@@ -28,8 +28,7 @@
     `;
     document.body.appendChild(loader);
 
-    window.addEventListener('load', () => {
-        // Page load fade-out transition
+    function initPageAnimations() {
         if (hasMotion) {
             Motion.animate("#loading-overlay", { opacity: 0 }, { duration: 0.4 }).finished.then(() => {
                 loader.classList.add('hidden');
@@ -41,7 +40,13 @@
         } else {
             loader.classList.add('hidden');
         }
-    });
+    }
+
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        initPageAnimations();
+    } else {
+        window.addEventListener('load', initPageAnimations);
+    }
 
     // ── 2. Add Magnetic Spring Hover to Interactive Controls ──────────
     function wireInteractiveSprings(root) {
