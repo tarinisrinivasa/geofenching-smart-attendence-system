@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- QR and Barcode Scanning Library -->
+    <script src="https://unpkg.com/html5-qrcode"></script>
+</head>
+<body>
+    <div class="container" style="max-width: 500px;">
+        <div class="top-bar">
+            <h3>Student Portal</h3>
+            <button class="logout-btn" onclick="logout(event)">Logout</button>
+        </div>
+
+        <div id="statusMsg" class="message"></div>
+
+        <h3 style="margin-top: 1.5rem;">Active Classes</h3>
+        <div id="classesList" style="margin-top: 1rem;">
+            <div style="text-align: center; color: var(--text-muted); padding: 2rem;">Loading classes...</div>
+        </div>
+    </div>
+
+    <!-- Active Class Verification Modal -->
+    <div id="verifyModal" class="container" style="max-width: 500px; display: none; margin-top: 2rem; border-color: var(--primary);">
+        <div class="top-bar" style="margin-bottom:1rem; padding-bottom: 0.5rem;">
+            <h3 id="verifyClassName">Class Verification</h3>
+            <button class="logout-btn" style="color:var(--text-main); border-color:var(--border);" onclick="closeVerify()">Close</button>
+        </div>
+
+        <!-- Verification Options Tabs -->
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchVerifyTab('gps')">GPS Only</button>
+            <button class="tab-btn" onclick="switchVerifyTab('qr')">Scan QR</button>
+            <button class="tab-btn" onclick="switchVerifyTab('manual')">Request Approval</button>
+            <button class="tab-btn" onclick="switchVerifyTab('barcode')">My Barcode</button>
+        </div>
+
+        <div id="verifyStatusMsg" class="message"></div>
+
+        <!-- Tab 1: Standard GPS -->
+        <div id="tab-gps" class="tab-content" style="text-align: center; padding: 1rem 0;">
+            <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem;">Click below to verify that you are inside the classroom geofence.</p>
+            <button class="btn" id="gpsBtn" onclick="markGPSOnly()">
+                <span class="btn-text">Verify GPS Location</span>
+                <div class="spinner"></div>
+            </button>
+        </div>
+
+        <!-- Tab 2: Dynamic QR Code Scanner -->
+        <div id="tab-qr" class="tab-content" style="display: none;">
+            <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem; text-align: center;">Scan the teacher's screen containing the dynamic QR code.</p>
+            <button class="btn" id="startQrScanBtn" onclick="toggleQRScanner()">Start Camera Scanner</button>
+            <div class="scanner-container" id="scannerWrapper" style="margin-top:1rem;">
+                <div id="reader"></div>
+            </div>
+        </div>
+
+        <!-- Tab 3: Request Manual Approval -->
+        <div id="tab-manual" class="tab-content" style="display: none; text-align: center; padding: 1rem 0;">
+            <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem;">If the geofence fails or you have issues, send a manual request to the teacher's dashboard.</p>
+            <button class="btn" id="manualRequestBtn" onclick="requestManualApproval()" style="background-color: #f59e0b;">
+                <span class="btn-text">Send Attendance Request</span>
+                <div class="spinner"></div>
+            </button>
+        </div>
+
+        <!-- Tab 4: Student ID Barcode Card -->
+        <div id="tab-barcode" class="tab-content" style="display: none; text-align: center; padding: 1.5rem 0;">
+            <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem;">Show this barcode to the teacher to scan directly.</p>
+            <div id="barcodeCard" style="background: white; border-radius: 12px; padding: 1.5rem; display: inline-block;">
+                <!-- Real Scannable Barcode Image API -->
+                <img id="barcodeImage" src="" alt="Barcode ID" style="display: block; margin: 0 auto 0.5rem auto; max-width: 100%;">
+                <span id="barcodeText" style="color: #030712; font-family: monospace; font-weight: 700; font-size: 1.2rem; letter-spacing: 0.2em;"></span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const user = JSON.parse(localStorage.getItem('user'));
+        const token = localStorage.getItem('token');
+        if (!user || !token || user.role !== 'student') {
+            window.location.href = 'index.html';
+        }
+
+        let selectedClassId = null;
+        let html5QrcodeScanner = null;
+
+        // Global Ripple Effect
+        document.addEventListener('click', function (e) {
+            const btn = e.target.closest('.btn') || e.target.closest('.logout-btn') || e.target.closest('.tab-btn');
+            if (btn) {
+                const circle = document.createElement('span');
+                const diameter = Math.max(btn.clientWidth, btn.clientHeight);
+                const radius = diameter / 2;
+                
+                circle.style.width = circle.style.height = `${diameter}px`;
+                circle.style.left = `${e.clientX - btn.getBoundingClientRect().left - radius}px`;
+                circle.style.top = `${e.clientY - btn.getBoundingClientRect().top - radius}px`;
+                circle.classList.add('ripple');
+                
+                const existing = btn.querySelector('.ripple');
+                if (existing) {
+                    existing.remove();
+                }
+                
+                btn.appendChild(circle);
+                circle.addEventListener('animationend', () => circle.remove());
+            }
+        });
+
+        function logout(e) {
+            e.preventDefault();
+            setTimeout(() => {
+                localStorage.removeItem('user');
+                localStorage.removeItem('token');
+                window.location.href = 'index.html';
+            }, 300);
+        }
+
+        async function fetchClasses() {
+            try {
+                const res = await fetch('/api/active-classes', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.status === 401 || res.status === 403) return logout(new Event('logout'));
+                
+                const data = await res.json();
+                const list = document.getElementById('classesList');
+                list.innerHTML = '';
+
+                if (data.classes.length === 0) {
+                    list.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 2rem;">No active classes found.</div>';
+                    return;
+                }
+
+                data.classes.forEach((cls, index) => {
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    card.style.animationDelay = `${index * 0.1}s`;
+                    card.innerHTML = `
+                        <div style="display:flex; justify-content:space-between; align-items:center; gap: 16px;">
+                            <span style="font-weight:600; font-size:1.05rem; word-break: break-word;">${cls.name}</span>
+                            <button class="btn" style="width:auto; padding:10px 20px; font-size:0.85rem;" onclick="openVerifyPanel(${cls.id}, '${cls.name}')">
+                                Enter Class
+                            </button>
+                        </div>
+                    `;
+                    list.appendChild(card);
+                });
+            } catch (err) {
+                document.getElementById('classesList').innerHTML = '<div style="text-align: center; color: var(--error); padding: 2rem;">Error connecting to the server.</div>';
+            }
+        }
+
+        function openVerifyPanel(classId, className) {
+            closeVerify();
+            selectedClassId = classId;
+            document.getElementById('verifyClassName').innerText = className;
+            document.getElementById('verifyModal').style.display = 'block';
+            document.getElementById('verifyModal').scrollIntoView({ behavior: 'smooth' });
+            
+            const barcode = user.barcode || "STU999";
+            document.getElementById('barcodeText').innerText = barcode;
+            document.getElementById('barcodeImage').src = `https://bwipjs-api.metafloor.com/?bcid=code128&text=${barcode}&scale=2&rotate=N&includetext=false`;
+
+            switchVerifyTab('gps');
+        }
+
+        function closeVerify() {
+            selectedClassId = null;
+            document.getElementById('verifyModal').style.display = 'none';
+            stopQRScanner();
+            document.getElementById('verifyStatusMsg').className = 'message';
+        }
+
+        function switchVerifyTab(tabName) {
+            // Toggle active tabs
+            const tabs = document.querySelectorAll('.tab-btn');
+            tabs.forEach(btn => {
+                btn.classList.toggle('active', btn.getAttribute('onclick').includes(tabName));
+            });
+
+            // Toggle content visibility
+            const contents = document.querySelectorAll('.tab-content');
+            contents.forEach(div => {
+                div.style.display = div.id === `tab-${tabName}` ? 'block' : 'none';
+            });
+
+            stopQRScanner();
+            document.getElementById('verifyStatusMsg').className = 'message'; // reset message
+        }
+
+        // Method 1: GPS-only Attendance
+        function markGPSOnly() {
+            const btn = document.getElementById('gpsBtn');
+            const msg = document.getElementById('verifyStatusMsg');
+            msg.className = 'message';
+
+            if (!navigator.geolocation) {
+                msg.classList.add('error');
+                msg.innerText = "Geolocation not supported.";
+                return;
+            }
+
+            btn.classList.add('loading');
+            msg.innerText = "Verifying GPS location...";
+            msg.classList.add('success');
+            msg.style.backgroundColor = 'rgba(99, 102, 241, 0.15)';
+            msg.style.color = '#6366f1';
+            msg.style.borderColor = 'rgba(99, 102, 241, 0.2)';
+
+            navigator.geolocation.getCurrentPosition(async (position) => {
+                const { latitude, longitude, accuracy } = position.coords;
+                
+                try {
+                    const res = await fetch('/api/mark-attendance', {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({ class_id: selectedClassId, latitude, longitude, accuracy })
+                    });
+                    const data = await res.json();
+                    
+                    msg.className = 'message';
+                    msg.style.backgroundColor = ''; msg.style.color = ''; msg.style.borderColor = '';
+                    
+                    if (data.success) {
+                        msg.classList.add('success');
+                        msg.innerText = `✅ ${data.message} (Distance: ${data.distance}m, Accuracy: ±${Math.round(accuracy)}m)`;
+                    } else {
+                        msg.classList.add('error');
+                        msg.innerText = `❌ ${data.message}`;
+                    }
+                } catch (err) {
+                    msg.className = 'message error';
+                    msg.innerText = 'Server connection failed.';
+                } finally {
+                    btn.classList.remove('loading');
+                }
+            }, (error) => {
+                msg.className = 'message error';
+                msg.style.backgroundColor = ''; msg.style.color = ''; msg.style.borderColor = '';
+                msg.innerText = "Location permission denied or timed out. Please verify GPS is enabled.";
+                btn.classList.remove('loading');
+            }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+        }
+
+        // Method 2: Dynamic QR Code Scanner Logic
+        function toggleQRScanner() {
+            const btn = document.getElementById('startQrScanBtn');
+            if (html5QrcodeScanner) {
+                stopQRScanner();
+                btn.innerText = 'Start Camera Scanner';
+                btn.style.backgroundColor = 'var(--primary)';
+            } else {
+                document.getElementById('scannerWrapper').classList.add('active');
+                html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
+                html5QrcodeScanner.render(onQRScanSuccess);
+                btn.innerText = 'Stop Scanner';
+                btn.style.backgroundColor = 'var(--error)';
+            }
+        }
+
+        function stopQRScanner() {
+            if (html5QrcodeScanner) {
+                html5QrcodeScanner.clear().catch(e => console.error(e));
+                html5QrcodeScanner = null;
+            }
+            document.getElementById('scannerWrapper').classList.remove('active');
+            const btn = document.getElementById('startQrScanBtn');
+            if(btn) {
+                btn.innerText = 'Start Camera Scanner';
+                btn.style.backgroundColor = 'var(--primary)';
+            }
+        }
+
+        function onQRScanSuccess(decodedText) {
+            try { new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA").play(); } catch(e){}
+            
+            stopQRScanner();
+            const msg = document.getElementById('verifyStatusMsg');
+            msg.className = 'message';
+
+            try {
+                const qrData = JSON.parse(decodedText);
+                if (qrData.class_id !== selectedClassId) {
+                    msg.className = 'message error';
+                    msg.innerText = "❌ Scanned QR code belongs to a different class.";
+                    return;
+                }
+
+                msg.className = 'message success';
+                msg.style.backgroundColor = 'rgba(99, 102, 241, 0.15)';
+                msg.style.color = '#6366f1';
+                msg.style.borderColor = 'rgba(99, 102, 241, 0.2)';
+                msg.innerText = "QR Code Verified. Fetching GPS location...";
+
+                navigator.geolocation.getCurrentPosition(async (position) => {
+                    const { latitude, longitude, accuracy } = position.coords;
+                    
+                    try {
+                        const res = await fetch('/api/mark-attendance', {
+                            method: 'POST',
+                            headers: { 
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${token}`
+                            },
+                            body: JSON.stringify({ 
+                                class_id: selectedClassId, 
+                                latitude, 
+                                longitude, 
+                                qr_token: qrData.token,
+                                accuracy
+                            })
+                        });
+                        const data = await res.json();
+                        
+                        msg.className = 'message';
+                        msg.style.backgroundColor = ''; msg.style.color = ''; msg.style.borderColor = '';
+                        
+                        if (data.success) {
+                            msg.classList.add('success');
+                            msg.innerText = `✅ QR Verified & Attendance Marked! (Distance: ${data.distance}m, Accuracy: ±${Math.round(accuracy)}m)`;
+                        } else {
+                            msg.classList.add('error');
+                            msg.innerText = `❌ ${data.message}`;
+                        }
+                    } catch(err) {
+                        msg.className = 'message error';
+                        msg.innerText = "Server connection error.";
+                    }
+                }, (error) => {
+                    msg.className = 'message error';
+                    msg.style.backgroundColor = ''; msg.style.color = ''; msg.style.borderColor = '';
+                    msg.innerText = "Please allow location access to mark attendance.";
+                }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+
+            } catch(e) {
+                msg.className = 'message error';
+                msg.innerText = "❌ Invalid QR code scanned.";
+            }
+        }
+
+        // Method 3: Request Manual Approval
+        function requestManualApproval() {
+            const btn = document.getElementById('manualRequestBtn');
+            const msg = document.getElementById('verifyStatusMsg');
+            msg.className = 'message';
+
+            if (!navigator.geolocation) {
+                msg.classList.add('error');
+                msg.innerText = "Geolocation not supported.";
+                return;
+            }
+
+            btn.classList.add('loading');
+            msg.innerText = "Submitting manual request...";
+            msg.classList.add('success');
+            msg.style.backgroundColor = 'rgba(245, 158, 11, 0.15)';
+            msg.style.color = '#f59e0b';
+            msg.style.borderColor = 'rgba(245, 158, 11, 0.2)';
+
+            navigator.geolocation.getCurrentPosition(async (position) => {
+                const { latitude, longitude, accuracy } = position.coords;
+                
+                try {
+                    const res = await fetch('/api/request-approval', {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({ class_id: selectedClassId, latitude, longitude })
+                    });
+                    const data = await res.json();
+                    
+                    msg.className = 'message';
+                    msg.style.backgroundColor = ''; msg.style.color = ''; msg.style.borderColor = '';
+                    
+                    if (data.success) {
+                        msg.classList.add('success');
+                        msg.innerText = `✅ ${data.message} (Accuracy: ±${Math.round(accuracy)}m)`;
+                    } else {
+                        msg.classList.add('error');
+                        msg.innerText = `❌ ${data.message}`;
+                    }
+                } catch (err) {
+                    msg.className = 'message error';
+                    msg.innerText = 'Server connection failed.';
+                } finally {
+                    btn.classList.remove('loading');
+                }
+            }, (error) => {
+                msg.className = 'message error';
+                msg.style.backgroundColor = ''; msg.style.color = ''; msg.style.borderColor = '';
+                msg.innerText = "Please allow location access to request manual verification.";
+                btn.classList.remove('loading');
+            }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+        }
+
+        fetchClasses();
+    </script>
+</body>
+</html>

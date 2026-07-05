@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Attendance Login</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h2>Welcome Back 👋</h2>
+        <form id="loginForm">
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="username" placeholder="teacher or student" required autocomplete="username">
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" id="password" placeholder="pass" required autocomplete="current-password">
+            </div>
+            <button type="submit" class="btn" id="loginBtn">
+                <span class="btn-text">Login</span>
+                <div class="spinner"></div>
+            </button>
+            <div id="msg" class="message"></div>
+        </form>
+    </div>
+
+    <script>
+        // Global Ripple Effect for Buttons
+        document.addEventListener('click', function (e) {
+            const btn = e.target.closest('.btn');
+            if (btn) {
+                const circle = document.createElement('span');
+                const diameter = Math.max(btn.clientWidth, btn.clientHeight);
+                const radius = diameter / 2;
+                
+                circle.style.width = circle.style.height = `${diameter}px`;
+                circle.style.left = `${e.clientX - btn.getBoundingClientRect().left - radius}px`;
+                circle.style.top = `${e.clientY - btn.getBoundingClientRect().top - radius}px`;
+                circle.classList.add('ripple');
+                
+                const existing = btn.querySelector('.ripple');
+                if (existing) {
+                    existing.remove();
+                }
+                
+                btn.appendChild(circle);
+                circle.addEventListener('animationend', () => circle.remove());
+            }
+        });
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('loginBtn');
+            const msg = document.getElementById('msg');
+            btn.classList.add('loading');
+            msg.className = 'message';
+
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    localStorage.setItem('user', JSON.stringify(data.user));
+                    localStorage.setItem('token', data.token); // Store secure JWT session token
+                    msg.classList.add('success');
+                    msg.innerText = 'Login successful! Redirecting...';
+                    setTimeout(() => {
+                        window.location.href = data.user.role === 'teacher' ? 'teacher.html' : 'student.html';
+                    }, 600);
+                } else {
+                    msg.classList.add('error');
+                    msg.innerText = data.message;
+                }
+            } catch (err) {
+                msg.classList.add('error');
+                msg.innerText = 'Server error. Please try again.';
+            } finally {
+                btn.classList.remove('loading');
+            }
+        });
+    </script>
+</body>
+</html>

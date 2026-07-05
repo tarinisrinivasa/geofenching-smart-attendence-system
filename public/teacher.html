@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teacher Console</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- QR and Barcode Scanning Library -->
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <!-- QR Code Generator Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+    <div class="container" style="max-width: 600px; padding: 2rem;">
+        <div class="top-bar">
+            <div>
+                <h3 id="welcomeMsg">Teacher Dashboard</h3>
+                <p style="font-size: 0.8rem; color: var(--text-muted);" id="userTag"></p>
+            </div>
+            <button class="logout-btn" onclick="logout(event)">Logout</button>
+        </div>
+
+        <!-- Class Session Setup Card -->
+        <div id="setupSessionCard">
+            <h3>Start Attendance Session</h3>
+            <div id="setupMsg" class="message"></div>
+            
+            <div class="form-group" style="margin-top: 1rem;">
+                <label>Class Name</label>
+                <input type="text" id="classNameInput" placeholder="e.g. Physics 101, Lecture 4">
+            </div>
+
+            <div class="form-group">
+                <label>Geofence Radius (meters)</label>
+                <input type="number" id="radiusInput" value="50" min="5" placeholder="e.g. 50">
+            </div>
+
+            <!-- GPS Override Option -->
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 1.5rem;">
+                <input type="checkbox" id="disableGpsCheckbox" style="width: auto; height: 16px; margin: 0; cursor: pointer;">
+                <label for="disableGpsCheckbox" style="margin: 0; cursor: pointer; text-transform: none; font-size: 0.9rem; font-weight: 500;">
+                    Disable GPS Geofence Check (Bypass)
+                </label>
+            </div>
+
+            <button class="btn" id="startSessionBtn" onclick="createClass()">
+                <span class="btn-text">Start Session</span>
+                <div class="spinner"></div>
+            </button>
+        </div>
+
+        <!-- Active Class Monitor Console -->
+        <div id="monitorConsole" style="display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <div>
+                    <h3 id="activeClassName" style="margin: 0; word-break: break-word;">Active Session</h3>
+                    <span id="activeClassDetails" style="font-size: 0.825rem; color: var(--text-muted);">Radius: 50m</span>
+                </div>
+                <button class="logout-btn" style="background: rgba(239,68,68,0.08);" onclick="endClass()">End Session</button>
+            </div>
+
+            <!-- Verification Mode Tabs -->
+            <div class="tabs">
+                <button class="tab-btn active" id="tabBtnQr" onclick="switchMonitorTab('qr')">QR Method</button>
+                <button class="tab-btn" id="tabBtnBarcode" onclick="switchMonitorTab('barcode')">Barcode Scanner</button>
+                <button class="tab-btn" id="tabBtnManual" onclick="switchMonitorTab('manual')">Approvals</button>
+                <button class="tab-btn" id="tabBtnReport" onclick="switchMonitorTab('report')">Reports</button>
+            </div>
+
+            <div id="monitorMsg" class="message"></div>
+
+            <!-- Tab 1: Dynamic QR Code -->
+            <div id="mon-qr" class="tab-content">
+                <p style="color: var(--text-muted); font-size: 0.85rem; text-align: center; margin-bottom: 1rem;">
+                    Students scan this code. It rotates every 15 seconds to prevent screenshot sharing.
+                </p>
+                <div class="qr-code-box">
+                    <div id="qrcode"></div>
+                </div>
+                <div class="qr-timer-bar">
+                    <div class="qr-timer-progress" id="qrTimer"></div>
+                </div>
+            </div>
+
+            <!-- Tab 2: Webcam Barcode Scanner -->
+            <div id="mon-barcode" class="tab-content" style="display: none;">
+                <p style="color: var(--text-muted); font-size: 0.85rem; text-align: center; margin-bottom: 1rem;">
+                    Scan student ID barcodes using your webcam.
+                </p>
+                <button class="btn" id="startCamBtn" onclick="toggleBarcodeCamera()">Start Scanner Camera</button>
+                
+                <div class="scanner-container" id="cameraWrapper">
+                    <div id="barcodeReader"></div>
+                </div>
+
+                <div style="margin: 1.5rem 0; border-top: 1px solid var(--surface-border); padding-top: 1.5rem;">
+                    <label>Or Enter ID Manually</label>
+                    <div style="display: flex; gap: 8px; margin-top: 0.5rem;">
+                        <input type="text" id="manualBarcodeVal" placeholder="e.g. STU101" style="flex: 1;">
+                        <button class="btn" onclick="submitManualBarcode()" style="width: auto; padding: 0 20px;">Submit</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab 3: Manual Geofence Approvals -->
+            <div id="mon-manual" class="tab-content" style="display: none;">
+                <p style="color: var(--text-muted); font-size: 0.85rem; text-align: center; margin-bottom: 1rem;">
+                    Manual attendance requests submitted by students who failed the GPS bounds checks.
+                </p>
+                <div id="pendingList" style="margin-top: 1rem;">
+                    <div style="text-align: center; color: var(--text-muted); padding: 1.5rem;">No pending approvals.</div>
+                </div>
+            </div>
+
+            <!-- Tab 4: Present Reports & CSV/PDF Exporters -->
+            <div id="mon-report" class="tab-content" style="display: none;">
+                <div style="display:flex; gap:12px; margin-bottom: 1.5rem;">
+                    <button class="btn" onclick="exportCSV()" style="flex:1; background-color: var(--secondary); box-shadow: 0 4px 12px var(--secondary-glow);">Export CSV</button>
+                    <button class="btn" onclick="printPDF()" style="flex:1; background-color: #0f172a; box-shadow: 0 4px 12px rgba(15,23,42,0.1);">Print / PDF</button>
+                </div>
+                
+                <h3>Present Students (<span id="presentCount">0</span>)</h3>
+                <div id="presentList" style="margin-top: 1rem; max-height: 250px; overflow-y: auto; border: 1px solid var(--surface-border); border-radius: 12px; padding: 8px;">
+                    <div style="text-align: center; color: var(--text-muted); padding: 1.5rem;">List is empty.</div>
+                </div>
+            </div>
+        </div>
+
+        <h3 style="margin-top: 2.5rem;" id="recentHeading">Recent Sessions</h3>
+        <div id="recentClasses" style="margin-top: 1rem;"></div>
+    </div>
+
+    <script>
+        const user = JSON.parse(localStorage.getItem('user'));
+        const token = localStorage.getItem('token');
+        if (!user || !token || user.role !== 'teacher') {
+            window.location.href = 'index.html';
+        }
+
+        document.getElementById('welcomeMsg').innerText = `Welcome, ${user.username}`;
+        document.getElementById('userTag').innerText = `Teacher ID: ${user.id}`;
+
+        let activeSessionId = null;
+        let qrCodeGenerator = null;
+        let qrIntervalId = null;
+        let pendingIntervalId = null;
+        let presentIntervalId = null;
+        let html5BarcodeScanner = null;
+
+        // Global Ripple Effect
+        document.addEventListener('click', function (e) {
+            const btn = e.target.closest('.btn') || e.target.closest('.logout-btn') || e.target.closest('.tab-btn');
+            if (btn) {
+                const circle = document.createElement('span');
+                const diameter = Math.max(btn.clientWidth, btn.clientHeight);
+                const radius = diameter / 2;
+                
+                circle.style.width = circle.style.height = `${diameter}px`;
+                circle.style.left = `${e.clientX - btn.getBoundingClientRect().left - radius}px`;
+                circle.style.top = `${e.clientY - btn.getBoundingClientRect().top - radius}px`;
+                circle.classList.add('ripple');
+                
+                const existing = btn.querySelector('.ripple');
+                if (existing) {
+                    existing.remove();
+                }
+                
+                btn.appendChild(circle);
+                circle.addEventListener('animationend', () => circle.remove());
+            }
+        });
+
+        function logout(e) {
+            e.preventDefault();
+            setTimeout(() => {
+                localStorage.removeItem('user');
+                localStorage.removeItem('token');
+                window.location.href = 'index.html';
+            }, 300);
+        }
+
+        async function fetchRecentSessions() {
+            try {
+                const res = await fetch(`/api/classes/${user.id}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.status === 401 || res.status === 403) return logout(new Event('logout'));
+                
+                const data = await res.json();
+                const list = document.getElementById('recentClasses');
+                list.innerHTML = '';
+
+                if (data.classes.length === 0) {
+                    list.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 1.5rem;">No sessions logged.</div>';
+                    return;
+                }
+
+                // Auto-restore UI state if the teacher has an active class
+                const activeSession = data.classes.find(c => c.active === 1);
+                if (activeSession) {
+                    restoreActiveSessionUI(activeSession);
+                }
+
+                data.classes.forEach((c, index) => {
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    card.style.animationDelay = `${index * 0.05}s`;
+                    
+                    const statusBadge = c.active === 1 
+                        ? `<span class="badge" style="background: rgba(16, 185, 129, 0.1); color: var(--success); border: 1px solid rgba(16,185,129,0.15);">Active</span>`
+                        : `<span class="badge" style="background: rgba(100, 116, 139, 0.1); color: var(--text-muted); border: 1px solid rgba(100,116,139,0.15);">Inactive</span>`;
+                    
+                    card.innerHTML = `
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                                <span style="font-weight: 600; display: block; font-size:1.05rem;">${c.name}</span>
+                                <small style="color: var(--text-muted);">Radius: ${c.radius > 0 ? c.radius + 'm' : 'Bypassed'}</small>
+                            </div>
+                            ${statusBadge}
+                        </div>
+                    `;
+                    list.appendChild(card);
+                });
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        function createClass() {
+            const btn = document.getElementById('startSessionBtn');
+            const msg = document.getElementById('setupMsg');
+            const className = document.getElementById('classNameInput').value;
+            const radius = parseFloat(document.getElementById('radiusInput').value);
+            const disableGPS = document.getElementById('disableGpsCheckbox').checked;
+
+            if (!className) return alert('Enter a class name');
+
+            btn.classList.add('loading');
+            msg.className = 'message success';
+            msg.style.backgroundColor = 'rgba(79, 70, 229, 0.08)';
+            msg.style.color = 'var(--primary)';
+            msg.style.borderColor = 'var(--primary-glow)';
+            
+            if (disableGPS) {
+                msg.innerText = "Starting session (Bypassing GPS)...";
+                submitClassCreation(className, 0, 0, 0, 0, btn, msg);
+            } else {
+                msg.innerText = "Acquiring GPS location...";
+                navigator.geolocation.getCurrentPosition(async (position) => {
+                    const { latitude, longitude, accuracy } = position.coords;
+                    submitClassCreation(className, latitude, longitude, radius, accuracy, btn, msg);
+                }, (error) => {
+                    msg.className = 'message error';
+                    msg.style.backgroundColor = ''; msg.style.color = ''; msg.style.borderColor = '';
+                    msg.innerText = "Please allow location access or check the 'Disable GPS Geofence' option.";
+                    btn.classList.remove('loading');
+                }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+            }
+        }
+
+        async function submitClassCreation(name, latitude, longitude, radius, accuracy, btn, msg) {
+            try {
+                const res = await fetch('/api/classes', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ name, latitude, longitude, radius, accuracy })
+                });
+                const data = await res.json();
+                
+                msg.style.backgroundColor = ''; msg.style.color = ''; msg.style.borderColor = '';
+                if (data.success) {
+                    msg.classList.add('success');
+                    msg.innerText = 'Session started successfully!';
+                    setTimeout(() => {
+                        restoreActiveSessionUI({ id: data.class_id, name, radius });
+                        fetchRecentSessions();
+                    }, 500);
+                } else {
+                    msg.classList.add('error');
+                    msg.innerText = 'Failed to create session.';
+                }
+            } catch (err) {
+                msg.className = 'message error';
+                msg.innerText = 'Server request failed.';
+            } finally {
+                btn.classList.remove('loading');
+            }
+        }
+
+        function restoreActiveSessionUI(session) {
+            activeSessionId = session.id;
+            document.getElementById('setupSessionCard').style.display = 'none';
+            document.getElementById('recentHeading').style.display = 'none';
+            document.getElementById('recentClasses').style.display = 'none';
+
+            document.getElementById('activeClassName').innerText = session.name;
+            document.getElementById('activeClassDetails').innerText = session.radius > 0 ? `Radius: ${session.radius}m` : 'Geofence: Bypassed (Off)';
+            document.getElementById('monitorConsole').style.display = 'block';
+
+            switchMonitorTab('qr');
+            startPollingData();
+        }
+
+        function switchMonitorTab(tabName) {
+            const tabs = ['qr', 'barcode', 'manual', 'report'];
+            tabs.forEach(t => {
+                document.getElementById(`tabBtn${t.charAt(0).toUpperCase() + t.slice(1)}`).classList.toggle('active', t === tabName);
+                document.getElementById(`mon-${t}`).style.display = t === tabName ? 'block' : 'none';
+            });
+            stopBarcodeCamera();
+            document.getElementById('monitorMsg').className = 'message';
+        }
+
+        async function endClass() {
+            if (!confirm('Are you sure you want to end this attendance session?')) return;
+            
+            try {
+                const res = await fetch(`/api/classes/${activeSessionId}/end`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                if (data.success) {
+                    stopPollingData();
+                    activeSessionId = null;
+                    document.getElementById('monitorConsole').style.display = 'none';
+                    document.getElementById('setupSessionCard').style.display = 'block';
+                    document.getElementById('recentHeading').style.display = 'block';
+                    document.getElementById('recentClasses').style.display = 'block';
+                    fetchRecentSessions();
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        // QR Code Rotation Loop
+        function updateQrCode() {
+            if (!activeSessionId) return;
+            fetch(`/api/classes/${activeSessionId}/token`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.token) {
+                    const qrText = JSON.stringify({ class_id: activeSessionId, token: data.token });
+                    const box = document.getElementById('qrcode');
+                    box.innerHTML = '';
+                    qrCodeGenerator = new QRCode(box, {
+                        text: qrText,
+                        width: 140,
+                        height: 140,
+                        colorDark: "#0f172a",
+                        colorLight: "#ffffff",
+                        correctLevel: QRCode.CorrectLevel.M
+                    });
+
+                    // Manage dynamic progress bar
+                    const progressBar = document.getElementById('qrTimer');
+                    progressBar.style.transition = 'none';
+                    progressBar.style.width = '100%';
+                    setTimeout(() => {
+                        progressBar.style.transition = `width ${data.expires_in}s linear`;
+                        progressBar.style.width = '0%';
+                    }, 50);
+                }
+            });
+        }
+
+        // Camera Web Barcode Scans
+        function toggleBarcodeCamera() {
+            const btn = document.getElementById('startCamBtn');
+            if (html5BarcodeScanner) {
+                stopBarcodeCamera();
+            } else {
+                document.getElementById('cameraWrapper').classList.add('active');
+                html5BarcodeScanner = new Html5QrcodeScanner("barcodeReader", { fps: 15, qrbox: 250 });
+                html5BarcodeScanner.render((text) => {
+                    submitScannedBarcode(text);
+                });
+                btn.innerText = 'Stop Camera';
+                btn.style.backgroundColor = 'var(--error)';
+            }
+        }
+
+        function stopBarcodeCamera() {
+            if (html5BarcodeScanner) {
+                html5BarcodeScanner.clear().catch(e => console.error(e));
+                html5BarcodeScanner = null;
+            }
+            const wrapper = document.getElementById('cameraWrapper');
+            if(wrapper) wrapper.classList.remove('active');
+            const btn = document.getElementById('startCamBtn');
+            if(btn) {
+                btn.innerText = 'Start Scanner Camera';
+                btn.style.backgroundColor = 'var(--primary)';
+            }
+        }
+
+        function submitScannedBarcode(barcode) {
+            try { new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA").play(); } catch(e){}
+            
+            const msg = document.getElementById('monitorMsg');
+            fetch('/api/mark-barcode', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ class_id: activeSessionId, barcode })
+            })
+            .then(res => res.json())
+            .then(data => {
+                msg.className = 'message';
+                if (data.success) {
+                    msg.classList.add('success');
+                    msg.innerText = `✅ ${data.message}`;
+                    fetchAttendanceRecords();
+                } else {
+                    msg.classList.add('error');
+                    msg.innerText = `❌ ${data.message}`;
+                }
+            });
+        }
+
+        function submitManualBarcode() {
+            const input = document.getElementById('manualBarcodeVal');
+            if (!input.value) return alert('Enter student barcode ID');
+            submitScannedBarcode(input.value);
+            input.value = '';
+        }
+
+        // Fetch manual requests
+        async function fetchPendingRequests() {
+            if (!activeSessionId) return;
+            try {
+                const res = await fetch(`/api/pending-requests/${activeSessionId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                const list = document.getElementById('pendingList');
+                list.innerHTML = '';
+
+                if (data.requests.length === 0) {
+                    list.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 1.5rem;">No pending approvals.</div>';
+                    return;
+                }
+
+                data.requests.forEach(r => {
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    card.innerHTML = `
+                        <div style="display:flex; justify-content:space-between; align-items:center; gap: 8px;">
+                            <div>
+                                <span style="font-weight: 600; display:block;">${r.username}</span>
+                                <small style="color:var(--text-muted);">Diff: ${r.distance}m</small>
+                            </div>
+                            <button class="btn" style="width:auto; padding:8px 16px; font-size:0.8rem;" onclick="approveRequest(${r.student_id})">
+                                Approve
+                            </button>
+                        </div>
+                    `;
+                    list.appendChild(card);
+                });
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function approveRequest(studentId) {
+            try {
+                const res = await fetch('/api/approve-request', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ class_id: activeSessionId, student_id: studentId })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    fetchPendingRequests();
+                    fetchAttendanceRecords();
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        // Fetch Present students
+        let currentPresentRecords = [];
+        async function fetchAttendanceRecords() {
+            if (!activeSessionId) return;
+            try {
+                const res = await fetch(`/api/attendance/${activeSessionId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                currentPresentRecords = data.attendance;
+                
+                document.getElementById('presentCount').innerText = currentPresentRecords.length;
+                const list = document.getElementById('presentList');
+                list.innerHTML = '';
+
+                if (currentPresentRecords.length === 0) {
+                    list.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 1.5rem;">List is empty.</div>';
+                    return;
+                }
+
+                currentPresentRecords.forEach(r => {
+                    const row = document.createElement('div');
+                    row.className = 'list-item';
+                    const time = new Date(r.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    row.innerHTML = `
+                        <span style="font-weight: 600;">${r.username}</span>
+                        <span style="font-size:0.85rem; color:var(--text-muted);">${time}</span>
+                    `;
+                    list.appendChild(row);
+                });
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        // Export Tools
+        function exportCSV() {
+            if (currentPresentRecords.length === 0) return alert('No present records to export.');
+            let csv = 'Username,Check-In Time\n';
+            currentPresentRecords.forEach(r => {
+                csv += `${r.username},${new Date(r.timestamp).toLocaleString()}\n`;
+            });
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.setAttribute('download', `${document.getElementById('activeClassName').innerText.replace(/\s+/g, '_')}_attendance.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function printPDF() {
+            window.print();
+        }
+
+        // Polling loop manager
+        function startPollingData() {
+            updateQrCode();
+            fetchPendingRequests();
+            fetchAttendanceRecords();
+            
+            qrIntervalId = setInterval(updateQrCode, 15000);
+            pendingIntervalId = setInterval(fetchPendingRequests, 3500);
+            presentIntervalId = setInterval(fetchAttendanceRecords, 4000);
+        }
+
+        function stopPollingData() {
+            clearInterval(qrIntervalId);
+            clearInterval(pendingIntervalId);
+            clearInterval(presentIntervalId);
+        }
+
+        fetchRecentSessions();
+    </script>
+</body>
+</html>
