@@ -9,6 +9,8 @@
     <script src="https://cdn.jsdelivr.net/npm/motion@11.11.13/dist/motion.js"></script>
     <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
     <script src="animations.js" defer></script>
+    <!-- jsPDF Library for Auto-PDF Exports -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <!-- QR and Barcode Scanning Library -->
     <script src="https://unpkg.com/html5-qrcode"></script>
     <!-- QR Code Generator Library -->
@@ -357,12 +359,19 @@
             if (!confirm('Are you sure you want to end this attendance session?')) return;
             
             try {
+                // Fetch latest records before ending to ensure exports have complete data
+                await fetchAttendanceRecords();
+                
                 const res = await fetch(`/api/classes/${activeSessionId}/end`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const data = await res.json();
                 if (data.success) {
+                    // Auto-download files on close
+                    exportCSV(true);
+                    exportPDF(true);
+
                     stopPollingData();
                     activeSessionId = null;
                     document.getElementById('monitorConsole').style.display = 'none';
@@ -565,8 +574,11 @@
         }
 
         // Export Tools
-        function exportCSV() {
-            if (currentPresentRecords.length === 0) return alert('No present records to export.');
+        function exportCSV(silent = false) {
+            if (currentPresentRecords.length === 0) {
+                if (!silent) alert('No present records to export.');
+                return;
+            }
             let csv = 'Username,Check-In Time\n';
             currentPresentRecords.forEach(r => {
                 csv += `${r.username},${new Date(r.timestamp.replace(' ', 'T') + 'Z').toLocaleString()}\n`;
@@ -580,8 +592,64 @@
             document.body.removeChild(link);
         }
 
+        function exportPDF(silent = false) {
+            if (currentPresentRecords.length === 0) {
+                if (!silent) alert('No present records to export.');
+                return;
+            }
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            const className = document.getElementById('activeClassName').innerText;
+            const dateStr = new Date().toLocaleString();
+            
+            // Document Title & Header
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(20);
+            doc.text("Attendance Session Report", 14, 20);
+            
+            doc.setFontSize(12);
+            doc.setFont("helvetica", "normal");
+            doc.text(`Class: ${className}`, 14, 30);
+            doc.text(`Export Date: ${dateStr}`, 14, 37);
+            doc.text(`Total Present: ${currentPresentRecords.length}`, 14, 44);
+            
+            // Draw a separator line
+            doc.setDrawColor(200, 200, 200);
+            doc.line(14, 49, 196, 49);
+            
+            // Table Header
+            doc.setFont("helvetica", "bold");
+            doc.text("Student Username", 14, 57);
+            doc.text("Check-In Time", 120, 57);
+            doc.line(14, 61, 196, 61);
+            
+            // Table Rows
+            doc.setFont("helvetica", "normal");
+            let y = 69;
+            currentPresentRecords.forEach((r, idx) => {
+                // Handle new page creation if table overflows single page bounds (roughly 260mm limit)
+                if (y > 275) {
+                    doc.addPage();
+                    y = 20;
+                    doc.setFont("helvetica", "bold");
+                    doc.text("Student Username", 14, y);
+                    doc.text("Check-In Time", 120, y);
+                    doc.line(14, y + 4, 196, y + 4);
+                    doc.setFont("helvetica", "normal");
+                    y += 12;
+                }
+                const checkInTime = new Date(r.timestamp.replace(' ', 'T') + 'Z').toLocaleString();
+                doc.text(r.username, 14, y);
+                doc.text(checkInTime, 120, y);
+                y += 8;
+            });
+            
+            doc.save(`${className.replace(/\s+/g, '_')}_attendance.pdf`);
+        }
+
         function printPDF() {
-            window.print();
+            exportPDF(false);
         }
 
         // Polling loop manager
