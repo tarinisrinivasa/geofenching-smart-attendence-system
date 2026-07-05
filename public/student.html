@@ -194,11 +194,15 @@
         }
 
         async function verifyBiometrics() {
-            if (!window.PublicKeyCredential) {
-                console.log("WebAuthn not supported by this browser.");
-                return true; // Fallback to let them proceed if browser does not support WebAuthn
-            }
             try {
+                if (!window.PublicKeyCredential) {
+                    console.log("WebAuthn not supported by this browser.");
+                    return true; // Fallback to let them proceed if browser does not support WebAuthn
+                }
+                if (typeof PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable !== 'function') {
+                    console.log("Platform authenticator check function not available.");
+                    return true; // Fallback for older WebAuthn implementations
+                }
                 const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
                 if (!available) {
                     console.log("Platform biometrics not available on this device.");
@@ -229,8 +233,13 @@
                 const credential = await navigator.credentials.create({ publicKey: options });
                 return !!credential;
             } catch (err) {
-                console.error("Biometric prompt error:", err);
-                throw new Error("Biometric verification cancelled or failed.");
+                // If it is a cancellation or failure by the user, we throw an error to block check-in
+                if (err.name === 'NotAllowedError' || err.message.toLowerCase().includes("cancel") || err.message.toLowerCase().includes("reject") || err.message.toLowerCase().includes("deny")) {
+                    throw new Error("Biometric verification cancelled or failed.");
+                }
+                // For other system/compatibility errors, we bypass so the app doesn't break on older devices (e.g. iOS 12)
+                console.error("Biometric verification compatibility bypass:", err);
+                return true;
             }
         }
 
