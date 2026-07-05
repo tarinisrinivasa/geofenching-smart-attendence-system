@@ -3,7 +3,20 @@ const path = require('path');
 const bcrypt = require('bcryptjs');
 const fs = require('fs');
 
-const dbPath = path.resolve(__dirname, 'database.sqlite');
+// Auto-detect Render cloud persistent disks to prevent data wipes on server restart
+let dbPath = path.resolve(__dirname, 'database.sqlite');
+const persistentDirs = ['/var/data', '/data'];
+for (const dir of persistentDirs) {
+    try {
+        if (fs.existsSync(dir)) {
+            dbPath = path.resolve(dir, 'database.sqlite');
+            console.log(`Persistent disk detected! Storing database at: ${dbPath}`);
+            break;
+        }
+    } catch (e) {
+        // Directory not accessible or exists check failed
+    }
+}
 const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
         console.error('Error opening database', err.message);
