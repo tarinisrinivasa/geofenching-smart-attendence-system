@@ -513,7 +513,7 @@
                 currentPresentRecords.forEach(r => {
                     const row = document.createElement('div');
                     row.className = 'list-item';
-                    const time = new Date(r.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    const time = new Date(r.timestamp.replace(' ', 'T') + 'Z').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
                     row.innerHTML = `
                         <span style="font-weight: 600;">${r.username}</span>
                         <span style="font-size:0.85rem; color:var(--text-muted);">${time}</span>
@@ -530,7 +530,7 @@
             if (currentPresentRecords.length === 0) return alert('No present records to export.');
             let csv = 'Username,Check-In Time\n';
             currentPresentRecords.forEach(r => {
-                csv += `${r.username},${new Date(r.timestamp).toLocaleString()}\n`;
+                csv += `${r.username},${new Date(r.timestamp.replace(' ', 'T') + 'Z').toLocaleString()}\n`;
             });
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
