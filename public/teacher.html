@@ -139,6 +139,39 @@
         <div id="recentClasses" style="margin-top: 1rem;"></div>
     </div>
 
+    <!-- Active Class Verification Modal Overlay Wrapper -->
+    <div id="exportModalOverlay" class="modal-overlay" style="display: none;">
+        <div class="success-modal-card" style="max-width: 420px; margin: auto;">
+            <lottie-player 
+                src="https://lottie.host/e7d41f71-2be3-48b7-9556-91e860950669/yQ9vGZ0p4n.json" 
+                background="transparent" 
+                speed="1" 
+                style="width: 100px; height: 100px; margin: 0 auto;" 
+                autoplay>
+            </lottie-player>
+            <h3 style="color: var(--success); margin-top: 1rem; text-align: center;">Session Ended Successfully</h3>
+            <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 0.5rem; line-height: 1.4; text-align: center;">
+                Attendance data has been logged. Tap below to download the records to your device:
+            </p>
+            
+            <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 1.5rem;">
+                <button class="btn" onclick="exportCSV(true)" style="background: var(--secondary); box-shadow: 0 4px 12px var(--secondary-glow); height: 48px; border-radius: 14px;">
+                    📥 Download Excel Sheet (.CSV)
+                </button>
+                <button class="btn" onclick="exportPDF(true)" style="background: #0f172a; border: 1px solid var(--surface-border); height: 48px; border-radius: 14px;">
+                    📄 Download PDF Report
+                </button>
+                <button class="btn" id="syncTgsbtetBtn" onclick="pushToTgsbtet()" style="background: linear-gradient(135deg, var(--primary), var(--secondary)); box-shadow: 0 4px 15px var(--primary-glow); height: 48px; border-radius: 14px;">
+                    ⚡ Sync with TGSBTET State Portal
+                </button>
+            </div>
+            
+            <button class="btn" onclick="closeExportModal()" style="margin-top: 1.5rem; background: transparent; border: 1px solid var(--border); height: 40px; font-size: 0.85rem; border-radius: 12px;">
+                Return to Dashboard
+            </button>
+        </div>
+    </div>
+
     <script>
         // Create Magnetic Cursor Glow element
         const glow = document.createElement('div');
@@ -182,6 +215,7 @@
         document.getElementById('userTag').innerText = `Teacher ID: ${user.id}`;
 
         let activeSessionId = null;
+        let endedSessionId = null;
         let qrCodeGenerator = null;
         let qrIntervalId = null;
         let pendingIntervalId = null;
@@ -368,11 +402,47 @@
                 });
                 const data = await res.json();
                 if (data.success) {
-                    // Auto-download files on close
-                    exportCSV(true);
-                    exportPDF(true);
+                    endedSessionId = activeSessionId; // store the ended session ID for reports/syncs
+                    
+                    // Try auto-triggering downloads first (works silently on desktop)
+                    try { exportCSV(true); } catch(e) {}
+                    try { exportPDF(true); } catch(e) {}
 
                     stopPollingData();
+
+                    // Open the interactive download modal overlay for mobile browser compatibility
+                    const overlay = document.getElementById('exportModalOverlay');
+                    overlay.style.display = 'flex';
+                    if (typeof Motion !== 'undefined') {
+                        Motion.animate(overlay, { opacity: [0, 1] }, { duration: 0.25 });
+                        Motion.animate(".success-modal-card", { scale: [0.85, 1], y: [20, 0] }, { duration: 0.35, easing: [0.34, 1.56, 0.64, 1] });
+                    }
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        function closeExportModal() {
+            const overlay = document.getElementById('exportModalOverlay');
+            if (overlay) {
+                if (typeof Motion !== 'undefined') {
+                    Promise.all([
+                        Motion.animate(overlay, { opacity: 0 }, { duration: 0.2 }),
+                        Motion.animate(".success-modal-card", { scale: 0.9, y: 15 }, { duration: 0.2 })
+                    ]).then(() => {
+                        overlay.style.display = 'none';
+                        overlay.style.opacity = '';
+                        // Reset dashboard UI state
+                        activeSessionId = null;
+                        document.getElementById('monitorConsole').style.display = 'none';
+                        document.getElementById('setupSessionCard').style.display = 'block';
+                        document.getElementById('recentHeading').style.display = 'block';
+                        document.getElementById('recentClasses').style.display = 'block';
+                        fetchRecentSessions();
+                    });
+                } else {
+                    overlay.style.display = 'none';
                     activeSessionId = null;
                     document.getElementById('monitorConsole').style.display = 'none';
                     document.getElementById('setupSessionCard').style.display = 'block';
@@ -380,8 +450,6 @@
                     document.getElementById('recentClasses').style.display = 'block';
                     fetchRecentSessions();
                 }
-            } catch (err) {
-                console.error(err);
             }
         }
 
@@ -650,6 +718,37 @@
 
         function printPDF() {
             exportPDF(false);
+        }
+
+        async function pushToTgsbtet() {
+            const btn = document.getElementById('syncTgsbtetBtn');
+            if (btn.classList.contains('loading')) return;
+            btn.classList.add('loading');
+            
+            const classId = endedSessionId || activeSessionId;
+            if (!classId) {
+                alert('No active session ID found.');
+                btn.classList.remove('loading');
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/classes/${classId}/push-tgsbtet`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                btn.classList.remove('loading');
+                
+                if (data.success) {
+                    alert(`✅ Integration Successful!\nTransaction ID: ${data.transaction_id}\n\nMessage: ${data.message}`);
+                } else {
+                    alert(`❌ Sync Failed: ${data.message}`);
+                }
+            } catch (err) {
+                btn.classList.remove('loading');
+                alert('❌ Server connection error.');
+            }
         }
 
         // Polling loop manager
