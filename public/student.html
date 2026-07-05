@@ -193,8 +193,49 @@
             document.getElementById('verifyStatusMsg').className = 'message'; // reset message
         }
 
+        async function verifyBiometrics() {
+            if (!window.PublicKeyCredential) {
+                console.log("WebAuthn not supported by this browser.");
+                return true; // Fallback to let them proceed if browser does not support WebAuthn
+            }
+            try {
+                const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+                if (!available) {
+                    console.log("Platform biometrics not available on this device.");
+                    return true; // Fallback if device doesn't have biometric sensors setup
+                }
+
+                // Generate a random challenge buffer
+                const challenge = new Uint8Array(32);
+                window.crypto.getRandomValues(challenge);
+
+                // Configure standard WebAuthn local validation request (platform authenticator)
+                const options = {
+                    challenge: challenge,
+                    rp: { name: "Smart Attendance System" },
+                    user: {
+                        id: new TextEncoder().encode(user.username),
+                        name: user.username,
+                        displayName: user.username
+                    },
+                    pubKeyCredParams: [{ type: "public-key", alg: -7 }], // ES256
+                    authenticatorSelection: {
+                        authenticatorAttachment: "platform",
+                        userVerification: "required"
+                    },
+                    timeout: 60000
+                };
+
+                const credential = await navigator.credentials.create({ publicKey: options });
+                return !!credential;
+            } catch (err) {
+                console.error("Biometric prompt error:", err);
+                throw new Error("Biometric verification cancelled or failed.");
+            }
+        }
+
         // Method 1: GPS-only Attendance
-        function markGPSOnly() {
+        async function markGPSOnly() {
             const btn = document.getElementById('gpsBtn');
             const msg = document.getElementById('verifyStatusMsg');
             msg.className = 'message';
@@ -202,6 +243,21 @@
             if (!navigator.geolocation) {
                 msg.classList.add('error');
                 msg.innerText = "Geolocation not supported.";
+                return;
+            }
+
+            try {
+                msg.className = 'message success';
+                msg.style.backgroundColor = 'rgba(79, 70, 229, 0.08)';
+                msg.style.color = 'var(--primary)';
+                msg.style.borderColor = 'var(--primary-glow)';
+                msg.innerText = "Verify your identity using fingerprint/FaceID...";
+                
+                await verifyBiometrics();
+            } catch (err) {
+                msg.className = 'message error';
+                msg.style.backgroundColor = ''; msg.style.color = ''; msg.style.borderColor = '';
+                msg.innerText = "❌ Biometric verification failed: request rejected.";
                 return;
             }
 
@@ -279,7 +335,7 @@
             }
         }
 
-        function onQRScanSuccess(decodedText) {
+        async function onQRScanSuccess(decodedText) {
             try { new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA").play(); } catch(e){}
             
             stopQRScanner();
@@ -291,6 +347,21 @@
                 if (qrData.class_id !== selectedClassId) {
                     msg.className = 'message error';
                     msg.innerText = "❌ Scanned QR code belongs to a different class.";
+                    return;
+                }
+
+                try {
+                    msg.className = 'message success';
+                    msg.style.backgroundColor = 'rgba(79, 70, 229, 0.08)';
+                    msg.style.color = 'var(--primary)';
+                    msg.style.borderColor = 'var(--primary-glow)';
+                    msg.innerText = "Verify your identity using fingerprint/FaceID...";
+                    
+                    await verifyBiometrics();
+                } catch (err) {
+                    msg.className = 'message error';
+                    msg.style.backgroundColor = ''; msg.style.color = ''; msg.style.borderColor = '';
+                    msg.innerText = "❌ Biometric verification failed: request rejected.";
                     return;
                 }
 
