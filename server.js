@@ -281,6 +281,36 @@ app.get('/api/active-classes', authenticateToken, (req, res) => {
     });
 });
 
+// Student API: Update registered barcode ID
+app.post('/api/update-barcode', authenticateToken, (req, res) => {
+    if (req.user.role !== 'student') {
+        return res.status(403).json({ success: false, message: "Unauthorized." });
+    }
+
+    const { barcode } = req.body;
+    const student_id = req.user.id;
+
+    if (!barcode || barcode.trim() === "") {
+        return res.status(400).json({ success: false, message: "Barcode ID cannot be empty." });
+    }
+
+    const cleanBarcode = barcode.trim();
+    // Validate barcode uniqueness to prevent duplicate profiles
+    db.get("SELECT username FROM users WHERE barcode = ? AND id != ?", [cleanBarcode, student_id], (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (row) {
+            return res.status(400).json({ success: false, message: "This barcode is already registered by another student." });
+        }
+
+        db.run("UPDATE users SET barcode = ? WHERE id = ?", [cleanBarcode, student_id], function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            
+            // Return updated barcode so student profile refreshes correctly
+            res.json({ success: true, message: "Barcode ID updated successfully!", barcode: cleanBarcode });
+        });
+    });
+});
+
 // Student API: Request Manual Attendance Approval (GPS verified)
 app.post('/api/request-approval', authenticateToken, (req, res) => {
     const { class_id, latitude, longitude } = req.body;
