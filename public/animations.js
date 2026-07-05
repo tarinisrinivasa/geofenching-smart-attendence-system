@@ -30,7 +30,7 @@
 
     function initPageAnimations() {
         if (hasMotion) {
-            Motion.animate("#loading-overlay", { opacity: 0 }, { duration: 0.4 }).finished.then(() => {
+            Motion.animate("#loading-overlay", { opacity: 0 }, { duration: 0.4 }).then(() => {
                 loader.classList.add('hidden');
             });
             // Container dynamic slide-up
@@ -145,7 +145,7 @@
         const modal = document.getElementById('success-modal-overlay');
         if (modal && modal.classList.contains('active')) {
             if (hasMotion) {
-                Motion.animate(modal, { opacity: 0 }, { duration: 0.25 }).finished.then(() => {
+                Motion.animate(modal, { opacity: 0 }, { duration: 0.25 }).then(() => {
                     modal.classList.remove('active');
                     modal.style.opacity = '';
                     if (onCloseCallback) onCloseCallback();
@@ -188,7 +188,7 @@
         const overlay = document.getElementById('gps-overlay');
         if (overlay && overlay.classList.contains('active')) {
             if (hasMotion) {
-                Motion.animate(overlay, { opacity: 0 }, { duration: 0.25 }).finished.then(() => {
+                Motion.animate(overlay, { opacity: 0 }, { duration: 0.25 }).then(() => {
                     overlay.classList.remove('active');
                     overlay.style.opacity = '';
                 });
