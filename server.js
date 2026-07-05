@@ -49,9 +49,9 @@ function authenticateToken(req, res, next) {
     });
 }
 
-// Secure Login Endpoint (using Bcrypt & JWT)
+// Secure Login Endpoint (using Bcrypt, JWT, and Device Lock)
 app.post('/api/login', (req, res) => {
-    const { username, password } = req.body;
+    const { username, password, device_id } = req.body;
     
     db.get("SELECT * FROM users WHERE username = ?", [username], (err, row) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -62,6 +62,17 @@ app.post('/api/login', (req, res) => {
         // Verify hashed password
         const passwordMatch = bcrypt.compareSync(password, row.password);
         if (passwordMatch) {
+            // Enforce hardware lock for students
+            if (row.role === 'student') {
+                if (!row.device_id) {
+                    // First login: Register this device ID
+                    db.run("UPDATE users SET device_id = ? WHERE id = ?", [device_id, row.id]);
+                } else if (row.device_id !== device_id) {
+                    // Lockout: Prevent login from other devices
+                    return res.status(400).json({ success: false, message: "This account is registered on another device." });
+                }
+            }
+
             // Generate securely signed JWT token valid for 12 hours
             const token = jwt.sign(
                 { id: row.id, username: row.username, role: row.role }, 

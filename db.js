@@ -17,7 +17,8 @@ const db = new sqlite3.Database(dbPath, (err) => {
                 username TEXT UNIQUE,
                 password TEXT,
                 role TEXT,
-                barcode TEXT UNIQUE
+                barcode TEXT UNIQUE,
+                device_id TEXT
             )`);
 
             db.run(`CREATE TABLE IF NOT EXISTS classes (
@@ -45,6 +46,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
 
             // Migration: Helper to add columns dynamically if the database file was already created
             db.run("ALTER TABLE users ADD COLUMN barcode TEXT UNIQUE", (err) => { /* Ignore duplicate column errors */ });
+            db.run("ALTER TABLE users ADD COLUMN device_id TEXT", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE classes ADD COLUMN token_secret TEXT", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE classes ADD COLUMN accuracy REAL", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE attendance ADD COLUMN status TEXT DEFAULT 'present'", (err) => { /* Ignore duplicate column errors */ });
