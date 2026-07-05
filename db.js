@@ -61,58 +61,65 @@ const db = new sqlite3.Database(dbPath, (err) => {
             db.run("ALTER TABLE attendance ADD COLUMN request_lat REAL", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE attendance ADD COLUMN request_lon REAL", (err) => { /* Ignore duplicate column errors */ });
 
-            // Seed initial data
-            db.get("SELECT count(*) as count FROM users", async (err, row) => {
+            // Robust individual seeding (creates HOD or other users if they are missing from the table)
+            db.get("SELECT count(*) as count FROM users WHERE role = 'hod'", (err, row) => {
                 if (row && row.count === 0) {
-                    console.log("Seeding database with HOD, 20 teachers, and 67 students...");
-                    
-                    let credentialsLog = "=========================================\n";
-                    credentialsLog += "AUTO-GENERATED SECURED LOGIN CREDENTIALS\n";
-                    credentialsLog += "=========================================\n\n";
-                    
-                    credentialsLog += "HOD ACCOUNT (1 Total)\n";
-                    credentialsLog += "---------------------\n";
+                    console.log("Seeding HOD account...");
                     const hodUsername = 'hod1';
                     const hodPassword = 'hod123';
                     const hashedHodPassword = bcrypt.hashSync(hodPassword, 10);
-                    
-                    const insert = db.prepare('INSERT INTO users (username, password, role, barcode) VALUES (?,?,?,?)');
-                    insert.run([hodUsername, hashedHodPassword, 'hod', null]);
-                    credentialsLog += `Username: ${hodUsername} | Password: ${hodPassword}\n\n`;
+                    db.run('INSERT INTO users (username, password, role, barcode) VALUES (?,?,?,?)', [hodUsername, hashedHodPassword, 'hod', null]);
+                }
+            });
 
-                    credentialsLog += "TEACHER ACCOUNTS (20 Total)\n";
-                    credentialsLog += "---------------------------\n";
-                    
-                    // Seed 20 Teachers
+            db.get("SELECT count(*) as count FROM users WHERE role = 'teacher'", (err, row) => {
+                if (row && row.count === 0) {
+                    console.log("Seeding 20 teachers...");
+                    const insert = db.prepare('INSERT INTO users (username, password, role, barcode) VALUES (?,?,?,?)');
                     for (let i = 1; i <= 20; i++) {
                         const username = `teacher${i}`;
                         const password = `teacher123`;
                         const hashedPassword = bcrypt.hashSync(password, 10);
                         insert.run([username, hashedPassword, 'teacher', null]);
-                        credentialsLog += `Username: ${username} | Password: ${password}\n`;
                     }
-                    
-                    credentialsLog += "\nSTUDENT ACCOUNTS (67 Total)\n";
-                    credentialsLog += "---------------------------\n";
-                    
-                    // Seed 67 Students
+                    insert.finalize();
+                }
+            });
+
+            db.get("SELECT count(*) as count FROM users WHERE role = 'student'", (err, row) => {
+                if (row && row.count === 0) {
+                    console.log("Seeding 67 students...");
+                    const insert = db.prepare('INSERT INTO users (username, password, role, barcode) VALUES (?,?,?,?)');
                     for (let i = 1; i <= 67; i++) {
                         const username = `student${i}`;
                         const password = `student123`;
                         const barcode = `STU${100 + i}`;
                         const hashedPassword = bcrypt.hashSync(password, 10);
                         insert.run([username, hashedPassword, 'student', barcode]);
-                        credentialsLog += `Username: ${username} | Password: ${password} | Barcode ID: ${barcode}\n`;
                     }
-                    
                     insert.finalize();
-                    
-                    // Write to local text file for easy reference
-                    const logPath = path.resolve(__dirname, 'generated_credentials.txt');
-                    fs.writeFileSync(logPath, credentialsLog, 'utf8');
-                    console.log(`Secured credentials successfully saved to: ${logPath}`);
                 }
             });
+
+            // Write static credentials helper file locally
+            let credentialsLog = "=========================================\n";
+            credentialsLog += "AUTO-GENERATED SECURED LOGIN CREDENTIALS\n";
+            credentialsLog += "=========================================\n\n";
+            credentialsLog += "HOD ACCOUNT (1 Total)\n";
+            credentialsLog += "---------------------\n";
+            credentialsLog += `Username: hod1 | Password: hod123\n\n`;
+            credentialsLog += "TEACHER ACCOUNTS (20 Total)\n";
+            credentialsLog += "---------------------------\n";
+            for (let i = 1; i <= 20; i++) {
+                credentialsLog += `Username: teacher${i} | Password: teacher123\n`;
+            }
+            credentialsLog += "\nSTUDENT ACCOUNTS (67 Total)\n";
+            credentialsLog += "---------------------------\n";
+            for (let i = 1; i <= 67; i++) {
+                credentialsLog += `Username: student${i} | Password: student123 | Barcode ID: STU${100 + i}\n`;
+            }
+            const logPath = path.resolve(__dirname, 'generated_credentials.txt');
+            fs.writeFileSync(logPath, credentialsLog, 'utf8');
         });
     }
 });
