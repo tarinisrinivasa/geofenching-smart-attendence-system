@@ -80,7 +80,11 @@
                     msg.classList.add('success');
                     msg.innerText = 'Login successful! Redirecting...';
                     setTimeout(() => {
-                        window.location.href = data.user.role === 'teacher' ? 'teacher.html' : 'student.html';
+                        if (data.user.role === 'hod') {
+                            window.location.href = 'hod.html';
+                        } else {
+                            window.location.href = data.user.role === 'teacher' ? 'teacher.html' : 'student.html';
+                        }
                     }, 600);
                 } else {
                     msg.classList.add('error');

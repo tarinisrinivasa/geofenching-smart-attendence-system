@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HOD Analytics Console</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container" style="max-width: 650px; padding: 2rem;">
+        <div class="top-bar">
+            <div>
+                <h3>HOD Control Center</h3>
+                <p style="font-size: 0.8rem; color: var(--text-muted);">Head of Department Analytics</p>
+            </div>
+            <button class="logout-btn" onclick="logout(event)">Logout</button>
+        </div>
+
+        <!-- AI Metrics Cards -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 2rem;">
+            <div class="card" style="margin: 0; text-align: center; background: rgba(124, 58, 237, 0.04); border-color: rgba(124, 58, 237, 0.15);">
+                <span style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: var(--secondary); letter-spacing: 0.05em;">AI Alerts Triggered</span>
+                <h2 id="totalAlerts" style="font-size: 2.2rem; margin: 0.5rem 0 0 0; background: none; -webkit-text-fill-color: initial; color: var(--text-main);">0</h2>
+            </div>
+            <div class="card" style="margin: 0; text-align: center; background: rgba(239, 68, 68, 0.04); border-color: rgba(239, 68, 68, 0.15);">
+                <span style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: var(--error); letter-spacing: 0.05em;">Unread Flagged Cases</span>
+                <h2 id="unreadAlerts" style="font-size: 2.2rem; margin: 0.5rem 0 0 0; background: none; -webkit-text-fill-color: initial; color: var(--error);">0</h2>
+            </div>
+        </div>
+
+        <!-- HOD Operations Panel -->
+        <div style="display: flex; gap: 12px; margin-bottom: 2rem;">
+            <button class="btn" onclick="window.print()" style="flex: 1; background-color: var(--primary); box-shadow: 0 4px 12px var(--primary-glow);">
+                Print / Save PDF Report
+            </button>
+            <button class="btn" onclick="fetchAlerts()" style="flex: 1; background-color: #0f172a; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);">
+                Refresh Analysis
+            </button>
+        </div>
+
+        <h3>AI Attendance Anomalies</h3>
+        <div id="alertsList" style="margin-top: 1rem;">
+            <div style="text-align: center; color: var(--text-muted); padding: 2rem;">Analyzing logs...</div>
+        </div>
+    </div>
+
+    <script>
+        const user = JSON.parse(localStorage.getItem('user'));
+        const token = localStorage.getItem('token');
+        
+        if (!user || !token || user.role !== 'hod') {
+            window.location.href = 'index.html';
+        }
+
+        // Global Ripple Effect
+        document.addEventListener('click', function (e) {
+            const btn = e.target.closest('.btn') || e.target.closest('.logout-btn');
+            if (btn) {
+                const circle = document.createElement('span');
+                const diameter = Math.max(btn.clientWidth, btn.clientHeight);
+                const radius = diameter / 2;
+                
+                circle.style.width = circle.style.height = `${diameter}px`;
+                circle.style.left = `${e.clientX - btn.getBoundingClientRect().left - radius}px`;
+                circle.style.top = `${e.clientY - btn.getBoundingClientRect().top - radius}px`;
+                circle.classList.add('ripple');
+                
+                const existing = btn.querySelector('.ripple');
+                if (existing) {
+                    existing.remove();
+                }
+                
+                btn.appendChild(circle);
+                circle.addEventListener('animationend', () => circle.remove());
+            }
+        });
+
+        function logout(e) {
+            e.preventDefault();
+            setTimeout(() => {
+                localStorage.removeItem('user');
+                localStorage.removeItem('token');
+                window.location.href = 'index.html';
+            }, 300);
+        }
+
+        async function fetchAlerts() {
+            try {
+                const res = await fetch('/api/alerts', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.status === 401 || res.status === 403) return logout(new Event('logout'));
+                
+                const data = await res.json();
+                const list = document.getElementById('alertsList');
+                list.innerHTML = '';
+
+                let total = data.alerts.length;
+                let unread = data.alerts.filter(a => a.status === 0).length;
+
+                document.getElementById('totalAlerts').innerText = total;
+                document.getElementById('unreadAlerts').innerText = unread;
+
+                if (total === 0) {
+                    list.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 2.5rem; font-size: 0.95rem;">No bunking anomalies detected by the AI. All student attendance is normal.</div>';
+                    return;
+                }
+
+                data.alerts.forEach((alert, index) => {
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    card.style.animationDelay = `${index * 0.05}s`;
+                    
+                    if (alert.status === 0) {
+                        card.style.borderColor = 'rgba(239, 68, 68, 0.25)';
+                        card.style.background = 'rgba(239, 68, 68, 0.02)';
+                    }
+
+                    const timeStr = new Date(alert.timestamp.replace(' ', 'T') + 'Z').toLocaleString();
+                    const actionButton = alert.status === 0 
+                        ? `<button class="btn" style="width: auto; padding: 6px 14px; font-size: 0.75rem; background-color: var(--secondary); box-shadow: 0 2px 6px var(--secondary-glow);" onclick="dismissAlert(${alert.id})">Acknowledge</button>`
+                        : `<span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Acknowledged</span>`;
+
+                    card.innerHTML = `
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
+                                <p style="font-size: 0.9rem; font-weight: 500; line-height: 1.4; color: var(--text-main);">${alert.message}</p>
+                                ${actionButton}
+                            </div>
+                            <small style="color: var(--text-muted); font-size: 0.75rem; font-weight: 500;">Detected on: ${timeStr}</small>
+                        </div>
+                    `;
+                    list.appendChild(card);
+                });
+            } catch (err) {
+                console.error(err);
+                document.getElementById('alertsList').innerHTML = '<div style="text-align: center; color: var(--error); padding: 2rem;">Error connecting to the server.</div>';
+            }
+        }
+
+        async function dismissAlert(alertId) {
+            try {
+                const res = await fetch(`/api/alerts/${alertId}/read`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                if (data.success) {
+                    fetchAlerts();
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        // Auto-refresh alerts every 5 seconds
+        fetchAlerts();
+        setInterval(fetchAlerts, 5000);
+    </script>
+</body>
+</html>
