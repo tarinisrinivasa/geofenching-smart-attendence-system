@@ -61,32 +61,48 @@ app.post('/api/login', (req, res) => {
         
         // Verify hashed password
         const passwordMatch = bcrypt.compareSync(password, row.password);
-        if (passwordMatch) {
-            // Enforce hardware lock for students
-            if (row.role === 'student') {
-                if (!row.device_id) {
-                    // First login: Register this device ID
-                    db.run("UPDATE users SET device_id = ? WHERE id = ?", [device_id, row.id]);
-                } else if (row.device_id !== device_id) {
-                    // Lockout: Prevent login from other devices
-                    return res.status(400).json({ success: false, message: "This account is registered on another device." });
-                }
-            }
+        if (!passwordMatch) {
+            return res.status(401).json({ success: false, message: "Invalid username or password" });
+        }
 
-            // Generate securely signed JWT token valid for 12 hours
+        // Helper to sign JWT and return response
+        const completeLogin = () => {
             const token = jwt.sign(
                 { id: row.id, username: row.username, role: row.role }, 
                 JWT_SECRET, 
                 { expiresIn: '12h' }
             );
-            
             res.json({ 
                 success: true, 
                 token, 
                 user: { id: row.id, username: row.username, role: row.role, barcode: row.barcode } 
             });
+        };
+
+        // Enforce hardware lock for students
+        if (row.role === 'student') {
+            if (!row.device_id) {
+                // First login: Verify that this phone isn't already registered to another student
+                db.get("SELECT username FROM users WHERE device_id = ? AND id != ?", [device_id, row.id], (err, boundUser) => {
+                    if (err) return res.status(500).json({ error: err.message });
+                    if (boundUser) {
+                        return res.status(400).json({ success: false, message: `This device is already registered to student: ${boundUser.username}` });
+                    }
+                    
+                    // Bind this device ID
+                    db.run("UPDATE users SET device_id = ? WHERE id = ?", [device_id, row.id], (err) => {
+                        if (err) return res.status(500).json({ error: err.message });
+                        completeLogin();
+                    });
+                });
+            } else if (row.device_id !== device_id) {
+                // Lockout: Prevent login from other devices
+                return res.status(400).json({ success: false, message: "This account is registered on another device." });
+            } else {
+                completeLogin();
+            }
         } else {
-            res.status(401).json({ success: false, message: "Invalid username or password" });
+            completeLogin();
         }
     });
 });
