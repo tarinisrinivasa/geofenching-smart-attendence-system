@@ -11,13 +11,18 @@ const { getDistance } = require('./utils/geofence');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_key_for_attendance_system';
 
-// Generate self-signed certificates on startup for secure local device testing
-const attrs = [{ name: 'commonName', value: 'localhost' }];
-const pems = selfsigned.generate(attrs, { days: 365, keySize: 2048 });
-const httpsOptions = {
-    key: pems.private,
-    cert: pems.cert
-};
+const isRender = process.env.RENDER === 'true';
+
+let httpsOptions = null;
+if (!isRender) {
+    // Generate self-signed certificates on startup for secure local device testing (only needed for local network phone access)
+    const attrs = [{ name: 'commonName', value: 'localhost' }];
+    const pems = selfsigned.generate(attrs, { days: 365, keySize: 2048 });
+    httpsOptions = {
+        key: pems.private,
+        cert: pems.cert
+    };
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -307,7 +312,15 @@ app.post('/api/mark-attendance', authenticateToken, (req, res) => {
     });
 });
 
-https.createServer(httpsOptions, app).listen(PORT, '0.0.0.0', () => {
-    console.log(`Secure HTTPS Server running on https://localhost:${PORT}`);
-    console.log(`To access from other devices on WiFi, open: https://<your_laptop_ip>:${PORT}`);
-});
+if (isRender) {
+    // Render handles SSL certificates automatically at the proxy level. Start a standard HTTP server.
+    app.listen(PORT, '0.0.0.0', () => {
+        console.log(`HTTP Server running on port ${PORT}`);
+    });
+} else {
+    // Local environment: Start HTTPS server for secure mobile phone connections over local WiFi
+    https.createServer(httpsOptions, app).listen(PORT, '0.0.0.0', () => {
+        console.log(`Secure HTTPS Server running on https://localhost:${PORT}`);
+        console.log(`To access from other devices on WiFi, open: https://<your_laptop_ip>:${PORT}`);
+    });
+}
