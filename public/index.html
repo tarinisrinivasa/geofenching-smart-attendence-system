@@ -50,10 +50,28 @@
             }
         });
 
-        let deviceId = localStorage.getItem('device_id');
-        if (!deviceId) {
-            deviceId = 'dev-' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-            localStorage.setItem('device_id', deviceId);
+        const safeStorage = {
+            getItem(key) {
+                try { return localStorage.getItem(key); } catch(e) { 
+                    try { return sessionStorage.getItem(key) || null; } catch(err) { return null; }
+                }
+            },
+            setItem(key, value) {
+                try { localStorage.setItem(key, value); } catch(e) { 
+                    try { sessionStorage.setItem(key, value); } catch(err) {}
+                }
+            }
+        };
+
+        let deviceId = '';
+        try {
+            deviceId = safeStorage.getItem('device_id');
+            if (!deviceId) {
+                deviceId = 'dev-' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+                safeStorage.setItem('device_id', deviceId);
+            }
+        } catch (e) {
+            deviceId = 'dev-fallback-' + Math.random().toString(36).substring(2, 15);
         }
 
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
@@ -75,15 +93,25 @@
                 const data = await res.json();
                 
                 if (data.success) {
-                    localStorage.setItem('user', JSON.stringify(data.user));
-                    localStorage.setItem('token', data.token); // Store secure JWT session token
+                    safeStorage.setItem('user', JSON.stringify(data.user));
+                    safeStorage.setItem('token', data.token); // Store secure JWT session token
                     msg.classList.add('success');
                     msg.innerText = 'Login successful! Redirecting...';
                     setTimeout(() => {
+                        let targetPage = '';
                         if (data.user.role === 'hod') {
-                            window.location.href = 'hod.html';
+                            targetPage = 'hod.html';
                         } else {
-                            window.location.href = data.user.role === 'teacher' ? 'teacher.html' : 'student.html';
+                            targetPage = data.user.role === 'teacher' ? 'teacher.html' : 'student.html';
+                        }
+                        
+                        // Check if localStorage works, otherwise append credentials to URL for legacy Safari
+                        try {
+                            localStorage.setItem('__test', '1');
+                            localStorage.removeItem('__test');
+                            window.location.href = targetPage;
+                        } catch(e) {
+                            window.location.href = `${targetPage}?token=${encodeURIComponent(data.token)}&user=${encodeURIComponent(JSON.stringify(data.user))}`;
                         }
                     }, 600);
                 } else {

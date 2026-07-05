@@ -131,8 +131,31 @@
     </div>
 
     <script>
-        const user = JSON.parse(localStorage.getItem('user'));
-        const token = localStorage.getItem('token');
+        const urlParams = new URLSearchParams(window.location.search);
+        const safeStorage = {
+            getItem(key) {
+                let val = null;
+                try { val = localStorage.getItem(key); } catch(e) {}
+                if (!val) {
+                    try { val = sessionStorage.getItem(key); } catch(e) {}
+                }
+                if (!val && urlParams.has(key)) {
+                    val = urlParams.get(key);
+                    // Cache it if possible
+                    try { localStorage.setItem(key, val); } catch(e) {
+                        try { sessionStorage.setItem(key, val); } catch(err) {}
+                    }
+                }
+                return val;
+            },
+            removeItem(key) {
+                try { localStorage.removeItem(key); } catch(e) {}
+                try { sessionStorage.removeItem(key); } catch(e) {}
+            }
+        };
+
+        const user = JSON.parse(safeStorage.getItem('user'));
+        const token = safeStorage.getItem('token');
         if (!user || !token || user.role !== 'teacher') {
             window.location.href = 'index.html';
         }
@@ -173,8 +196,8 @@
         function logout(e) {
             e.preventDefault();
             setTimeout(() => {
-                localStorage.removeItem('user');
-                localStorage.removeItem('token');
+                safeStorage.removeItem('user');
+                safeStorage.removeItem('token');
                 window.location.href = 'index.html';
             }, 300);
         }
