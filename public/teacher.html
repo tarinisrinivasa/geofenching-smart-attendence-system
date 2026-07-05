@@ -161,9 +161,6 @@
                 <button class="btn" onclick="exportPDF(true)" style="background: #0f172a; border: 1px solid var(--surface-border); height: 48px; border-radius: 14px;">
                     📄 Download PDF Report
                 </button>
-                <button class="btn" id="syncTgsbtetBtn" onclick="pushToTgsbtet()" style="background: linear-gradient(135deg, var(--primary), var(--secondary)); box-shadow: 0 4px 15px var(--primary-glow); height: 48px; border-radius: 14px;">
-                    ⚡ Sync with TGSBTET State Portal
-                </button>
             </div>
             
             <button class="btn" onclick="closeExportModal()" style="margin-top: 1.5rem; background: transparent; border: 1px solid var(--border); height: 40px; font-size: 0.85rem; border-radius: 12px;">
@@ -718,37 +715,6 @@
 
         function printPDF() {
             exportPDF(false);
-        }
-
-        async function pushToTgsbtet() {
-            const btn = document.getElementById('syncTgsbtetBtn');
-            if (btn.classList.contains('loading')) return;
-            btn.classList.add('loading');
-            
-            const classId = endedSessionId || activeSessionId;
-            if (!classId) {
-                alert('No active session ID found.');
-                btn.classList.remove('loading');
-                return;
-            }
-
-            try {
-                const res = await fetch(`/api/classes/${classId}/push-tgsbtet`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const data = await res.json();
-                btn.classList.remove('loading');
-                
-                if (data.success) {
-                    alert(`✅ Integration Successful!\nTransaction ID: ${data.transaction_id}\n\nMessage: ${data.message}`);
-                } else {
-                    alert(`❌ Sync Failed: ${data.message}`);
-                }
-            } catch (err) {
-                btn.classList.remove('loading');
-                alert('❌ Server connection error.');
-            }
         }
 
         // Polling loop manager
