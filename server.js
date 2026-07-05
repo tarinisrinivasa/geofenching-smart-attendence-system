@@ -120,16 +120,82 @@ app.get('/api/classes/:teacher_id', authenticateToken, (req, res) => {
     });
 });
 
-// Teacher API: End a class session
+// Teacher API: End a class session & Run AI Bunking Analysis
 app.post('/api/classes/:class_id/end', authenticateToken, (req, res) => {
     if (req.user.role !== 'teacher') {
         return res.status(403).json({ success: false, message: "Unauthorized." });
     }
 
-    const classId = req.params.class_id;
+    const classId = parseInt(req.params.class_id);
     db.run("UPDATE classes SET active = 0 WHERE id = ?", [classId], function(err) {
         if (err) return res.status(500).json({ error: err.message });
+
+        // Run AI Bunking Analysis asynchronously in the background
+        db.get("SELECT name FROM classes WHERE id = ?", [classId], (err, currentClass) => {
+            if (err || !currentClass) return;
+
+            // Find the most recent ended class session (if any)
+            db.get("SELECT id, name FROM classes WHERE id < ? ORDER BY id DESC LIMIT 1", [classId], (err, prevClass) => {
+                if (err || !prevClass) return;
+
+                // Query students present in the previous session
+                db.all("SELECT student_id FROM attendance WHERE class_id = ? AND status = 'present'", [prevClass.id], (err, prevPresent) => {
+                    if (err || !prevPresent || prevPresent.length === 0) return;
+
+                    // Query students present in the current ended session
+                    db.all("SELECT student_id FROM attendance WHERE class_id = ? AND status = 'present'", [classId], (err, currentPresent) => {
+                        if (err || !currentPresent) return;
+
+                        const currentPresentIds = new Set(currentPresent.map(p => p.student_id));
+                        const missingStudents = prevPresent.filter(p => !currentPresentIds.has(p.student_id));
+
+                        if (missingStudents.length > 0) {
+                            const placeholders = missingStudents.map(() => '?').join(',');
+                            const studentIds = missingStudents.map(m => m.student_id);
+
+                            // Get usernames of flagged students to write readable warnings
+                            db.all(`SELECT id, username FROM users WHERE id IN (${placeholders})`, studentIds, (err, users) => {
+                                if (err || !users) return;
+
+                                const insertAlert = db.prepare("INSERT INTO alerts (student_id, message) VALUES (?, ?)");
+                                users.forEach(u => {
+                                    const alertMsg = `⚠️ Anomaly: Student "${u.username}" was Present in "${prevClass.name}" but Absent in consecutive class "${currentClass.name}". Potential class skipping detected.`;
+                                    insertAlert.run([u.id, alertMsg]);
+                                });
+                                insertAlert.finalize();
+                            });
+                        }
+                    });
+                });
+            });
+        });
+
         res.json({ success: true, message: "Class session ended successfully!" });
+    });
+});
+
+// HOD API: Get all AI alerts (sorted by unread first)
+app.get('/api/alerts', authenticateToken, (req, res) => {
+    if (req.user.role !== 'hod') {
+        return res.status(403).json({ success: false, message: "Unauthorized access." });
+    }
+
+    db.all("SELECT * FROM alerts ORDER BY status ASC, id DESC", [], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ alerts: rows });
+    });
+});
+
+// HOD API: Mark alert as read
+app.post('/api/alerts/:alert_id/read', authenticateToken, (req, res) => {
+    if (req.user.role !== 'hod') {
+        return res.status(403).json({ success: false, message: "Unauthorized access." });
+    }
+
+    const alertId = req.params.alert_id;
+    db.run("UPDATE alerts SET status = 1 WHERE id = ?", [alertId], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true, message: "Alert marked as read." });
     });
 });
 

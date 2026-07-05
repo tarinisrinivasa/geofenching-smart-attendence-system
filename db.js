@@ -44,6 +44,14 @@ const db = new sqlite3.Database(dbPath, (err) => {
                 UNIQUE(class_id, student_id)
             )`);
 
+            db.run(`CREATE TABLE IF NOT EXISTS alerts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                student_id INTEGER,
+                message TEXT,
+                status INTEGER DEFAULT 0,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            )`);
+
             // Migration: Helper to add columns dynamically if the database file was already created
             db.run("ALTER TABLE users ADD COLUMN barcode TEXT UNIQUE", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE users ADD COLUMN device_id TEXT", (err) => { /* Ignore duplicate column errors */ });
@@ -56,16 +64,24 @@ const db = new sqlite3.Database(dbPath, (err) => {
             // Seed initial data
             db.get("SELECT count(*) as count FROM users", async (err, row) => {
                 if (row && row.count === 0) {
-                    console.log("Seeding database with 20 teachers and 67 students...");
+                    console.log("Seeding database with HOD, 20 teachers, and 67 students...");
                     
                     let credentialsLog = "=========================================\n";
                     credentialsLog += "AUTO-GENERATED SECURED LOGIN CREDENTIALS\n";
                     credentialsLog += "=========================================\n\n";
                     
-                    credentialsLog += "TEACHER ACCOUNTS (20 Total)\n";
-                    credentialsLog += "---------------------------\n";
+                    credentialsLog += "HOD ACCOUNT (1 Total)\n";
+                    credentialsLog += "---------------------\n";
+                    const hodUsername = 'hod1';
+                    const hodPassword = 'hod123';
+                    const hashedHodPassword = bcrypt.hashSync(hodPassword, 10);
                     
                     const insert = db.prepare('INSERT INTO users (username, password, role, barcode) VALUES (?,?,?,?)');
+                    insert.run([hodUsername, hashedHodPassword, 'hod', null]);
+                    credentialsLog += `Username: ${hodUsername} | Password: ${hodPassword}\n\n`;
+
+                    credentialsLog += "TEACHER ACCOUNTS (20 Total)\n";
+                    credentialsLog += "---------------------------\n";
                     
                     // Seed 20 Teachers
                     for (let i = 1; i <= 20; i++) {
