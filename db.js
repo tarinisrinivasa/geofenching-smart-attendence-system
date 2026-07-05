@@ -60,6 +60,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
             db.run(`CREATE TABLE IF NOT EXISTS alerts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 student_id INTEGER,
+                class_id INTEGER,
                 message TEXT,
                 status INTEGER DEFAULT 0,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -68,11 +69,16 @@ const db = new sqlite3.Database(dbPath, (err) => {
             // Migration: Helper to add columns dynamically if the database file was already created
             db.run("ALTER TABLE users ADD COLUMN barcode TEXT UNIQUE", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE users ADD COLUMN device_id TEXT", (err) => { /* Ignore duplicate column errors */ });
+            db.run("ALTER TABLE users ADD COLUMN parent_phone TEXT", (err) => { /* Ignore duplicate column errors */ });
+            db.run("ALTER TABLE alerts ADD COLUMN class_id INTEGER", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE classes ADD COLUMN token_secret TEXT", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE classes ADD COLUMN accuracy REAL", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE attendance ADD COLUMN status TEXT DEFAULT 'present'", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE attendance ADD COLUMN request_lat REAL", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE attendance ADD COLUMN request_lon REAL", (err) => { /* Ignore duplicate column errors */ });
+            
+            // Retroactively populate student parent phones
+            db.run("UPDATE users SET parent_phone = '+91 90123 456' || substr('0' || (id - 21), -2) WHERE role = 'student' AND parent_phone IS NULL");
 
             // Robust individual seeding (creates HOD or other users if they are missing from the table)
             db.get("SELECT count(*) as count FROM users WHERE role = 'hod'", (err, row) => {
@@ -102,13 +108,14 @@ const db = new sqlite3.Database(dbPath, (err) => {
             db.get("SELECT count(*) as count FROM users WHERE role = 'student'", (err, row) => {
                 if (row && row.count === 0) {
                     console.log("Seeding 67 students...");
-                    const insert = db.prepare('INSERT INTO users (username, password, role, barcode) VALUES (?,?,?,?)');
+                    const insert = db.prepare('INSERT INTO users (username, password, role, barcode, parent_phone) VALUES (?,?,?,?,?)');
                     for (let i = 1; i <= 67; i++) {
                         const username = `student${i}`;
                         const password = `student123`;
                         const barcode = `STU${100 + i}`;
+                        const parentPhone = `+91 90123 456${i.toString().padStart(2, '0')}`;
                         const hashedPassword = bcrypt.hashSync(password, 10);
-                        insert.run([username, hashedPassword, 'student', barcode]);
+                        insert.run([username, hashedPassword, 'student', barcode, parentPhone]);
                     }
                     insert.finalize();
                 }
