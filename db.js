@@ -66,11 +66,27 @@ const db = new sqlite3.Database(dbPath, (err) => {
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
             )`);
 
+            db.run(`CREATE TABLE IF NOT EXISTS campus_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )`);
+
+            // Seed default campus settings if not present
+            db.get("SELECT count(*) as count FROM campus_settings", (err, row) => {
+                if (row && row.count === 0) {
+                    console.log("Seeding default campus geofence settings...");
+                    db.run("INSERT INTO campus_settings (key, value) VALUES ('campus_latitude', '17.3850')");
+                    db.run("INSERT INTO campus_settings (key, value) VALUES ('campus_longitude', '78.4867')");
+                    db.run("INSERT INTO campus_settings (key, value) VALUES ('campus_radius', '500')");
+                }
+            });
+
             // Migration: Helper to add columns dynamically if the database file was already created
             db.run("ALTER TABLE users ADD COLUMN barcode TEXT UNIQUE", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE users ADD COLUMN device_id TEXT", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE users ADD COLUMN parent_phone TEXT", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE alerts ADD COLUMN class_id INTEGER", (err) => { /* Ignore duplicate column errors */ });
+            db.run("ALTER TABLE alerts ADD COLUMN student_reason TEXT", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE classes ADD COLUMN token_secret TEXT", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE classes ADD COLUMN accuracy REAL", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE attendance ADD COLUMN status TEXT DEFAULT 'present'", (err) => { /* Ignore duplicate column errors */ });

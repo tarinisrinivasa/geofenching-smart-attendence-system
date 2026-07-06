@@ -173,10 +173,10 @@ app.post('/api/classes/:class_id/end', authenticateToken, (req, res) => {
                             db.all(`SELECT id, username FROM users WHERE id IN (${placeholders})`, studentIds, (err, users) => {
                                 if (err || !users) return;
 
-                                const insertAlert = db.prepare("INSERT INTO alerts (student_id, message) VALUES (?, ?)");
+                                const insertAlert = db.prepare("INSERT INTO alerts (student_id, class_id, message) VALUES (?, ?, ?)");
                                 users.forEach(u => {
                                     const alertMsg = `⚠️ Anomaly: Student "${u.username}" was Present in "${prevClass.name}" but Absent in consecutive class "${currentClass.name}". Potential class skipping detected.`;
-                                    insertAlert.run([u.id, alertMsg]);
+                                    insertAlert.run([u.id, classId, alertMsg]);
                                 });
                                 insertAlert.finalize();
                             });
@@ -190,15 +190,105 @@ app.post('/api/classes/:class_id/end', authenticateToken, (req, res) => {
     });
 });
 
-// HOD API: Get all AI alerts (sorted by unread first)
+// HOD API: Get all AI alerts (sorted by unread first, joined with user details and parent phone)
 app.get('/api/alerts', authenticateToken, (req, res) => {
     if (req.user.role !== 'hod') {
         return res.status(403).json({ success: false, message: "Unauthorized access." });
     }
 
-    db.all("SELECT * FROM alerts ORDER BY status ASC, id DESC", [], (err, rows) => {
+    const query = `
+        SELECT 
+            a.id, 
+            a.student_id, 
+            a.class_id, 
+            a.message, 
+            a.student_reason,
+            a.status, 
+            a.timestamp, 
+            u.username as student_name, 
+            u.parent_phone 
+        FROM alerts a
+        LEFT JOIN users u ON a.student_id = u.id
+        ORDER BY a.status ASC, a.id DESC
+    `;
+    db.all(query, [], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ alerts: rows });
+    });
+});
+
+// HOD API: Notify parent (Indian digits standard layout, manual action confirmation)
+app.post('/api/alerts/:alert_id/notify-parent', authenticateToken, (req, res) => {
+    if (req.user.role !== 'hod') {
+        return res.status(403).json({ success: false, message: "Unauthorized access." });
+    }
+
+    const alertId = parseInt(req.params.alert_id);
+    const query = `
+        SELECT a.id, a.message, u.username, u.parent_phone
+        FROM alerts a
+        JOIN users u ON a.student_id = u.id
+        WHERE a.id = ?
+    `;
+    db.get(query, [alertId], (err, row) => {
+        if (err || !row) {
+            return res.status(404).json({ success: false, message: "Alert not found." });
+        }
+
+        if (!row.parent_phone) {
+            return res.status(400).json({ success: false, message: "No registered parent phone number found for this student." });
+        }
+
+        const messageText = `Alert from HOD: Your child ${row.username} was Present in the first session but Absent in the second session. Please contact your child or the HOD to clarify.`;
+        
+        console.log(`[PARENT ALERT SMS] Destination: ${row.parent_phone} | Content: "${messageText}"`);
+
+        // Mark alert notification as sent by updating status (let's say we set status to 1 as marked/notified)
+        db.run("UPDATE alerts SET status = 1 WHERE id = ?", [alertId], function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ 
+                success: true, 
+                message: `SMS notification logged & sent to ${row.parent_phone}!`,
+                parent_phone: row.parent_phone,
+                sms_body: messageText
+            });
+        });
+    });
+});
+
+// HOD API: Reverse attendance status from Absent to Present
+app.post('/api/alerts/:alert_id/reverse-attendance', authenticateToken, (req, res) => {
+    if (req.user.role !== 'hod') {
+        return res.status(403).json({ success: false, message: "Unauthorized access." });
+    }
+
+    const alertId = parseInt(req.params.alert_id);
+
+    db.get("SELECT student_id, class_id FROM alerts WHERE id = ?", [alertId], (err, alertRecord) => {
+        if (err || !alertRecord) {
+            return res.status(404).json({ success: false, message: "Alert not found." });
+        }
+
+        const { student_id, class_id } = alertRecord;
+
+        if (!class_id) {
+            return res.status(400).json({ success: false, message: "No valid class session associated with this alert." });
+        }
+
+        // Insert or replace present attendance status for that student and class
+        const insertAttendance = `
+            INSERT OR REPLACE INTO attendance (class_id, student_id, status, timestamp) 
+            VALUES (?, ?, 'present', datetime('now', 'localtime'))
+        `;
+        db.run(insertAttendance, [class_id, student_id], function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+
+            // Mark the alert as resolved (status = 2)
+            db.run("UPDATE alerts SET status = 2 WHERE id = ?", [alertId], function(err) {
+                if (err) return res.status(500).json({ error: err.message });
+                res.json({ success: true, message: "Attendance successfully reversed from Absent to Present!" });
+            });
+        });
     });
 });
 
@@ -273,11 +363,43 @@ app.post('/api/mark-barcode', authenticateToken, (req, res) => {
     });
 });
 
-// Student API: Get active classes
+// Student API: Get active classes (includes check-in status for this specific student!)
 app.get('/api/active-classes', authenticateToken, (req, res) => {
-    db.all("SELECT id, name FROM classes WHERE active = 1 ORDER BY id DESC", [], (err, rows) => {
+    const studentId = req.user.id;
+    const query = `
+        SELECT c.id, c.name, c.latitude, c.longitude, c.radius,
+               (SELECT status FROM attendance WHERE class_id = c.id AND student_id = ?) as attendance_status
+        FROM classes c
+        WHERE c.active = 1
+        ORDER BY c.id DESC
+    `;
+    db.all(query, [studentId], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ classes: rows });
+    });
+});
+
+// Student API: Report Geofence Boundary Breach (Student walked out of class)
+app.post('/api/alerts/geofence-breach', authenticateToken, (req, res) => {
+    if (req.user.role !== 'student') {
+        return res.status(403).json({ success: false, message: "Unauthorized." });
+    }
+
+    const { class_id, latitude, longitude, distance } = req.body;
+    const student_id = req.user.id;
+    const student_name = req.user.username;
+
+    // Fetch class details to construct the alert message
+    db.get("SELECT name, radius FROM classes WHERE id = ?", [class_id], (err, currentClass) => {
+        if (err || !currentClass) return res.status(404).json({ success: false, message: "Class not found." });
+
+        const message = `🚨 Geofence Breach: Student "${student_name}" walked outside the classroom geofence bounds of "${currentClass.name}" (Current distance: ${distance}m, Limit: ${currentClass.radius}m).`;
+        
+        // Log this breach alert for the HOD
+        db.run("INSERT INTO alerts (student_id, class_id, message) VALUES (?, ?, ?)", [student_id, class_id, message], function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ success: true, message: "Geofence boundary breach logged for HOD review." });
+        });
     });
 });
 
@@ -432,6 +554,82 @@ app.post('/api/mark-attendance', authenticateToken, (req, res) => {
                 message: `You are outside the geofence. Distance: ${Math.round(distance)}m, Limit: ${Math.round(allowedDistance)}m (Radius: ${cls.radius}m + Teacher GPS error: ±${Math.round(cls.accuracy || 0)}m + Student GPS error: ±${Math.round(accuracy || 0)}m)`
             });
         }
+    });
+});
+
+// HOD & Student API: Get Campus Geofence Settings
+app.get('/api/campus-settings', authenticateToken, (req, res) => {
+    db.all("SELECT key, value FROM campus_settings", [], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        const settings = {};
+        rows.forEach(r => {
+            settings[r.key] = parseFloat(r.value);
+        });
+        res.json({ success: true, settings });
+    });
+});
+
+// HOD API: Update Campus Geofence Settings
+app.post('/api/campus-settings', authenticateToken, (req, res) => {
+    if (req.user.role !== 'hod') {
+        return res.status(403).json({ success: false, message: "Unauthorized access." });
+    }
+
+    const { campus_latitude, campus_longitude, campus_radius } = req.body;
+    
+    if (campus_latitude === undefined || campus_longitude === undefined || campus_radius === undefined) {
+        return res.status(400).json({ success: false, message: "Missing latitude, longitude, or radius values." });
+    }
+
+    db.serialize(() => {
+        db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('campus_latitude', ?)", [campus_latitude.toString()]);
+        db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('campus_longitude', ?)", [campus_longitude.toString()]);
+        db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('campus_radius', ?)", [campus_radius.toString()], function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ success: true, message: "Campus geofence settings updated successfully!" });
+        });
+    });
+});
+
+// Student API: Report Campus Geofence Boundary Breach
+app.post('/api/alerts/campus-breach', authenticateToken, (req, res) => {
+    if (req.user.role !== 'student') {
+        return res.status(403).json({ success: false, message: "Unauthorized." });
+    }
+
+    const { latitude, longitude, distance } = req.body;
+    const student_id = req.user.id;
+    const student_name = req.user.username;
+
+    db.get("SELECT value FROM campus_settings WHERE key = 'campus_radius'", (err, row) => {
+        if (err || !row) return res.status(500).json({ error: "Campus settings not loaded." });
+        const campusRadius = row.value;
+
+        const message = `🚨 Campus Geofence Breach: Student "${student_name}" walked outside the HOD campus bounds (Current distance: ${distance}m, Limit: ${campusRadius}m).`;
+        
+        db.run("INSERT INTO alerts (student_id, message) VALUES (?, ?)", [student_id, message], function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            
+            res.json({ success: true, message: "Breach logged.", alert_id: this.lastID });
+        });
+    });
+});
+
+// Student API: Submit Explanation Reason for Breach Alert
+app.post('/api/alerts/submit-reason', authenticateToken, (req, res) => {
+    if (req.user.role !== 'student') {
+        return res.status(403).json({ success: false, message: "Unauthorized." });
+    }
+
+    const { alert_id, reason } = req.body;
+
+    if (!alert_id || !reason || reason.trim() === "") {
+        return res.status(400).json({ success: false, message: "Valid alert ID and explanation statement are required." });
+    }
+
+    db.run("UPDATE alerts SET student_reason = ? WHERE id = ? AND student_id = ?", [reason.trim(), alert_id, req.user.id], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true, message: "Reason statement logged successfully for HOD review." });
     });
 });
 
