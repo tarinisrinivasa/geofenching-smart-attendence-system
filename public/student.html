@@ -218,6 +218,11 @@
 
         let selectedClassId = null;
         let html5QrcodeScanner = null;
+        let activeClassesArray = [];
+        let campusSettings = null;
+        let campusGeofenceGuard = null;
+        let activeBreachAlertId = null;
+        let hasReportedBreach = false;
 
         // Global Ripple Effect
         document.addEventListener('click', function (e) {
@@ -259,6 +264,7 @@
                 if (res.status === 401 || res.status === 403) return logout(new Event('logout'));
                 
                 const data = await res.json();
+                activeClassesArray = data.classes || [];
                 const list = document.getElementById('classesList');
                 list.innerHTML = '';
 
@@ -271,12 +277,26 @@
                     const card = document.createElement('div');
                     card.className = 'card';
                     card.style.animationDelay = `${index * 0.1}s`;
-                    card.innerHTML = `
-                        <div style="display:flex; justify-content:space-between; align-items:center; gap: 16px;">
-                            <span style="font-weight:600; font-size:1.05rem; word-break: break-word;">${cls.name}</span>
+                    
+                    let actionControl = '';
+                    if (cls.attendance_status === 'present') {
+                        actionControl = `
+                            <span style="color: var(--success); font-weight: 700; font-size: 0.85rem; background: rgba(16, 185, 129, 0.15); padding: 8px 16px; border-radius: 14px; border: 1px solid rgba(16, 185, 129, 0.25); text-shadow: 0 0 10px rgba(16, 185, 129, 0.3);">
+                                🛡️ Checked In (Guarded)
+                            </span>
+                        `;
+                    } else {
+                        actionControl = `
                             <button class="btn" style="width:auto; padding:10px 20px; font-size:0.85rem;" onclick="openVerifyPanel(${cls.id}, '${cls.name}')">
                                 Enter Class
                             </button>
+                        `;
+                    }
+
+                    card.innerHTML = `
+                        <div style="display:flex; justify-content:space-between; align-items:center; gap: 16px;">
+                            <span style="font-weight:600; font-size:1.05rem; word-break: break-word;">${cls.name}</span>
+                            ${actionControl}
                         </div>
                     `;
                     list.appendChild(card);
@@ -436,7 +456,7 @@
                     
                     if (data.success) {
                         showSuccessLottie(`${data.message} (Distance: ${data.distance}m)`, () => {
-                            loadClasses();
+                            fetchClasses();
                             closeVerify();
                         });
                     } else {
@@ -536,7 +556,7 @@
                         
                         if (data.success) {
                             showSuccessLottie(`${data.message} (Distance: ${data.distance}m)`, () => {
-                                loadClasses();
+                                fetchClasses();
                                 closeVerify();
                             });
                         } else {
@@ -617,7 +637,191 @@
             }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
         }
 
+        function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371e3; // Earth radius in meters
+            const phi1 = lat1 * Math.PI/180;
+            const phi2 = lat2 * Math.PI/180;
+            const deltaPhi = (lat2-lat1) * Math.PI/180;
+            const deltaLambda = (lon2-lon1) * Math.PI/180;
+
+            const a = Math.sin(deltaPhi/2) * Math.sin(deltaPhi/2) +
+                      Math.cos(phi1) * Math.cos(phi2) *
+                      Math.sin(deltaLambda/2) * Math.sin(deltaLambda/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+            return R * c; // distance in meters
+        }
+
+        async function fetchCampusSettingsAndStartGuard() {
+            try {
+                const res = await fetch('/api/campus-settings', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                if (data.success && data.settings) {
+                    campusSettings = data.settings;
+                    startCampusGeofenceGuard();
+                }
+            } catch (err) {
+                console.error("Failed to load campus settings:", err);
+            }
+        }
+
+        function startCampusGeofenceGuard() {
+            if (campusGeofenceGuard) {
+                clearInterval(campusGeofenceGuard);
+            }
+            if (!campusSettings) return;
+
+            const targetLat = campusSettings.campus_latitude;
+            const targetLon = campusSettings.campus_longitude;
+            const radius = campusSettings.campus_radius;
+            console.log(`[Campus Guard] Monitoring campus bounds: Center (${targetLat}, ${targetLon}), Radius: ${radius}m`);
+
+            // Continuous background geofence check loop (runs every 20 seconds, works if class ended or not)
+            campusGeofenceGuard = setInterval(() => {
+                navigator.geolocation.getCurrentPosition((pos) => {
+                    const { latitude, longitude } = pos.coords;
+                    const distance = calculateHaversineDistance(latitude, longitude, targetLat, targetLon);
+                    
+                    console.log(`[Campus Guard] Distance check: ${Math.round(distance)}m (Campus Radius Limit: ${radius}m)`);
+
+                    if (distance > radius) {
+                        if (!hasReportedBreach) {
+                            hasReportedBreach = true;
+                            reportCampusBreach(latitude, longitude, distance);
+                        }
+                    } else {
+                        if (hasReportedBreach) {
+                            hasReportedBreach = false;
+                            clearBreachWarning();
+                        }
+                    }
+                }, (err) => {
+                    console.warn("[Campus Guard] Failed to get GPS coordinates:", err.message);
+                }, { enableHighAccuracy: true });
+            }, 20000);
+        }
+
+        async function reportCampusBreach(lat, lon, distance) {
+            try {
+                const res = await fetch('/api/alerts/campus-breach', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        latitude: lat,
+                        longitude: lon,
+                        distance: Math.round(distance)
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    activeBreachAlertId = data.alert_id;
+                    showBreachWarning(Math.round(distance));
+                }
+            } catch (err) {
+                console.error("[Campus Guard] Breach report transmission failed:", err);
+            }
+        }
+
+        function showBreachWarning(distance) {
+            const statusMsg = document.getElementById('statusMsg');
+            if (statusMsg) {
+                statusMsg.className = 'message error';
+                statusMsg.style.display = 'block';
+                statusMsg.innerHTML = `
+                    <div style="text-align: left; padding: 4px 0;">
+                        <strong style="font-size: 1.05rem; color: #f43f5e; display: block; margin-bottom: 6px;">⚠️ Campus boundary breach!</strong>
+                        <p style="margin-bottom: 12px; font-size: 0.85rem; line-height: 1.45; color: var(--text-main);">
+                            You exited the campus geofence (Current distance: <strong>${distance}m</strong>, limit: ${campusSettings.campus_radius}m). 
+                            A breach alert has been sent to the HOD. Please enter your valid reason statement below:
+                        </p>
+                        <textarea id="breachReasonText" placeholder="Enter reason statement for the HOD..." style="width:100%; height:75px; background:rgba(0,0,0,0.4); border:1px solid var(--border); border-radius:12px; color:#fff; padding:10px; font-size:0.85rem; resize:none; margin-bottom:10px; font-family:inherit; outline:none;"></textarea>
+                        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                            <button class="btn" style="height:34px; font-size:0.75rem; padding:0 16px; width:auto; border-radius:10px; background:var(--error);" onclick="submitBreachReason()">Submit Reason</button>
+                            <span id="reasonStatus" style="font-size:0.8rem; font-weight:700; color:var(--primary);"></span>
+                        </div>
+                    </div>
+                `;
+                
+                const container = document.querySelector('.container');
+                if (container) {
+                    container.style.border = '2px solid var(--error)';
+                    container.style.boxShadow = '0 0 30px rgba(244, 63, 94, 0.4)';
+                    if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+                }
+            }
+        }
+
+        async function submitBreachReason() {
+            const reason = document.getElementById('breachReasonText').value.trim();
+            const statusLabel = document.getElementById('reasonStatus');
+            
+            if (!reason) {
+                statusLabel.style.color = 'var(--error)';
+                statusLabel.innerText = "Statement cannot be empty.";
+                return;
+            }
+
+            if (!activeBreachAlertId) {
+                statusLabel.style.color = 'var(--error)';
+                statusLabel.innerText = "No active alert record.";
+                return;
+            }
+
+            statusLabel.style.color = 'var(--text-muted)';
+            statusLabel.innerText = "Sending...";
+
+            try {
+                const res = await fetch('/api/alerts/submit-reason', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ alert_id: activeBreachAlertId, reason })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    statusLabel.style.color = 'var(--success)';
+                    statusLabel.innerText = "Sent Successfully!";
+                    document.getElementById('breachReasonText').disabled = true;
+                    document.querySelector('#statusMsg button').disabled = true;
+                } else {
+                    statusLabel.style.color = 'var(--error)';
+                    statusLabel.innerText = data.message;
+                }
+            } catch (err) {
+                statusLabel.style.color = 'var(--error)';
+                statusLabel.innerText = "Connection error.";
+            }
+        }
+
+        function clearBreachWarning() {
+            const statusMsg = document.getElementById('statusMsg');
+            if (statusMsg) {
+                statusMsg.className = 'message success';
+                statusMsg.style.display = 'block';
+                statusMsg.innerHTML = `✅ <strong>Returned to Campus Bounds</strong><br>GPS coordinates verified. You are back inside campus bounds.`;
+                setTimeout(() => {
+                    statusMsg.style.display = 'none';
+                    statusMsg.className = 'message';
+                }, 4000);
+            }
+            const container = document.querySelector('.container');
+            if (container) {
+                container.style.border = '';
+                container.style.boxShadow = '';
+            }
+        }
+
         fetchClasses();
+        fetchCampusSettingsAndStartGuard();
+        // Auto-refresh active classes list every 10 seconds to catch new classes live
+        setInterval(fetchClasses, 10000);
     </script>
 </body>
 </html>
