@@ -602,8 +602,9 @@
                     });
                     const regData = await regRes.json();
                     if (!regData.success) {
-                        alert(`❌ Registration Failed:\n${regData.message}`);
-                        throw new Error(regData.message);
+                        const errMsg = regData.message || regData.error || "Unknown registration error.";
+                        alert(`❌ Registration Failed:\n${errMsg}`);
+                        throw new Error(errMsg);
                     }
                     alert("✅ Device Bound!\nThis device is now securely linked to your account.");
                     return true;
