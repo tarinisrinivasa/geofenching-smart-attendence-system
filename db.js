@@ -116,9 +116,18 @@ const db = new sqlite3.Database(dbPath, (err) => {
             db.run("ALTER TABLE attendance ADD COLUMN request_lat REAL", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE attendance ADD COLUMN request_lon REAL", (err) => { /* Ignore duplicate column errors */ });
             
-            // Clean up and seed exact demo accounts if users count is 0 (or reset)
-            db.get("SELECT count(*) as count FROM users", (err, row) => {
-                if (row && row.count === 0) {
+            // Clean up and seed exact demo accounts if no coordinators exist (indicates old database version on Render)
+            db.get("SELECT count(*) as count FROM users WHERE role = 'coordinator'", (err, row) => {
+                if (err || !row || row.count === 0) {
+                    console.log("Wiping old database structures on Render to seed fresh coordinator roster...");
+                    
+                    db.run("DELETE FROM users");
+                    db.run("DELETE FROM classes");
+                    db.run("DELETE FROM attendance");
+                    db.run("DELETE FROM alerts");
+                    db.run("DELETE FROM student_passes");
+                    db.run("DELETE FROM otp_codes");
+
                     console.log("Seeding clean demo environment accounts...");
 
                     // 1. Seed 6 HODs
