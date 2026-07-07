@@ -226,10 +226,21 @@
                         else if (student.status.includes('Breach')) statusColor = 'var(--error)';
                         else if (student.status.includes('Offline')) statusColor = '#f59e0b';
 
+                        const lockText = student.attendance_locked === 1 
+                            ? `<span style="color: #f43f5e; font-weight:700; font-size: 0.7rem; background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.25); border-radius: 4px; padding: 1px 4px; margin-left: 6px; display: inline-flex; align-items: center; gap: 4px;">🔒 Locked</span>` 
+                            : '';
+                        
+                        const unlockBtn = student.attendance_locked === 1
+                            ? `<button class="btn" style="height: 28px; padding: 0 10px; font-size: 0.7rem; width: auto; border-radius: 8px; background: var(--success); border-color: var(--success); margin-left: 6px;" onclick="unlockStudent(${student.id})">🔓 Unlock</button>`
+                            : '';
+
                         card.innerHTML = `
                             <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                                 <div>
-                                    <h4 style="margin: 0; font-size: 1.05rem; font-weight: 600;">${student.username}</h4>
+                                    <div style="display: flex; align-items: center;">
+                                        <h4 style="margin: 0; font-size: 1.05rem; font-weight: 600;">${student.username}</h4>
+                                        ${lockText}
+                                    </div>
                                     <span style="font-size: 0.75rem; color: var(--text-muted);">Barcode: ${student.barcode}</span>
                                 </div>
                                 <span style="font-size: 0.75rem; font-weight: 700; color: ${statusColor};">${student.status}</span>
@@ -240,9 +251,12 @@
                                     <input type="checkbox" ${student.is_keypad === 1 ? 'checked' : ''} onchange="toggleKeypad(${student.id}, this.checked)">
                                     Keypad Phone
                                 </label>
-                                <button class="btn" style="height: 28px; padding: 0 10px; font-size: 0.7rem; width: auto; border-radius: 8px; background: rgba(255,255,255,0.05);" onclick="manualCheckIn(${student.id})">
-                                    Manual Checkin
-                                </button>
+                                <div style="display: flex; gap: 4px;">
+                                    <button class="btn" style="height: 28px; padding: 0 10px; font-size: 0.7rem; width: auto; border-radius: 8px; background: rgba(255,255,255,0.05);" onclick="manualCheckIn(${student.id})">
+                                        Manual Checkin
+                                    </button>
+                                    ${unlockBtn}
+                                </div>
                             </div>
                         `;
                         list.appendChild(card);
@@ -287,6 +301,30 @@
                 fetchRoster();
             } catch (err) {
                 console.error("Manual check-in failed:", err);
+            }
+        }
+
+        async function unlockStudent(studentId) {
+            if (!confirm("Are you sure you want to unlock this student's check-in privileges?")) return;
+            try {
+                const res = await fetch('/api/coordinator/unlock-student', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}` 
+                    },
+                    body: JSON.stringify({ student_id: studentId })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert("✅ Student attendance check-ins unlocked successfully!");
+                    fetchRoster();
+                } else {
+                    alert(`❌ Unlock error: ${data.message}`);
+                }
+            } catch (err) {
+                console.error(err);
+                alert('❌ Server connection error.');
             }
         }
 

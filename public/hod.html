@@ -607,15 +607,53 @@
                             statusBadge = '<span style="color: #f59e0b; font-weight:700; font-size: 0.75rem; background: rgba(245, 158, 11, 0.15); padding: 4px 8px; border-radius: 6px; border: 1px solid rgba(245, 158, 11, 0.2); animation: pulseWarning 1.5s infinite alternate;">⚠️ Offline / Suspended</span>';
                         }
 
+                        const lockText = s.attendance_locked === 1 
+                            ? `<span style="color: #f43f5e; font-weight:700; font-size: 0.75rem; background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.25); border-radius: 6px; padding: 2px 6px; margin-left: 4px; display: inline-flex; align-items: center; gap: 4px;">🔒 Locked</span>` 
+                            : '';
+                        
+                        const unlockBtn = s.attendance_locked === 1
+                            ? `<button class="btn" style="width: auto; padding: 2px 8px; font-size: 0.7rem; height: 24px; background: var(--success); border-color: var(--success); box-shadow: none;" onclick="unlockStudent(${s.id})">🔓 Unlock</button>`
+                            : '';
+
                         div.innerHTML = `
-                            <span style="font-weight: 600; font-size: 0.85rem; color: var(--text-main);">${s.username}</span>
-                            ${statusBadge}
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span style="font-weight: 600; font-size: 0.85rem; color: var(--text-main);">${s.username}</span>
+                                ${lockText}
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                ${statusBadge}
+                                ${unlockBtn}
+                            </div>
                         `;
                         list.appendChild(div);
                     });
                 }
             } catch (err) {
                 console.error("Failed to load students tracking feeds:", err);
+            }
+        }
+
+        async function unlockStudent(studentId) {
+            if (!confirm("Are you sure you want to unlock this student's check-in privileges?")) return;
+            try {
+                const res = await fetch('/api/coordinator/unlock-student', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}` 
+                    },
+                    body: JSON.stringify({ student_id: studentId })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert("✅ Student attendance check-ins unlocked successfully!");
+                    fetchStudentTrackingStatuses();
+                } else {
+                    alert(`❌ Unlock error: ${data.message}`);
+                }
+            } catch (err) {
+                console.error(err);
+                alert('❌ Server connection error.');
             }
         }
 
