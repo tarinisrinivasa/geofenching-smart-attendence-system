@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HOD Analytics Console</title>
+    <title>HOD Portal</title>
     <link rel="stylesheet" href="styles.css">
     <!-- Motion.dev and LottieFiles -->
     <script src="https://cdn.jsdelivr.net/npm/motion@11.11.13/dist/motion.js"></script>
@@ -15,7 +15,7 @@
     <div class="container" style="max-width: 650px; padding: 2rem;">
         <div class="top-bar">
             <div>
-                <h3>HOD Control Center</h3>
+                <h3>HOD Portal</h3>
                 <p style="font-size: 0.8rem; color: var(--text-muted);">Head of Department Analytics</p>
             </div>
             <button class="logout-btn" onclick="logout(event)">Logout</button>
@@ -52,22 +52,84 @@
                 Define the absolute center coordinates and geofence radius for the entire college campus. Students walking outside this perimeter will trigger HOD breach logs.
             </p>
             <div style="display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap;">
-                <div style="flex: 1; min-width: 140px;">
+                <div style="flex: 1; min-width: 130px;">
                     <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 4px;">Center Latitude</label>
                     <input type="number" step="any" id="campusLat" style="width: 100%; height: 38px; border: 1px solid var(--border); border-radius: 8px; background: rgba(0,0,0,0.3); color: #fff; padding: 0 10px; font-size: 0.85rem;" placeholder="e.g. 17.3850">
                 </div>
-                <div style="flex: 1; min-width: 140px;">
+                <div style="flex: 1; min-width: 130px;">
                     <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 4px;">Center Longitude</label>
                     <input type="number" step="any" id="campusLon" style="width: 100%; height: 38px; border: 1px solid var(--border); border-radius: 8px; background: rgba(0,0,0,0.3); color: #fff; padding: 0 10px; font-size: 0.85rem;" placeholder="e.g. 78.4867">
                 </div>
-                <div style="flex: 1; min-width: 140px;">
+                <div style="flex: 1; min-width: 110px;">
                     <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 4px;">Radius (Meters)</label>
                     <input type="number" id="campusRadius" style="width: 100%; height: 38px; border: 1px solid var(--border); border-radius: 8px; background: rgba(0,0,0,0.3); color: #fff; padding: 0 10px; font-size: 0.85rem;" placeholder="e.g. 500">
+                </div>
+                <div style="flex: 1; min-width: 110px;">
+                    <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 4px;">Start Time</label>
+                    <input type="time" id="collegeStartTime" style="width: 100%; height: 38px; border: 1px solid var(--border); border-radius: 8px; background: rgba(0,0,0,0.3); color: #fff; padding: 0 10px; font-size: 0.85rem;">
+                </div>
+                <div style="flex: 1; min-width: 110px;">
+                    <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 4px;">End Time</label>
+                    <input type="time" id="collegeEndTime" style="width: 100%; height: 38px; border: 1px solid var(--border); border-radius: 8px; background: rgba(0,0,0,0.3); color: #fff; padding: 0 10px; font-size: 0.85rem;">
                 </div>
             </div>
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
                 <button class="btn" style="width: auto; padding: 0 16px; height: 36px; font-size: 0.8rem; background: var(--success); border-radius: 8px;" onclick="updateCampusGeofence()">Update Campus Bounds</button>
                 <span id="campusSettingsStatus" style="font-size: 0.85rem; font-weight: 700; color: var(--success);"></span>
+            </div>
+        </div>
+
+        <!-- Temporary Out-of-Campus Pass Settings -->
+        <div class="card" style="margin-bottom: 2rem; border-color: rgba(124, 58, 237, 0.2); background: rgba(124, 58, 237, 0.01);">
+            <h4 style="color: var(--primary); margin: 0 0 12px 0; font-size: 1.05rem; display: flex; align-items: center; gap: 8px;">
+                🎫 Temporary Out-of-Campus Exit Passes
+            </h4>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem; line-height: 1.4;">
+                Grant temporary out-of-campus geofence passes. Active passes will temporarily mute geofence warnings on the student's dashboard and auto-report breaches if they fail to return on time.
+            </p>
+            <div style="display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap;">
+                <div style="flex: 1.5; min-width: 180px;">
+                    <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 4px;">Student Profile / Roll Number</label>
+                    <select id="passStudentSelect" style="width: 100%; height: 38px; border: 1px solid var(--border); border-radius: 8px; background: rgba(0,0,0,0.3); color: #fff; padding: 0 10px; font-size: 0.85rem; outline: none;"></select>
+                </div>
+                <div style="flex: 1.5; min-width: 160px;">
+                    <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 4px;">Exit Reason Statement</label>
+                    <input type="text" id="passReasonInput" style="width: 100%; height: 38px; border: 1px solid var(--border); border-radius: 8px; background: rgba(0,0,0,0.3); color: #fff; padding: 0 10px; font-size: 0.85rem;" placeholder="e.g. Canteen / Medical / Scholarship">
+                </div>
+                <div style="flex: 1; min-width: 100px;">
+                    <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 4px;">Duration (Mins)</label>
+                    <select id="passDurationSelect" style="width: 100%; height: 38px; border: 1px solid var(--border); border-radius: 8px; background: rgba(0,0,0,0.3); color: #fff; padding: 0 10px; font-size: 0.85rem; outline: none;">
+                        <option value="15">15 Mins</option>
+                        <option value="30" selected>30 Mins</option>
+                        <option value="45">45 Mins</option>
+                        <option value="60">60 Mins</option>
+                        <option value="90">90 Mins</option>
+                        <option value="120">120 Mins</option>
+                    </select>
+                </div>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 1.5rem;">
+                <button class="btn" style="width: auto; padding: 0 16px; height: 36px; font-size: 0.8rem; background: var(--primary); border-radius: 8px;" onclick="grantStudentPass()">Grant Temporary Exit Pass</button>
+                <span id="passGrantStatus" style="font-size: 0.85rem; font-weight: 700; color: var(--primary);"></span>
+            </div>
+
+            <!-- List of active passes -->
+            <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 8px;">Active / Issued Exit Passes</label>
+            <div id="activePassesList" style="border: 1px solid var(--surface-border); border-radius: 12px; background: rgba(0,0,0,0.2); max-height: 180px; overflow-y: auto; padding: 8px;">
+                <div style="text-align: center; color: var(--text-muted); padding: 1rem; font-size: 0.8rem;">No active exit passes issued.</div>
+            </div>
+        </div>
+
+        <!-- Student Geofence Tracking Statuses Feed -->
+        <div class="card" style="margin-bottom: 2rem; border-color: rgba(16, 185, 129, 0.2); background: rgba(16, 185, 129, 0.01);">
+            <h4 style="color: var(--success); margin: 0 0 12px 0; font-size: 1.05rem; display: flex; align-items: center; gap: 8px;">
+                🎯 Students Real-Time Geofence Monitoring
+            </h4>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1rem; line-height: 1.4;">
+                Real-time tracking telemetry of students checked in today. Offline alerts indicate a student has disabled their GPS, closed their tab, or logged out during campus hours.
+            </p>
+            <div id="studentTrackingList" style="border: 1px solid var(--surface-border); border-radius: 12px; background: rgba(0,0,0,0.2); max-height: 220px; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px;">
+                <div style="text-align: center; color: var(--text-muted); padding: 1rem; font-size: 0.80rem;">No checked-in student telemetry found.</div>
             </div>
         </div>
 
@@ -307,6 +369,8 @@
                     document.getElementById('campusLat').value = data.settings.campus_latitude;
                     document.getElementById('campusLon').value = data.settings.campus_longitude;
                     document.getElementById('campusRadius').value = data.settings.campus_radius;
+                    document.getElementById('collegeStartTime').value = data.settings.college_start_time || "09:00";
+                    document.getElementById('collegeEndTime').value = data.settings.college_end_time || "16:00";
                 }
             } catch (err) {
                 console.error("Failed to load campus settings:", err);
@@ -317,11 +381,13 @@
             const lat = parseFloat(document.getElementById('campusLat').value);
             const lon = parseFloat(document.getElementById('campusLon').value);
             const radius = parseInt(document.getElementById('campusRadius').value);
+            const startTime = document.getElementById('collegeStartTime').value;
+            const endTime = document.getElementById('collegeEndTime').value;
             const statusLabel = document.getElementById('campusSettingsStatus');
 
-            if (isNaN(lat) || isNaN(lon) || isNaN(radius)) {
+            if (isNaN(lat) || isNaN(lon) || isNaN(radius) || !startTime || !endTime) {
                 statusLabel.style.color = 'var(--error)';
-                statusLabel.innerText = "❌ Please enter valid numbers.";
+                statusLabel.innerText = "❌ Please enter valid coordinates, radius, and hours.";
                 return;
             }
 
@@ -335,7 +401,13 @@
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${token}` 
                     },
-                    body: JSON.stringify({ campus_latitude: lat, campus_longitude: lon, campus_radius: radius })
+                    body: JSON.stringify({ 
+                        campus_latitude: lat, 
+                        campus_longitude: lon, 
+                        campus_radius: radius,
+                        college_start_time: startTime,
+                        college_end_time: endTime
+                    })
                 });
                 const data = await res.json();
                 if (data.success) {
@@ -352,10 +424,193 @@
             }
         }
 
-        // Auto-refresh alerts every 5 seconds
+        async function fetchStudentsForPass() {
+            try {
+                const res = await fetch('/api/students', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                if (data.success && data.students) {
+                    const select = document.getElementById('passStudentSelect');
+                    select.innerHTML = '';
+                    data.students.forEach(s => {
+                        const opt = document.createElement('option');
+                        opt.value = s.id;
+                        opt.innerText = s.username;
+                        select.appendChild(opt);
+                    });
+                }
+            } catch (err) {
+                console.error("Failed to load students roster for pass selection:", err);
+            }
+        }
+
+        async function fetchIssuedPasses() {
+            try {
+                const res = await fetch('/api/hod/active-passes', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                const list = document.getElementById('activePassesList');
+                list.innerHTML = '';
+
+                if (!data.success || !data.passes || data.passes.length === 0) {
+                    list.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 1rem; font-size: 0.8rem;">No active exit passes issued.</div>';
+                    return;
+                }
+
+                data.passes.forEach(p => {
+                    const card = document.createElement('div');
+                    card.style.display = 'flex';
+                    card.style.justifyContent = 'space-between';
+                    card.style.alignItems = 'center';
+                    card.style.padding = '8px 12px';
+                    card.style.borderBottom = '1px solid var(--border)';
+                    card.style.fontSize = '0.85rem';
+
+                    const statusBadge = p.is_active 
+                        ? `<span style="color: var(--success); font-weight:700;">Active</span>`
+                        : `<span style="color: var(--error); font-weight:700;">Expired</span>`;
+                    
+                    const timeText = p.is_active 
+                        ? `Expires: ${Math.floor(p.time_left_secs / 60)}m`
+                        : `Expired`;
+
+                    card.innerHTML = `
+                        <div>
+                            <strong>${p.username}</strong> - ${p.reason}
+                            <div style="font-size:0.75rem; color:var(--text-muted);">${statusBadge} (${timeText})</div>
+                        </div>
+                        <button class="logout-btn" style="padding: 4px 8px; font-size:0.75rem; color: var(--error); border-color: var(--error);" onclick="revokeStudentPass(${p.student_id})">
+                            Revoke
+                        </button>
+                    `;
+                    list.appendChild(card);
+                });
+            } catch (err) {
+                console.error("Failed to load active passes:", err);
+            }
+        }
+
+        async function grantStudentPass() {
+            const studentId = document.getElementById('passStudentSelect').value;
+            const reason = document.getElementById('passReasonInput').value.trim();
+            const duration = document.getElementById('passDurationSelect').value;
+            const statusLabel = document.getElementById('passGrantStatus');
+
+            if (!studentId || !reason) {
+                statusLabel.style.color = 'var(--error)';
+                statusLabel.innerText = "❌ Select student and enter reason.";
+                return;
+            }
+
+            statusLabel.style.color = 'var(--text-muted)';
+            statusLabel.innerText = "Issuing pass...";
+
+            try {
+                const res = await fetch('/api/hod/grant-pass', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ student_id: studentId, reason, duration_mins: duration })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    statusLabel.style.color = 'var(--success)';
+                    statusLabel.innerText = "✅ Pass Granted!";
+                    document.getElementById('passReasonInput').value = '';
+                    fetchIssuedPasses();
+                    setTimeout(() => { statusLabel.innerText = ''; }, 3000);
+                } else {
+                    statusLabel.style.color = 'var(--error)';
+                    statusLabel.innerText = `❌ ${data.message}`;
+                }
+            } catch (err) {
+                statusLabel.style.color = 'var(--error)';
+                statusLabel.innerText = "❌ Server communication error.";
+            }
+        }
+
+        async function revokeStudentPass(studentId) {
+            if (!confirm("Are you sure you want to revoke this student's out-pass?")) return;
+
+            try {
+                const res = await fetch('/api/hod/cancel-pass', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ student_id: studentId })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    fetchIssuedPasses();
+                }
+            } catch (err) {
+                console.error("Failed to revoke pass:", err);
+            }
+        }
+
+        async function fetchStudentTrackingStatuses() {
+            try {
+                const res = await fetch('/api/hod/students-tracking', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                if (data.success && data.students) {
+                    const list = document.getElementById('studentTrackingList');
+                    list.innerHTML = '';
+                    
+                    const checkedIn = data.students.filter(s => s.status !== 'Not Checked In');
+                    if (checkedIn.length === 0) {
+                        list.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 1rem; font-size: 0.8rem;">No checked-in student telemetry found.</div>';
+                        return;
+                    }
+
+                    checkedIn.forEach(s => {
+                        const div = document.createElement('div');
+                        div.style.display = 'flex';
+                        div.style.justifyContent = 'space-between';
+                        div.style.alignItems = 'center';
+                        div.style.padding = '8px 12px';
+                        div.style.borderRadius = '8px';
+                        div.style.background = 'rgba(255,255,255,0.03)';
+                        div.style.border = '1px solid var(--surface-border)';
+
+                        let statusBadge = '';
+                        if (s.status === 'Active & Guarded') {
+                            statusBadge = '<span style="color: var(--success); font-weight:700; font-size: 0.75rem; background: rgba(16, 185, 129, 0.15); padding: 4px 8px; border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.2);">🟢 Guarded</span>';
+                        } else if (s.status === 'Geofence Breach') {
+                            statusBadge = '<span style="color: var(--error); font-weight:700; font-size: 0.75rem; background: rgba(244, 63, 94, 0.15); padding: 4px 8px; border-radius: 6px; border: 1px solid rgba(244, 63, 94, 0.2);">🔴 Exited Bounds</span>';
+                        } else {
+                            statusBadge = '<span style="color: #f59e0b; font-weight:700; font-size: 0.75rem; background: rgba(245, 158, 11, 0.15); padding: 4px 8px; border-radius: 6px; border: 1px solid rgba(245, 158, 11, 0.2); animation: pulseWarning 1.5s infinite alternate;">⚠️ Offline / Suspended</span>';
+                        }
+
+                        div.innerHTML = `
+                            <span style="font-weight: 600; font-size: 0.85rem; color: var(--text-main);">${s.username}</span>
+                            ${statusBadge}
+                        `;
+                        list.appendChild(div);
+                    });
+                }
+            } catch (err) {
+                console.error("Failed to load students tracking feeds:", err);
+            }
+        }
+
+        // Auto-refresh alerts and tracking feeds
         fetchAlerts();
         fetchCampusSettings();
+        fetchStudentsForPass();
+        fetchIssuedPasses();
+        fetchStudentTrackingStatuses();
+        
         setInterval(fetchAlerts, 5000);
+        setInterval(fetchStudentTrackingStatuses, 5000);
+        setInterval(fetchIssuedPasses, 10000);
     </script>
 </body>
 </html>
