@@ -102,7 +102,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
             db.run("ALTER TABLE users ADD COLUMN barcode TEXT UNIQUE", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE users ADD COLUMN device_id TEXT", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE users ADD COLUMN parent_phone TEXT", (err) => { /* Ignore duplicate column errors */ });
-            db.run("ALTER TABLE users ADD COLUMN device_biometric_id TEXT UNIQUE", (err) => { /* Ignore duplicate column errors */ });
+            db.run("ALTER TABLE users ADD COLUMN device_biometric_id TEXT", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE users ADD COLUMN last_seen TEXT", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE users ADD COLUMN is_keypad INTEGER DEFAULT 0", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE users ADD COLUMN coordinator_class_id INTEGER", (err) => { /* Ignore duplicate column errors */ });
