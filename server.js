@@ -788,7 +788,7 @@ app.get('/api/students', authenticateToken, (req, res) => {
         return res.status(403).json({ success: false, message: "Unauthorized." });
     }
 
-    db.all("SELECT id, username FROM users WHERE role = 'student' ORDER BY username ASC", [], (err, rows) => {
+    db.all("SELECT id, username, is_keypad, student_phone FROM users WHERE role = 'student' ORDER BY username ASC", [], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ success: true, students: rows });
     });
@@ -1088,7 +1088,7 @@ app.get('/api/coordinator/roster', authenticateToken, (req, res) => {
     }
 
     const query = `
-        SELECT u.id, u.username, u.barcode, u.is_keypad, u.last_seen, u.attendance_locked, a.status as attendance_status,
+        SELECT u.id, u.username, u.barcode, u.is_keypad, u.last_seen, u.attendance_locked, u.student_phone, a.status as attendance_status,
                (SELECT message FROM alerts WHERE student_id = u.id ORDER BY id DESC LIMIT 1) as last_alert
         FROM users u
         LEFT JOIN attendance a ON a.student_id = u.id AND date(a.timestamp, 'localtime') = date('now', 'localtime')
@@ -1128,7 +1128,8 @@ app.get('/api/coordinator/roster', authenticateToken, (req, res) => {
                 is_keypad: r.is_keypad,
                 status,
                 tracking_alert,
-                attendance_locked: r.attendance_locked
+                attendance_locked: r.attendance_locked,
+                student_phone: r.student_phone
             };
         });
         res.json({ success: true, roster });
@@ -1183,6 +1184,74 @@ app.post('/api/coordinator/unlock-student', authenticateToken, (req, res) => {
     db.run("UPDATE users SET attendance_locked = 0 WHERE id = ?", [student_id], (err) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ success: true, message: "Student check-in privileges unlocked successfully!" });
+    });
+});
+
+// Coordinator & Teacher API: Send SMS OTP for keypad users
+app.post('/api/coordinator/send-keypad-otp', authenticateToken, (req, res) => {
+    if (req.user.role !== 'coordinator' && req.user.role !== 'hod' && req.user.role !== 'teacher') {
+        return res.status(403).json({ success: false, message: "Unauthorized." });
+    }
+    const { student_id, class_id } = req.body;
+    if (!student_id || !class_id) {
+        return res.status(400).json({ success: false, message: "Missing student_id or class_id." });
+    }
+
+    db.get("SELECT username, student_phone, is_keypad FROM users WHERE id = ?", [student_id], (err, student) => {
+        if (err || !student) return res.status(404).json({ success: false, message: "Student not found." });
+        if (student.is_keypad !== 1) {
+            return res.status(400).json({ success: false, message: "This student is not registered as a keypad phone user." });
+        }
+
+        const otp = Math.floor(1000 + Math.random() * 9000).toString();
+
+        db.run(
+            "INSERT OR REPLACE INTO otp_codes (student_id, class_id, otp_code, timestamp) VALUES (?, ?, ?, datetime('now', 'localtime'))",
+            [student_id, class_id, otp],
+            function(err) {
+                if (err) return res.status(500).json({ error: err.message });
+                
+                // Simulate SMS Transmission
+                console.log(`\n==================================================================`);
+                console.log(`[SMS GATEWAY] Transmitting OTP: ${otp} to Keypad Student "${student.username}" (Phone: ${student.student_phone || 'N/A'})`);
+                console.log(`==================================================================\n`);
+
+                res.json({ success: true, message: `OTP code sent via SMS successfully to ${student.username}!`, otp });
+            }
+        );
+    });
+});
+
+// Coordinator & Teacher API: Verify SMS OTP for keypad users
+app.post('/api/coordinator/verify-keypad-otp', authenticateToken, (req, res) => {
+    if (req.user.role !== 'coordinator' && req.user.role !== 'hod' && req.user.role !== 'teacher') {
+        return res.status(403).json({ success: false, message: "Unauthorized." });
+    }
+    const { student_id, class_id, otp_code } = req.body;
+    if (!student_id || !class_id || !otp_code) {
+        return res.status(400).json({ success: false, message: "Missing student_id, class_id, or otp_code." });
+    }
+
+    db.get("SELECT otp_code, timestamp FROM otp_codes WHERE student_id = ? AND class_id = ?", [student_id, class_id], (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!row) return res.status(400).json({ success: false, message: "No active OTP generated for this student." });
+
+        if (row.otp_code !== otp_code.trim()) {
+            return res.status(400).json({ success: false, message: "Incorrect OTP. Please check and try again." });
+        }
+
+        // OTP matches! Mark student present
+        db.serialize(() => {
+            db.run("DELETE FROM otp_codes WHERE student_id = ?", [student_id]);
+            db.run(
+                "INSERT OR REPLACE INTO attendance (class_id, student_id, status) VALUES (?, ?, 'present')",
+                [class_id, student_id],
+                function(err) {
+                    if (err) return res.status(500).json({ error: err.message });
+                    res.json({ success: true, message: "OTP verified! Student marked present successfully." });
+                }
+            );
+        });
     });
 });
 

@@ -107,6 +107,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
             db.run("ALTER TABLE users ADD COLUMN is_keypad INTEGER DEFAULT 0", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE users ADD COLUMN coordinator_class_id INTEGER", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE users ADD COLUMN attendance_locked INTEGER DEFAULT 0", (err) => { /* Ignore duplicate column errors */ });
+            db.run("ALTER TABLE users ADD COLUMN student_phone TEXT", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE alerts ADD COLUMN class_id INTEGER", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE alerts ADD COLUMN student_reason TEXT", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE alerts ADD COLUMN latitude REAL", (err) => { /* Ignore duplicate column errors */ });
@@ -161,10 +162,11 @@ const db = new sqlite3.Database(dbPath, (err) => {
                         const password = `student123`;
                         const barcode = `STU10${i}`;
                         const parentPhone = `+91 90123 4560${i}`;
+                        const studentPhone = `+91 99887 7665${i}`;
                         const hashedPassword = bcrypt.hashSync(password, 10);
                         // Make student6 a Keypad Phone User by default for testing/demo override
                         const isKeypad = (i === 6) ? 1 : 0;
-                        db.run('INSERT INTO users (username, password, role, barcode, parent_phone, is_keypad) VALUES (?,?,?,?,?,?)', [username, hashedPassword, 'student', barcode, parentPhone, isKeypad]);
+                        db.run('INSERT INTO users (username, password, role, barcode, parent_phone, student_phone, is_keypad) VALUES (?,?,?,?,?,?,?)', [username, hashedPassword, 'student', barcode, parentPhone, studentPhone, isKeypad]);
                     }
 
                     // 5. Seed 3 Demo Classes
