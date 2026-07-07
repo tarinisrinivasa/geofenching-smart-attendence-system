@@ -104,55 +104,65 @@ const db = new sqlite3.Database(dbPath, (err) => {
             db.run("ALTER TABLE users ADD COLUMN parent_phone TEXT", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE users ADD COLUMN device_biometric_id TEXT UNIQUE", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE users ADD COLUMN last_seen TEXT", (err) => { /* Ignore duplicate column errors */ });
+            db.run("ALTER TABLE users ADD COLUMN is_keypad INTEGER DEFAULT 0", (err) => { /* Ignore duplicate column errors */ });
+            db.run("ALTER TABLE users ADD COLUMN coordinator_class_id INTEGER", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE alerts ADD COLUMN class_id INTEGER", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE alerts ADD COLUMN student_reason TEXT", (err) => { /* Ignore duplicate column errors */ });
+            db.run("ALTER TABLE alerts ADD COLUMN latitude REAL", (err) => { /* Ignore duplicate column errors */ });
+            db.run("ALTER TABLE alerts ADD COLUMN longitude REAL", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE classes ADD COLUMN token_secret TEXT", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE classes ADD COLUMN accuracy REAL", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE attendance ADD COLUMN status TEXT DEFAULT 'present'", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE attendance ADD COLUMN request_lat REAL", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE attendance ADD COLUMN request_lon REAL", (err) => { /* Ignore duplicate column errors */ });
             
-            // Retroactively populate student parent phones
-            db.run("UPDATE users SET parent_phone = '+91 90123 456' || substr('0' || (id - 21), -2) WHERE role = 'student' AND parent_phone IS NULL");
-
-            // Robust individual seeding (creates HOD or other users if they are missing from the table)
-            db.get("SELECT count(*) as count FROM users WHERE role = 'hod'", (err, row) => {
+            // Clean up and seed exact demo accounts if users count is 0 (or reset)
+            db.get("SELECT count(*) as count FROM users", (err, row) => {
                 if (row && row.count === 0) {
-                    console.log("Seeding HOD account...");
-                    const hodUsername = 'hod1';
-                    const hodPassword = 'hod123';
-                    const hashedHodPassword = bcrypt.hashSync(hodPassword, 10);
-                    db.run('INSERT INTO users (username, password, role, barcode) VALUES (?,?,?,?)', [hodUsername, hashedHodPassword, 'hod', null]);
-                }
-            });
+                    console.log("Seeding clean demo environment accounts...");
 
-            db.get("SELECT count(*) as count FROM users WHERE role = 'teacher'", (err, row) => {
-                if (row && row.count === 0) {
-                    console.log("Seeding 20 teachers...");
-                    const insert = db.prepare('INSERT INTO users (username, password, role, barcode) VALUES (?,?,?,?)');
-                    for (let i = 1; i <= 20; i++) {
+                    // 1. Seed 6 HODs
+                    for (let i = 1; i <= 6; i++) {
+                        const username = `hod${i}`;
+                        const password = `hod123`;
+                        const hashedPassword = bcrypt.hashSync(password, 10);
+                        db.run('INSERT INTO users (username, password, role) VALUES (?,?,?)', [username, hashedPassword, 'hod']);
+                    }
+
+                    // 2. Seed 5 Teachers
+                    for (let i = 1; i <= 5; i++) {
                         const username = `teacher${i}`;
                         const password = `teacher123`;
                         const hashedPassword = bcrypt.hashSync(password, 10);
-                        insert.run([username, hashedPassword, 'teacher', null]);
+                        db.run('INSERT INTO users (username, password, role) VALUES (?,?,?)', [username, hashedPassword, 'teacher']);
                     }
-                    insert.finalize();
-                }
-            });
 
-            db.get("SELECT count(*) as count FROM users WHERE role = 'student'", (err, row) => {
-                if (row && row.count === 0) {
-                    console.log("Seeding 67 students...");
-                    const insert = db.prepare('INSERT INTO users (username, password, role, barcode, parent_phone) VALUES (?,?,?,?,?)');
-                    for (let i = 1; i <= 67; i++) {
+                    // 3. Seed 3 Coordinators (assigned to class IDs 1, 2, and 3)
+                    for (let i = 1; i <= 3; i++) {
+                        const username = `coordinator${i}`;
+                        const password = `coordinator123`;
+                        const hashedPassword = bcrypt.hashSync(password, 10);
+                        db.run('INSERT INTO users (username, password, role, coordinator_class_id) VALUES (?,?,?,?)', [username, hashedPassword, 'coordinator', i]);
+                    }
+
+                    // 4. Seed 6 Students
+                    for (let i = 1; i <= 6; i++) {
                         const username = `student${i}`;
                         const password = `student123`;
-                        const barcode = `STU${100 + i}`;
-                        const parentPhone = `+91 90123 456${i.toString().padStart(2, '0')}`;
+                        const barcode = `STU10${i}`;
+                        const parentPhone = `+91 90123 4560${i}`;
                         const hashedPassword = bcrypt.hashSync(password, 10);
-                        insert.run([username, hashedPassword, 'student', barcode, parentPhone]);
+                        // Make student6 a Keypad Phone User by default for testing/demo override
+                        const isKeypad = (i === 6) ? 1 : 0;
+                        db.run('INSERT INTO users (username, password, role, barcode, parent_phone, is_keypad) VALUES (?,?,?,?,?,?)', [username, hashedPassword, 'student', barcode, parentPhone, isKeypad]);
                     }
-                    insert.finalize();
+
+                    // 5. Seed 3 Demo Classes
+                    db.run("INSERT INTO classes (id, name, teacher_id, latitude, longitude, radius, token_secret, accuracy) VALUES (1, 'CSE-A (Section Alpha)', 1, 17.3850, 78.4867, 50, 'sec1', 10)");
+                    db.run("INSERT INTO classes (id, name, teacher_id, latitude, longitude, radius, token_secret, accuracy) VALUES (2, 'CSE-B (Section Beta)', 1, 17.3850, 78.4867, 50, 'sec2', 10)");
+                    db.run("INSERT INTO classes (id, name, teacher_id, latitude, longitude, radius, token_secret, accuracy) VALUES (3, 'ECE-A (Section Gamma)', 2, 17.3850, 78.4867, 50, 'sec3', 10)");
+
+                    console.log("Database seeded successfully!");
                 }
             });
 
@@ -160,18 +170,25 @@ const db = new sqlite3.Database(dbPath, (err) => {
             let credentialsLog = "=========================================\n";
             credentialsLog += "AUTO-GENERATED SECURED LOGIN CREDENTIALS\n";
             credentialsLog += "=========================================\n\n";
-            credentialsLog += "HOD ACCOUNT (1 Total)\n";
+            credentialsLog += "HOD ACCOUNTS (6 Total)\n";
             credentialsLog += "---------------------\n";
-            credentialsLog += `Username: hod1 | Password: hod123\n\n`;
-            credentialsLog += "TEACHER ACCOUNTS (20 Total)\n";
+            for (let i = 1; i <= 6; i++) {
+                credentialsLog += `Username: hod${i} | Password: hod123\n`;
+            }
+            credentialsLog += "\nTEACHER ACCOUNTS (5 Total)\n";
             credentialsLog += "---------------------------\n";
-            for (let i = 1; i <= 20; i++) {
+            for (let i = 1; i <= 5; i++) {
                 credentialsLog += `Username: teacher${i} | Password: teacher123\n`;
             }
-            credentialsLog += "\nSTUDENT ACCOUNTS (67 Total)\n";
+            credentialsLog += "\nCOORDINATOR ACCOUNTS (3 Total)\n";
+            credentialsLog += "-------------------------------\n";
+            for (let i = 1; i <= 3; i++) {
+                credentialsLog += `Username: coordinator${i} | Password: coordinator123 | Coordinator Class ID: ${i}\n`;
+            }
+            credentialsLog += "\nSTUDENT ACCOUNTS (6 Total)\n";
             credentialsLog += "---------------------------\n";
-            for (let i = 1; i <= 67; i++) {
-                credentialsLog += `Username: student${i} | Password: student123 | Barcode ID: STU${100 + i}\n`;
+            for (let i = 1; i <= 6; i++) {
+                credentialsLog += `Username: student${i} | Password: student123 | Barcode ID: STU10${i} | Parent: +91 90123 4560${i}${i === 6 ? ' (Keypad phone exempted)' : ''}\n`;
             }
             const logPath = path.resolve(__dirname, 'generated_credentials.txt');
             fs.writeFileSync(logPath, credentialsLog, 'utf8');

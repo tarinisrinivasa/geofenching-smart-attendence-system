@@ -68,14 +68,14 @@ app.post('/api/login', (req, res) => {
         // Helper to sign JWT and return response
         const completeLogin = () => {
             const token = jwt.sign(
-                { id: row.id, username: row.username, role: row.role }, 
+                { id: row.id, username: row.username, role: row.role, coordinator_class_id: row.coordinator_class_id }, 
                 JWT_SECRET, 
                 { expiresIn: '12h' }
             );
             res.json({ 
                 success: true, 
                 token, 
-                user: { id: row.id, username: row.username, role: row.role, barcode: row.barcode } 
+                user: { id: row.id, username: row.username, role: row.role, barcode: row.barcode, coordinator_class_id: row.coordinator_class_id } 
             });
         };
 
@@ -190,9 +190,9 @@ app.post('/api/classes/:class_id/end', authenticateToken, (req, res) => {
     });
 });
 
-// HOD API: Get all AI alerts (sorted by unread first, joined with user details and parent phone)
+// HOD & Coordinator API: Get all AI alerts (sorted by unread first, joined with user details and parent phone)
 app.get('/api/alerts', authenticateToken, (req, res) => {
-    if (req.user.role !== 'hod') {
+    if (req.user.role !== 'hod' && req.user.role !== 'coordinator') {
         return res.status(403).json({ success: false, message: "Unauthorized access." });
     }
 
@@ -205,6 +205,8 @@ app.get('/api/alerts', authenticateToken, (req, res) => {
             a.student_reason,
             a.status, 
             a.timestamp, 
+            a.latitude,
+            a.longitude,
             u.username as student_name, 
             u.parent_phone 
         FROM alerts a
@@ -217,9 +219,9 @@ app.get('/api/alerts', authenticateToken, (req, res) => {
     });
 });
 
-// HOD API: Notify parent (Indian digits standard layout, manual action confirmation)
+// HOD & Coordinator API: Notify parent (Indian digits standard layout, manual action confirmation)
 app.post('/api/alerts/:alert_id/notify-parent', authenticateToken, (req, res) => {
-    if (req.user.role !== 'hod') {
+    if (req.user.role !== 'hod' && req.user.role !== 'coordinator') {
         return res.status(403).json({ success: false, message: "Unauthorized access." });
     }
 
@@ -239,7 +241,7 @@ app.post('/api/alerts/:alert_id/notify-parent', authenticateToken, (req, res) =>
             return res.status(400).json({ success: false, message: "No registered parent phone number found for this student." });
         }
 
-        const messageText = `Alert from HOD: Your child ${row.username} was Present in the first session but Absent in the second session. Please contact your child or the HOD to clarify.`;
+        const messageText = `Alert from HOD/Coordinator: Your child ${row.username} was Present in the first session but Absent in the second session. Please contact your child or the college to clarify.`;
         
         console.log(`[PARENT ALERT SMS] Destination: ${row.parent_phone} | Content: "${messageText}"`);
 
@@ -256,9 +258,9 @@ app.post('/api/alerts/:alert_id/notify-parent', authenticateToken, (req, res) =>
     });
 });
 
-// HOD API: Reverse attendance status from Absent to Present
+// HOD & Coordinator API: Reverse attendance status from Absent to Present
 app.post('/api/alerts/:alert_id/reverse-attendance', authenticateToken, (req, res) => {
-    if (req.user.role !== 'hod') {
+    if (req.user.role !== 'hod' && req.user.role !== 'coordinator') {
         return res.status(403).json({ success: false, message: "Unauthorized access." });
     }
 
@@ -676,48 +678,56 @@ app.post('/api/alerts/campus-breach', authenticateToken, (req, res) => {
     const student_id = req.user.id;
     const student_name = req.user.username;
 
-    // Check if the student has an active out-pass
-    db.get("SELECT expiry, reason, duration_mins FROM student_passes WHERE student_id = ?", [student_id], (err, pass) => {
+    // Check if the student is marked as keypad/no-phone user (exempt from geofence)
+    db.get("SELECT is_keypad FROM users WHERE id = ?", [student_id], (err, u) => {
         if (err) return res.status(500).json({ error: err.message });
-
-        if (pass) {
-            const expiryTime = new Date(pass.expiry + 'Z').getTime();
-            if (Date.now() < expiryTime) {
-                // Active pass exists, ignore any breach warning reporting
-                return res.json({ success: false, ignored_due_to_pass: true, message: "Campus exit is authorized via HOD out-pass." });
-            }
+        if (u && u.is_keypad === 1) {
+            return res.json({ success: false, ignored_keypad: true, message: "Exempted due to keypad/no-phone status." });
         }
 
-        const isExpiredPass = pass && (Date.now() >= new Date(pass.expiry + 'Z').getTime());
-
-        // Check count of campus breach alerts for this student today
-        const countQuery = `
-            SELECT COUNT(*) as count 
-            FROM alerts 
-            WHERE student_id = ? 
-              AND (message LIKE '%Campus Geofence Breach%' OR message LIKE '%Out-Pass Expired%')
-              AND date(timestamp) = date('now')
-        `;
-        db.get(countQuery, [student_id], (err, countRow) => {
+        // Check if the student has an active out-pass
+        db.get("SELECT expiry, reason, duration_mins FROM student_passes WHERE student_id = ?", [student_id], (err, pass) => {
             if (err) return res.status(500).json({ error: err.message });
-            
-            if (countRow && countRow.count >= 4) {
-                return res.json({ success: false, limit_reached: true, message: "Breach alert limit (4) reached for today." });
+
+            if (pass) {
+                const expiryTime = new Date(pass.expiry + 'Z').getTime();
+                if (Date.now() < expiryTime) {
+                    // Active pass exists, ignore any breach warning reporting
+                    return res.json({ success: false, ignored_due_to_pass: true, message: "Campus exit is authorized via HOD out-pass." });
+                }
             }
 
-            db.get("SELECT value FROM campus_settings WHERE key = 'campus_radius'", (err, row) => {
-                if (err || !row) return res.status(500).json({ error: "Campus settings not loaded." });
-                const campusRadius = row.value;
+            const isExpiredPass = pass && (Date.now() >= new Date(pass.expiry + 'Z').getTime());
 
-                let message = `🚨 Campus Geofence Breach: Student "${student_name}" walked outside the HOD campus bounds (Current distance: ${distance}m, Limit: ${campusRadius}m).`;
-                if (isExpiredPass) {
-                    message = `🚨 Out-Pass Expired: Student "${student_name}" did not return to campus within the permitted ${pass.duration_mins} minutes for "${pass.reason}" (Current distance: ${distance}m, Limit: ${campusRadius}m).`;
-                }
+            // Check count of campus breach alerts for this student today
+            const countQuery = `
+                SELECT COUNT(*) as count 
+                FROM alerts 
+                WHERE student_id = ? 
+                  AND (message LIKE '%Campus Geofence Breach%' OR message LIKE '%Out-Pass Expired%')
+                  AND date(timestamp) = date('now')
+            `;
+            db.get(countQuery, [student_id], (err, countRow) => {
+                if (err) return res.status(500).json({ error: err.message });
                 
-                db.run("INSERT INTO alerts (student_id, message) VALUES (?, ?)", [student_id, message], function(err) {
-                    if (err) return res.status(500).json({ error: err.message });
+                if (countRow && countRow.count >= 4) {
+                    return res.json({ success: false, limit_reached: true, message: "Breach alert limit (4) reached for today." });
+                }
+
+                db.get("SELECT value FROM campus_settings WHERE key = 'campus_radius'", (err, row) => {
+                    if (err || !row) return res.status(500).json({ error: "Campus settings not loaded." });
+                    const campusRadius = row.value;
+
+                    let message = `🚨 Campus Geofence Breach: Student "${student_name}" walked outside the HOD campus bounds (Current distance: ${distance}m, Limit: ${campusRadius}m).`;
+                    if (isExpiredPass) {
+                        message = `🚨 Out-Pass Expired: Student "${student_name}" did not return to campus within the permitted ${pass.duration_mins} minutes for "${pass.reason}" (Current distance: ${distance}m, Limit: ${campusRadius}m).`;
+                    }
                     
-                    res.json({ success: true, message: isExpiredPass ? "Expired pass breach logged." : "Breach logged.", alert_id: this.lastID });
+                    db.run("INSERT INTO alerts (student_id, message, latitude, longitude) VALUES (?, ?, ?, ?)", [student_id, message, latitude, longitude], function(err) {
+                        if (err) return res.status(500).json({ error: err.message });
+                        
+                        res.json({ success: true, message: isExpiredPass ? "Expired pass breach logged." : "Breach logged.", alert_id: this.lastID });
+                    });
                 });
             });
         });
@@ -950,15 +960,22 @@ app.post('/api/student/heartbeat', authenticateToken, (req, res) => {
         return res.status(403).json({ success: false, message: "Unauthorized." });
     }
 
-    const nowIso = new Date().toISOString();
-    db.run(
-        "UPDATE users SET last_seen = ? WHERE id = ?",
-        [nowIso, req.user.id],
-        (err) => {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ success: true, message: "Heartbeat synced successfully!" });
+    db.get("SELECT is_keypad FROM users WHERE id = ?", [req.user.id], (err, u) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (u && u.is_keypad === 1) {
+            return res.json({ success: true, message: "Exempted due to keypad/no-phone status." });
         }
-    );
+
+        const nowIso = new Date().toISOString();
+        db.run(
+            "UPDATE users SET last_seen = ? WHERE id = ?",
+            [nowIso, req.user.id],
+            (err) => {
+                if (err) return res.status(500).json({ error: err.message });
+                res.json({ success: true, message: "Heartbeat synced successfully!" });
+            }
+        );
+    });
 });
 
 // HOD API: Fetch all students' real-time geofence tracking statuses
@@ -1012,6 +1029,106 @@ app.get('/api/hod/students-tracking', authenticateToken, (req, res) => {
         });
         
         res.json({ success: true, students });
+    });
+});
+
+// Coordinator API: Toggle Keypad Phone User exemption
+app.post('/api/coordinator/toggle-keypad', authenticateToken, (req, res) => {
+    if (req.user.role !== 'coordinator' && req.user.role !== 'hod') {
+        return res.status(403).json({ success: false, message: "Unauthorized." });
+    }
+    const { student_id, is_keypad } = req.body;
+    db.run("UPDATE users SET is_keypad = ? WHERE id = ? AND role = 'student'", [is_keypad ? 1 : 0, student_id], (err) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true, message: "Student keypad exemption status updated!" });
+    });
+});
+
+// Coordinator API: Fetch Coordinator's Class Roster & Telemetry
+app.get('/api/coordinator/roster', authenticateToken, (req, res) => {
+    if (req.user.role !== 'coordinator' && req.user.role !== 'hod') {
+        return res.status(403).json({ success: false, message: "Unauthorized." });
+    }
+
+    const query = `
+        SELECT u.id, u.username, u.barcode, u.is_keypad, u.last_seen, a.status as attendance_status,
+               (SELECT message FROM alerts WHERE student_id = u.id ORDER BY id DESC LIMIT 1) as last_alert
+        FROM users u
+        LEFT JOIN attendance a ON a.student_id = u.id AND date(a.timestamp, 'localtime') = date('now', 'localtime')
+        WHERE u.role = 'student'
+    `;
+    db.all(query, [], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        
+        const now = Date.now();
+        const roster = rows.map(r => {
+            let status = 'Not Checked In';
+            let tracking_alert = null;
+            
+            if (r.is_keypad === 1) {
+                status = r.attendance_status === 'present' ? '🟢 Checked In (Manual Override)' : 'Not Checked In';
+            } else if (r.attendance_status === 'present') {
+                if (!r.last_seen) {
+                    status = 'Offline / Suspended Tracking';
+                } else {
+                    const elapsedSecs = (now - new Date(r.last_seen).getTime()) / 1000;
+                    if (elapsedSecs > 180) {
+                        status = 'Offline / Suspended Tracking';
+                    } else {
+                        if (r.last_alert && r.last_alert.includes("Campus Geofence Breach")) {
+                            status = 'Geofence Breach';
+                            tracking_alert = r.last_alert;
+                        } else {
+                            status = 'Active & Guarded';
+                        }
+                    }
+                }
+            }
+            return {
+                id: r.id,
+                username: r.username,
+                barcode: r.barcode,
+                is_keypad: r.is_keypad,
+                status,
+                tracking_alert
+            };
+        });
+        res.json({ success: true, roster });
+    });
+});
+
+// Coordinator API: Fetch Class Alerts
+app.get('/api/coordinator/class-feed', authenticateToken, (req, res) => {
+    if (req.user.role !== 'coordinator' && req.user.role !== 'hod') {
+        return res.status(403).json({ success: false, message: "Unauthorized." });
+    }
+    const query = `
+        SELECT a.id, a.student_id, a.message, a.student_reason, a.status, a.timestamp, a.latitude, a.longitude,
+               u.username as student_name, u.parent_phone
+        FROM alerts a
+        JOIN users u ON a.student_id = u.id
+        ORDER BY a.status ASC, a.id DESC LIMIT 30
+    `;
+    db.all(query, [], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true, alerts: rows });
+    });
+});
+
+// Coordinator API: Manual check-in override for keypad / broken phone students
+app.post('/api/coordinator/manual-checkin', authenticateToken, (req, res) => {
+    if (req.user.role !== 'coordinator' && req.user.role !== 'hod') {
+        return res.status(403).json({ success: false, message: "Unauthorized." });
+    }
+    const { student_id, class_id } = req.body;
+    if (!student_id || !class_id) {
+        return res.status(400).json({ success: false, message: "Missing student_id or class_id." });
+    }
+
+    const query = `INSERT OR REPLACE INTO attendance (class_id, student_id, status) VALUES (?, ?, 'present')`;
+    db.run(query, [class_id, student_id], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true, message: "Attendance verified and marked manually!" });
     });
 });
 
