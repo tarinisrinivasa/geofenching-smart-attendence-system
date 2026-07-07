@@ -234,6 +234,22 @@
                             ? `<button class="btn" style="height: 28px; padding: 0 10px; font-size: 0.7rem; width: auto; border-radius: 8px; background: var(--success); border-color: var(--success); margin-left: 6px;" onclick="unlockStudent(${student.id})">🔓 Unlock</button>`
                             : '';
 
+                        let keypadTools = '';
+                        if (student.is_keypad === 1) {
+                            keypadTools = `
+                                <div style="border-top: 1px solid rgba(255,255,255,0.05); padding-top: 8px; margin-top: 8px; display: flex; flex-direction: column; gap: 6px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: var(--text-muted);">
+                                        <span>📞 Phone: ${student.student_phone || 'N/A'}</span>
+                                        <button class="btn" style="height: 22px; line-height: 22px; padding: 0 8px; font-size: 0.65rem; width: auto; background: var(--primary); border: none; box-shadow: none;" onclick="sendSMSOTP(${student.id})">Send SMS OTP</button>
+                                    </div>
+                                    <div style="display: flex; gap: 4px;">
+                                        <input type="text" id="otp-input-${student.id}" placeholder="4-digit OTP" style="height: 26px; font-size: 0.75rem; padding: 0 8px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; flex: 1; color: #fff;">
+                                        <button class="btn" style="height: 26px; line-height: 26px; padding: 0 10px; font-size: 0.7rem; width: auto; background: var(--success); border-color: var(--success); box-shadow: none;" onclick="verifySMSOTP(${student.id})">Verify</button>
+                                    </div>
+                                </div>
+                            `;
+                        }
+
                         card.innerHTML = `
                             <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                                 <div>
@@ -246,7 +262,7 @@
                                 <span style="font-size: 0.75rem; font-weight: 700; color: ${statusColor};">${student.status}</span>
                             </div>
                             
-                            <div style="border-top: 1px solid rgba(255,255,255,0.05); padding-top: 8px; display: flex; justify-content: space-between; align-items: center;">
+                            <div style="border-top: 1px solid rgba(255,255,255,0.05); padding-top: 8px; margin-top: 8px; display: flex; justify-content: space-between; align-items: center;">
                                 <label class="toggle-switch">
                                     <input type="checkbox" ${student.is_keypad === 1 ? 'checked' : ''} onchange="toggleKeypad(${student.id}, this.checked)">
                                     Keypad Phone
@@ -258,6 +274,7 @@
                                     ${unlockBtn}
                                 </div>
                             </div>
+                            ${keypadTools}
                         `;
                         list.appendChild(card);
                     });
@@ -325,6 +342,62 @@
             } catch (err) {
                 console.error(err);
                 alert('❌ Server connection error.');
+            }
+        }
+
+        async function sendSMSOTP(studentId) {
+            try {
+                const res = await fetch('/api/coordinator/send-keypad-otp', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        student_id: studentId,
+                        class_id: user.coordinator_class_id || 1
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert(`✅ OTP code simulated via SMS! Check server console log.\n(For demo, OTP is: ${data.otp})`);
+                } else {
+                    alert(`❌ SMS failed: ${data.message}`);
+                }
+            } catch (err) {
+                console.error(err);
+                alert("❌ Server connection error.");
+            }
+        }
+
+        async function verifySMSOTP(studentId) {
+            const input = document.getElementById(`otp-input-${studentId}`);
+            const otpCode = input.value ? input.value.trim() : '';
+            if (!otpCode) return alert("Please enter the 4-digit OTP code.");
+
+            try {
+                const res = await fetch('/api/coordinator/verify-keypad-otp', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        student_id: studentId,
+                        class_id: user.coordinator_class_id || 1,
+                        otp_code: otpCode
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert("✅ OTP verified! Student marked present.");
+                    fetchRoster();
+                } else {
+                    alert(`❌ Verification failed: ${data.message}`);
+                }
+            } catch (err) {
+                console.error(err);
+                alert("❌ Server connection error.");
             }
         }
 
