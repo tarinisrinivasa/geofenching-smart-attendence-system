@@ -71,6 +71,21 @@ const db = new sqlite3.Database(dbPath, (err) => {
                 value TEXT
             )`);
 
+            db.run(`CREATE TABLE IF NOT EXISTS otp_codes (
+                student_id INTEGER PRIMARY KEY,
+                class_id INTEGER,
+                otp_code TEXT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            )`);
+
+            db.run(`CREATE TABLE IF NOT EXISTS student_passes (
+                student_id INTEGER PRIMARY KEY,
+                expiry DATETIME,
+                reason TEXT,
+                duration_mins INTEGER,
+                notified_expired INTEGER DEFAULT 0
+            )`);
+
             // Seed default campus settings if not present
             db.get("SELECT count(*) as count FROM campus_settings", (err, row) => {
                 if (row && row.count === 0) {
@@ -78,6 +93,8 @@ const db = new sqlite3.Database(dbPath, (err) => {
                     db.run("INSERT INTO campus_settings (key, value) VALUES ('campus_latitude', '17.3850')");
                     db.run("INSERT INTO campus_settings (key, value) VALUES ('campus_longitude', '78.4867')");
                     db.run("INSERT INTO campus_settings (key, value) VALUES ('campus_radius', '500')");
+                    db.run("INSERT INTO campus_settings (key, value) VALUES ('college_start_time', '09:00')");
+                    db.run("INSERT INTO campus_settings (key, value) VALUES ('college_end_time', '16:00')");
                 }
             });
 
@@ -85,6 +102,8 @@ const db = new sqlite3.Database(dbPath, (err) => {
             db.run("ALTER TABLE users ADD COLUMN barcode TEXT UNIQUE", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE users ADD COLUMN device_id TEXT", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE users ADD COLUMN parent_phone TEXT", (err) => { /* Ignore duplicate column errors */ });
+            db.run("ALTER TABLE users ADD COLUMN device_biometric_id TEXT UNIQUE", (err) => { /* Ignore duplicate column errors */ });
+            db.run("ALTER TABLE users ADD COLUMN last_seen TEXT", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE alerts ADD COLUMN class_id INTEGER", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE alerts ADD COLUMN student_reason TEXT", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE classes ADD COLUMN token_secret TEXT", (err) => { /* Ignore duplicate column errors */ });
