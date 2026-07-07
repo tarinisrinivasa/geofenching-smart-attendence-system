@@ -239,7 +239,10 @@
                             keypadTools = `
                                 <div style="border-top: 1px solid rgba(255,255,255,0.05); padding-top: 8px; margin-top: 8px; display: flex; flex-direction: column; gap: 6px;">
                                     <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: var(--text-muted);">
-                                        <span>📞 Phone: ${student.student_phone || 'N/A'}</span>
+                                        <span style="display: inline-flex; align-items: center; gap: 4px;">
+                                            📞 Phone: <strong style="color: #fff;">${student.student_phone || 'N/A'}</strong> 
+                                            <a href="#" style="color: var(--primary); text-decoration: none; font-size: 0.7rem; font-weight:600; margin-left:4px;" onclick="editStudentPhone(${student.id}, '${student.username}', '${student.student_phone || ''}', event)">✏️ Edit</a>
+                                        </span>
                                         <button class="btn" style="height: 22px; line-height: 22px; padding: 0 8px; font-size: 0.65rem; width: auto; background: var(--primary); border: none; box-shadow: none;" onclick="sendSMSOTP(${student.id})">Send SMS OTP</button>
                                     </div>
                                     <div style="display: flex; gap: 4px;">
@@ -394,6 +397,36 @@
                     fetchRoster();
                 } else {
                     alert(`❌ Verification failed: ${data.message}`);
+                }
+            } catch (err) {
+                console.error(err);
+                alert("❌ Server connection error.");
+            }
+        }
+
+        async function editStudentPhone(studentId, username, currentPhone, e) {
+            e.preventDefault();
+            const newPhone = prompt(`Enter new keypad phone number for student "${username}":`, currentPhone);
+            if (newPhone === null) return;
+            
+            try {
+                const res = await fetch('/api/coordinator/update-student-phone', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        student_id: studentId,
+                        student_phone: newPhone
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert("✅ Student phone number updated successfully!");
+                    fetchRoster();
+                } else {
+                    alert(`❌ Failed to update phone: ${data.message}`);
                 }
             } catch (err) {
                 console.error(err);
