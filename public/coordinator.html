@@ -145,8 +145,30 @@
             glow.style.top = `${e.clientY}px`;
         });
 
-        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-        const user = JSON.parse(localStorage.getItem('user') || sessionStorage.getItem('user'));
+        const urlParams = new URLSearchParams(window.location.search);
+        const safeStorage = {
+            getItem(key) {
+                let val = null;
+                try { val = localStorage.getItem(key); } catch(e) {}
+                if (!val) {
+                    try { val = sessionStorage.getItem(key); } catch(e) {}
+                }
+                if (!val && urlParams.has(key)) {
+                    val = urlParams.get(key);
+                    try { localStorage.setItem(key, val); } catch(e) {
+                        try { sessionStorage.setItem(key, val); } catch(err) {}
+                    }
+                }
+                return val;
+            },
+            removeItem(key) {
+                try { localStorage.removeItem(key); } catch(e) {}
+                try { sessionStorage.removeItem(key); } catch(e) {}
+            }
+        };
+
+        const token = safeStorage.getItem('token');
+        const user = JSON.parse(safeStorage.getItem('user'));
 
         if (!token || !user || user.role !== 'coordinator') {
             window.location.href = 'index.html';
@@ -165,8 +187,8 @@
         });
 
         function logout() {
-            localStorage.clear();
-            sessionStorage.clear();
+            safeStorage.removeItem('user');
+            safeStorage.removeItem('token');
             window.location.href = 'index.html';
         }
 
