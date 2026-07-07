@@ -1255,6 +1255,22 @@ app.post('/api/coordinator/verify-keypad-otp', authenticateToken, (req, res) => 
     });
 });
 
+// Coordinator API: Update a student's phone number
+app.post('/api/coordinator/update-student-phone', authenticateToken, (req, res) => {
+    if (req.user.role !== 'coordinator' && req.user.role !== 'hod') {
+        return res.status(403).json({ success: false, message: "Unauthorized." });
+    }
+    const { student_id, student_phone } = req.body;
+    if (!student_id || student_phone === undefined) {
+        return res.status(400).json({ success: false, message: "Missing student_id or student_phone." });
+    }
+
+    db.run("UPDATE users SET student_phone = ? WHERE id = ? AND role = 'student'", [student_phone.trim(), student_id], (err) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true, message: "Student phone number updated successfully!" });
+    });
+});
+
 if (isRender) {
     // Render handles SSL certificates automatically at the proxy level. Start a standard HTTP server.
     app.listen(PORT, '0.0.0.0', () => {
