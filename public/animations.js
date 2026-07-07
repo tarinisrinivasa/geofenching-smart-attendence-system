@@ -28,16 +28,31 @@
     `;
     document.body.appendChild(loader);
 
+    // Safety Timeout: Hide loading overlay after 3 seconds under all circumstances
+    setTimeout(() => {
+        const overlay = document.getElementById('loading-overlay');
+        if (overlay && !overlay.classList.contains('hidden')) {
+            overlay.classList.add('hidden');
+            overlay.style.display = 'none';
+            console.log("Loading overlay hidden via safety timeout.");
+        }
+    }, 3000);
+
     function initPageAnimations() {
-        if (hasMotion) {
-            Motion.animate("#loading-overlay", { opacity: 0 }, { duration: 0.4 }).then(() => {
+        try {
+            if (hasMotion) {
+                Motion.animate("#loading-overlay", { opacity: 0 }, { duration: 0.4 }).then(() => {
+                    loader.classList.add('hidden');
+                });
+                // Container dynamic slide-up
+                Motion.animate(".container", { opacity: [0, 1], y: [25, 0] }, { duration: 0.6, easing: [0.16, 1, 0.3, 1] });
+                // Stagger card entries
+                Motion.animate(".card", { opacity: [0, 1], y: [15, 0] }, { delay: Motion.stagger(0.06), duration: 0.4 });
+            } else {
                 loader.classList.add('hidden');
-            });
-            // Container dynamic slide-up
-            Motion.animate(".container", { opacity: [0, 1], y: [25, 0] }, { duration: 0.6, easing: [0.16, 1, 0.3, 1] });
-            // Stagger card entries
-            Motion.animate(".card", { opacity: [0, 1], y: [15, 0] }, { delay: Motion.stagger(0.06), duration: 0.4 });
-        } else {
+            }
+        } catch (e) {
+            console.error("Animations initialization failed:", e);
             loader.classList.add('hidden');
         }
     }
