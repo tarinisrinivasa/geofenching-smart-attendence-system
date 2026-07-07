@@ -190,8 +190,15 @@
 
         const user = JSON.parse(safeStorage.getItem('user'));
         const token = safeStorage.getItem('token');
-        if (!user || !token || user.role !== 'student') {
+        
+        if (!user || !token) {
             window.location.href = 'index.html';
+        } else if (user.role !== 'student') {
+            let targetPage = 'index.html';
+            if (user.role === 'teacher') targetPage = 'teacher.html';
+            else if (user.role === 'coordinator') targetPage = 'coordinator.html';
+            else if (user.role === 'hod') targetPage = 'hod.html';
+            window.location.href = `${targetPage}?token=${encodeURIComponent(token)}&user=${encodeURIComponent(JSON.stringify(user))}`;
         }
 
         // Initialize student profile view

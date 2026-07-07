@@ -175,8 +175,14 @@
         const user = JSON.parse(safeStorage.getItem('user'));
         const token = safeStorage.getItem('token');
         
-        if (!user || !token || user.role !== 'hod') {
+        if (!user || !token) {
             window.location.href = 'index.html';
+        } else if (user.role !== 'hod') {
+            let targetPage = 'index.html';
+            if (user.role === 'student') targetPage = 'student.html';
+            else if (user.role === 'coordinator') targetPage = 'coordinator.html';
+            else if (user.role === 'teacher') targetPage = 'teacher.html';
+            window.location.href = `${targetPage}?token=${encodeURIComponent(token)}&user=${encodeURIComponent(JSON.stringify(user))}`;
         }
 
         // Global Ripple Effect

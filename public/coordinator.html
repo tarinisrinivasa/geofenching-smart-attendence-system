@@ -169,9 +169,15 @@
 
         const token = safeStorage.getItem('token');
         const user = JSON.parse(safeStorage.getItem('user'));
-
-        if (!token || !user || user.role !== 'coordinator') {
+        
+        if (!user || !token) {
             window.location.href = 'index.html';
+        } else if (user.role !== 'coordinator') {
+            let targetPage = 'index.html';
+            if (user.role === 'student') targetPage = 'student.html';
+            else if (user.role === 'teacher') targetPage = 'teacher.html';
+            else if (user.role === 'hod') targetPage = 'hod.html';
+            window.location.href = `${targetPage}?token=${encodeURIComponent(token)}&user=${encodeURIComponent(JSON.stringify(user))}`;
         }
 
         document.getElementById('coordinatorDetails').innerText = `Coordinator Account: ${user.username} | Class ID: ${user.coordinator_class_id || 'N/A'}`;

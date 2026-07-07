@@ -73,6 +73,7 @@
                 <button class="tab-btn active" id="tabBtnQr" onclick="switchMonitorTab('qr')">QR Method</button>
                 <button class="tab-btn" id="tabBtnBarcode" onclick="switchMonitorTab('barcode')">Barcode Scanner</button>
                 <button class="tab-btn" id="tabBtnManual" onclick="switchMonitorTab('manual')">Approvals</button>
+                <button class="tab-btn" id="tabBtnOtp" onclick="switchMonitorTab('otp')">Student OTPs</button>
                 <button class="tab-btn" id="tabBtnReport" onclick="switchMonitorTab('report')">Reports</button>
             </div>
 
@@ -118,6 +119,26 @@
                 </p>
                 <div id="pendingList" style="margin-top: 1rem;">
                     <div style="text-align: center; color: var(--text-muted); padding: 1.5rem;">No pending approvals.</div>
+                </div>
+            </div>
+
+            <!-- Tab 5: Student OTPs Generator -->
+            <div id="mon-otp" class="tab-content" style="display: none;">
+                <p style="color: var(--text-muted); font-size: 0.85rem; text-align: center; margin-bottom: 1.5rem;">
+                    Generate a temporary check-in OTP code for students without working biometrics.
+                </p>
+                <div class="form-group" style="margin-bottom: 1.5rem;">
+                    <label style="font-size: 0.75rem; margin-bottom: 0.5rem; display: block; font-weight: 600;">Select Student to Generate OTP</label>
+                    <select id="otpStudentSelect" style="width: 100%; height: 42px; border: 1px solid var(--border); border-radius: 12px; background: rgba(0,0,0,0.3); color: #fff; padding: 0 12px; font-size: 0.9rem; outline: none; box-sizing: border-box;"></select>
+                </div>
+                <div style="text-align: center; margin-top: 1rem; margin-bottom: 1.5rem;">
+                    <button class="btn" onclick="generateStudentOtp()" style="max-width: 250px; background: var(--primary);">Generate OTP Code</button>
+                </div>
+                
+                <div id="otpDisplayCard" style="display: none; text-align: center; padding: 1.5rem; background: rgba(124, 58, 237, 0.08); border: 1px solid rgba(124, 58, 237, 0.2); border-radius: 16px; margin: 0 auto; max-width: 320px;">
+                    <small style="color: var(--text-muted); display: block; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">Temp Attendance OTP</small>
+                    <h2 id="generatedOtpVal" style="font-size: 3.2rem; font-family: monospace; font-weight: 800; letter-spacing: 0.1em; color: var(--primary); margin: 8px 0; text-shadow: 0 0 15px rgba(124, 58, 237, 0.4);">0000</h2>
+                    <small id="otpExpiryText" style="color: #f59e0b; display: block; font-weight: 600;">Expires in 60s</small>
                 </div>
             </div>
 
@@ -204,8 +225,15 @@
 
         const user = JSON.parse(safeStorage.getItem('user'));
         const token = safeStorage.getItem('token');
-        if (!user || !token || user.role !== 'teacher') {
+        
+        if (!user || !token) {
             window.location.href = 'index.html';
+        } else if (user.role !== 'teacher') {
+            let targetPage = 'index.html';
+            if (user.role === 'student') targetPage = 'student.html';
+            else if (user.role === 'coordinator') targetPage = 'coordinator.html';
+            else if (user.role === 'hod') targetPage = 'hod.html';
+            window.location.href = `${targetPage}?token=${encodeURIComponent(token)}&user=${encodeURIComponent(JSON.stringify(user))}`;
         }
 
         document.getElementById('welcomeMsg').innerText = `Welcome, ${user.username}`;
@@ -377,13 +405,19 @@
         }
 
         function switchMonitorTab(tabName) {
-            const tabs = ['qr', 'barcode', 'manual', 'report'];
+            const tabs = ['qr', 'barcode', 'manual', 'otp', 'report'];
             tabs.forEach(t => {
-                document.getElementById(`tabBtn${t.charAt(0).toUpperCase() + t.slice(1)}`).classList.toggle('active', t === tabName);
-                document.getElementById(`mon-${t}`).style.display = t === tabName ? 'block' : 'none';
+                const btn = document.getElementById(`tabBtn${t.charAt(0).toUpperCase() + t.slice(1)}`);
+                if (btn) btn.classList.toggle('active', t === tabName);
+                const block = document.getElementById(`mon-${t}`);
+                if (block) block.style.display = t === tabName ? 'block' : 'none';
             });
             stopBarcodeCamera();
             document.getElementById('monitorMsg').className = 'message';
+            
+            if (tabName === 'otp') {
+                fetchStudentsForOtp();
+            }
         }
 
         async function endClass() {
@@ -580,6 +614,75 @@
                 });
             } catch (err) {
                 console.error(err);
+            }
+        }
+
+        async function fetchStudentsForOtp() {
+            try {
+                const res = await fetch('/api/students', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                if (data.success && data.students) {
+                    const select = document.getElementById('otpStudentSelect');
+                    select.innerHTML = '';
+                    
+                    data.students.forEach(s => {
+                        const opt = document.createElement('option');
+                        opt.value = s.id;
+                        opt.innerText = s.username;
+                        select.appendChild(opt);
+                    });
+                }
+            } catch (err) {
+                console.error("Failed to fetch students roster:", err);
+            }
+        }
+
+        let otpCountdownInterval = null;
+        async function generateStudentOtp() {
+            const studentId = document.getElementById('otpStudentSelect').value;
+            if (!studentId) return alert("Select a student first.");
+
+            try {
+                const res = await fetch('/api/teacher/generate-otp', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ class_id: activeSessionId, student_id: studentId })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    document.getElementById('generatedOtpVal').innerText = data.otp;
+                    const card = document.getElementById('otpDisplayCard');
+                    card.style.display = 'block';
+                    if (typeof Motion !== 'undefined') {
+                        Motion.animate(card, { scale: [0.9, 1], opacity: [0, 1] }, { duration: 0.25 });
+                    }
+
+                    // Start 60s countdown timer display
+                    let timeLeft = data.expires_in || 60;
+                    const timerText = document.getElementById('otpExpiryText');
+                    timerText.innerText = `Expires in ${timeLeft}s`;
+
+                    if (otpCountdownInterval) clearInterval(otpCountdownInterval);
+                    otpCountdownInterval = setInterval(() => {
+                        timeLeft--;
+                        if (timeLeft <= 0) {
+                            clearInterval(otpCountdownInterval);
+                            timerText.innerText = "Expired";
+                            document.getElementById('generatedOtpVal').innerText = "----";
+                        } else {
+                            timerText.innerText = `Expires in ${timeLeft}s`;
+                        }
+                    }, 1000);
+                } else {
+                    alert(`Failed to generate OTP: ${data.message}`);
+                }
+            } catch (err) {
+                console.error("Generate OTP request failed:", err);
             }
         }
 
