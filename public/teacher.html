@@ -140,6 +140,16 @@
                     <h2 id="generatedOtpVal" style="font-size: 3.2rem; font-family: monospace; font-weight: 800; letter-spacing: 0.1em; color: var(--primary); margin: 8px 0; text-shadow: 0 0 15px rgba(124, 58, 237, 0.4);">0000</h2>
                     <small id="otpExpiryText" style="color: #f59e0b; display: block; font-weight: 600;">Expires in 60s</small>
                 </div>
+
+                <div style="margin-top: 2rem; border-top: 1px solid var(--surface-border); padding-top: 1.5rem;">
+                    <h4 style="margin: 0 0 0.5rem 0;">Keypad Phone SMS OTP Verification</h4>
+                    <p style="color: var(--text-muted); font-size: 0.75rem; margin-bottom: 1rem;">
+                        Verify students using legacy keypad phones via simulated SMS authentication.
+                    </p>
+                    <div id="keypadStudentsList" style="display: flex; flex-direction: column; gap: 8px;">
+                        <div style="text-align: center; color: var(--text-muted); padding: 1rem; font-size: 0.8rem;">No keypad students loaded.</div>
+                    </div>
+                </div>
             </div>
 
             <!-- Tab 4: Present Reports & CSV/PDF Exporters -->
@@ -627,15 +637,102 @@
                     const select = document.getElementById('otpStudentSelect');
                     select.innerHTML = '';
                     
-                    data.students.forEach(s => {
+                    // Filter normal students for OTP select
+                    const normalStudents = data.students.filter(s => s.is_keypad !== 1);
+                    normalStudents.forEach(s => {
                         const opt = document.createElement('option');
                         opt.value = s.id;
                         opt.innerText = s.username;
                         select.appendChild(opt);
                     });
+
+                    // Render keypad students list
+                    const keypadList = document.getElementById('keypadStudentsList');
+                    keypadList.innerHTML = '';
+
+                    const keypadStudents = data.students.filter(s => s.is_keypad === 1);
+                    if (keypadStudents.length === 0) {
+                        keypadList.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 1rem; font-size: 0.8rem;">No keypad students registered.</div>';
+                    } else {
+                        keypadStudents.forEach(s => {
+                            const div = document.createElement('div');
+                            div.className = 'card';
+                            div.style.padding = '12px';
+                            div.style.marginBottom = '8px';
+                            div.innerHTML = `
+                                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; margin-bottom: 6px;">
+                                    <span style="font-weight:600;">${s.username}</span>
+                                    <span style="font-size: 0.75rem; color: var(--text-muted);">📞 ${s.student_phone || 'N/A'}</span>
+                                </div>
+                                <div style="display: flex; gap: 4px; align-items: center;">
+                                    <button class="btn" style="height: 26px; line-height: 26px; padding: 0 8px; font-size: 0.7rem; width: auto; background: var(--primary); border: none; box-shadow: none;" onclick="sendSMSOTP(${s.id})">Send SMS OTP</button>
+                                    <input type="text" id="otp-input-${s.id}" placeholder="Enter OTP" style="height: 26px; font-size: 0.75rem; padding: 0 8px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; flex: 1; color: #fff;">
+                                    <button class="btn" style="height: 26px; line-height: 26px; padding: 0 10px; font-size: 0.7rem; width: auto; background: var(--success); border-color: var(--success); box-shadow: none;" onclick="verifySMSOTP(${s.id})">Verify</button>
+                                </div>
+                            `;
+                            keypadList.appendChild(div);
+                        });
+                    }
                 }
             } catch (err) {
                 console.error("Failed to fetch students roster:", err);
+            }
+        }
+
+        async function sendSMSOTP(studentId) {
+            try {
+                const res = await fetch('/api/coordinator/send-keypad-otp', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        student_id: studentId,
+                        class_id: activeSessionId
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert(`✅ OTP code simulated via SMS! Check server console log.\n(For demo, OTP is: ${data.otp})`);
+                } else {
+                    alert(`❌ SMS failed: ${data.message}`);
+                }
+            } catch (err) {
+                console.error(err);
+                alert("❌ Server connection error.");
+            }
+        }
+
+        async function verifySMSOTP(studentId) {
+            const input = document.getElementById(`otp-input-${studentId}`);
+            const otpCode = input.value ? input.value.trim() : '';
+            if (!otpCode) return alert("Please enter the 4-digit OTP code.");
+
+            try {
+                const res = await fetch('/api/coordinator/verify-keypad-otp', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        student_id: studentId,
+                        class_id: activeSessionId,
+                        otp_code: otpCode
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert("✅ OTP verified! Student marked present.");
+                    fetchStudentsForOtp();
+                    fetchAttendanceRecords();
+                } else {
+                    alert(`❌ Verification failed: ${data.message}`);
+                }
+            } catch (err) {
+                console.error(err);
+                alert("❌ Server connection error.");
             }
         }
 
