@@ -117,6 +117,8 @@
                         let targetPage = '';
                         if (data.user.role === 'hod') {
                             targetPage = 'hod.html';
+                        } else if (data.user.role === 'coordinator') {
+                            targetPage = 'coordinator.html';
                         } else {
                             targetPage = data.user.role === 'teacher' ? 'teacher.html' : 'student.html';
                         }
