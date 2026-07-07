@@ -106,6 +106,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
             db.run("ALTER TABLE users ADD COLUMN last_seen TEXT", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE users ADD COLUMN is_keypad INTEGER DEFAULT 0", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE users ADD COLUMN coordinator_class_id INTEGER", (err) => { /* Ignore duplicate column errors */ });
+            db.run("ALTER TABLE users ADD COLUMN attendance_locked INTEGER DEFAULT 0", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE alerts ADD COLUMN class_id INTEGER", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE alerts ADD COLUMN student_reason TEXT", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE alerts ADD COLUMN latitude REAL", (err) => { /* Ignore duplicate column errors */ });

@@ -146,19 +146,38 @@ app.post('/api/classes/:class_id/end', authenticateToken, (req, res) => {
     db.run("UPDATE classes SET active = 0 WHERE id = ?", [classId], function(err) {
         if (err) return res.status(500).json({ error: err.message });
 
-        // Run AI Bunking Analysis asynchronously in the background
+        // Run AI Analysis and Unverified Absence Alerts asynchronously
         db.get("SELECT name FROM classes WHERE id = ?", [classId], (err, currentClass) => {
             if (err || !currentClass) return;
 
-            // Find the most recent ended class session (if any)
+            // 1. Unverified Absence Analysis (Alert coordinator for any student who didn't mark check-in)
+            db.all("SELECT id, username FROM users WHERE role = 'student'", [], (err, allStudents) => {
+                if (err || !allStudents) return;
+
+                db.all("SELECT student_id FROM attendance WHERE class_id = ? AND status = 'present'", [classId], (err, presentStudents) => {
+                    if (err || !presentStudents) return;
+
+                    const presentIds = new Set(presentStudents.map(p => p.student_id));
+                    const unmarkedStudents = allStudents.filter(s => !presentIds.has(s.id));
+
+                    if (unmarkedStudents.length > 0) {
+                        const insertUnmarkedAlert = db.prepare("INSERT INTO alerts (student_id, class_id, message) VALUES (?, ?, ?)");
+                        unmarkedStudents.forEach(u => {
+                            const alertMsg = `⚠️ Unverified Absence: Student "${u.username}" did not mark attendance for class session "${currentClass.name}".`;
+                            insertUnmarkedAlert.run([u.id, classId, alertMsg]);
+                        });
+                        insertUnmarkedAlert.finalize();
+                    }
+                });
+            });
+
+            // 2. AI Bunking Analysis (Flag consecutive class skipping anomalies)
             db.get("SELECT id, name FROM classes WHERE id < ? ORDER BY id DESC LIMIT 1", [classId], (err, prevClass) => {
                 if (err || !prevClass) return;
 
-                // Query students present in the previous session
                 db.all("SELECT student_id FROM attendance WHERE class_id = ? AND status = 'present'", [prevClass.id], (err, prevPresent) => {
                     if (err || !prevPresent || prevPresent.length === 0) return;
 
-                    // Query students present in the current ended session
                     db.all("SELECT student_id FROM attendance WHERE class_id = ? AND status = 'present'", [classId], (err, currentPresent) => {
                         if (err || !currentPresent) return;
 
@@ -169,7 +188,6 @@ app.post('/api/classes/:class_id/end', authenticateToken, (req, res) => {
                             const placeholders = missingStudents.map(() => '?').join(',');
                             const studentIds = missingStudents.map(m => m.student_id);
 
-                            // Get usernames of flagged students to write readable warnings
                             db.all(`SELECT id, username FROM users WHERE id IN (${placeholders})`, studentIds, (err, users) => {
                                 if (err || !users) return;
 
@@ -527,6 +545,13 @@ app.post('/api/mark-attendance', authenticateToken, (req, res) => {
     const { class_id, latitude, longitude, qr_token, accuracy, otp_code } = req.body;
     const student_id = req.user.id; // Securely retrieve student ID from verified token
 
+    // Check if attendance privileges are locked due to geofence breach
+    db.get("SELECT attendance_locked FROM users WHERE id = ?", [student_id], (err, u) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (u && u.attendance_locked === 1) {
+            return res.status(403).json({ success: false, attendance_locked: true, message: "❌ Attendance Privileges Locked: Your account has been suspended due to an unauthorized campus geofence breach. Please visit your HOD or Class Coordinator to unlock your account." });
+        }
+
     // Validate Teacher OTP first if provided (bypasses geofence check since teacher is present in person)
     if (otp_code) {
         db.get("SELECT otp_code, timestamp FROM otp_codes WHERE student_id = ? AND class_id = ?", [student_id, class_id], (err, row) => {
@@ -611,6 +636,7 @@ app.post('/api/mark-attendance', authenticateToken, (req, res) => {
                 message: `You are outside the geofence. Distance: ${Math.round(distance)}m, Limit: ${Math.round(allowedDistance)}m (Radius: ${cls.radius}m + Teacher GPS error: ±${Math.round(cls.accuracy || 0)}m + Student GPS error: ±${Math.round(accuracy || 0)}m)`
             });
         }
+    });
     });
 });
 
@@ -726,7 +752,11 @@ app.post('/api/alerts/campus-breach', authenticateToken, (req, res) => {
                     db.run("INSERT INTO alerts (student_id, message, latitude, longitude) VALUES (?, ?, ?, ?)", [student_id, message, latitude, longitude], function(err) {
                         if (err) return res.status(500).json({ error: err.message });
                         
-                        res.json({ success: true, message: isExpiredPass ? "Expired pass breach logged." : "Breach logged.", alert_id: this.lastID });
+                        const alertId = this.lastID;
+                        db.run("UPDATE users SET attendance_locked = 1 WHERE id = ?", [student_id], (lockErr) => {
+                            if (lockErr) console.error("Failed to lock attendance for student", student_id, lockErr);
+                            res.json({ success: true, message: isExpiredPass ? "Expired pass breach logged." : "Breach logged.", alert_id: alertId });
+                        });
                     });
                 });
             });
@@ -940,9 +970,15 @@ app.post('/api/biometrics/verify', authenticateToken, (req, res) => {
         return res.status(400).json({ success: false, message: "Missing credential_id." });
     }
 
-    db.get("SELECT device_biometric_id FROM users WHERE id = ?", [req.user.id], (err, row) => {
+    db.get("SELECT device_biometric_id, attendance_locked FROM users WHERE id = ?", [req.user.id], (err, row) => {
         if (err) return res.status(500).json({ error: err.message });
-        if (!row || !row.device_biometric_id) {
+        if (!row) return res.status(404).json({ success: false, message: "User not found." });
+
+        if (row.attendance_locked === 1) {
+            return res.status(403).json({ success: false, attendance_locked: true, message: "❌ Attendance Privileges Locked: Your account has been suspended due to an unauthorized campus geofence breach. Please visit your HOD or Class Coordinator to unlock your account." });
+        }
+
+        if (!row.device_biometric_id) {
             return res.status(400).json({ success: false, message: "No biometrics registered for this account." });
         }
 
@@ -985,7 +1021,7 @@ app.get('/api/hod/students-tracking', authenticateToken, (req, res) => {
     }
 
     const query = `
-        SELECT u.id, u.username, u.last_seen, a.status as attendance_status,
+        SELECT u.id, u.username, u.last_seen, u.attendance_locked, a.status as attendance_status,
                (SELECT message FROM alerts WHERE student_id = u.id ORDER BY id DESC LIMIT 1) as last_alert
         FROM users u
         LEFT JOIN attendance a ON a.student_id = u.id AND date(a.timestamp, 'localtime') = date('now', 'localtime')
@@ -1024,7 +1060,8 @@ app.get('/api/hod/students-tracking', authenticateToken, (req, res) => {
                 username: r.username,
                 last_seen: r.last_seen,
                 status,
-                tracking_alert
+                tracking_alert,
+                attendance_locked: r.attendance_locked
             };
         });
         
@@ -1051,7 +1088,7 @@ app.get('/api/coordinator/roster', authenticateToken, (req, res) => {
     }
 
     const query = `
-        SELECT u.id, u.username, u.barcode, u.is_keypad, u.last_seen, a.status as attendance_status,
+        SELECT u.id, u.username, u.barcode, u.is_keypad, u.last_seen, u.attendance_locked, a.status as attendance_status,
                (SELECT message FROM alerts WHERE student_id = u.id ORDER BY id DESC LIMIT 1) as last_alert
         FROM users u
         LEFT JOIN attendance a ON a.student_id = u.id AND date(a.timestamp, 'localtime') = date('now', 'localtime')
@@ -1090,7 +1127,8 @@ app.get('/api/coordinator/roster', authenticateToken, (req, res) => {
                 barcode: r.barcode,
                 is_keypad: r.is_keypad,
                 status,
-                tracking_alert
+                tracking_alert,
+                attendance_locked: r.attendance_locked
             };
         });
         res.json({ success: true, roster });
@@ -1129,6 +1167,22 @@ app.post('/api/coordinator/manual-checkin', authenticateToken, (req, res) => {
     db.run(query, [class_id, student_id], function(err) {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ success: true, message: "Attendance verified and marked manually!" });
+    });
+});
+
+// Coordinator & HOD API: Unlock student attendance locks
+app.post('/api/coordinator/unlock-student', authenticateToken, (req, res) => {
+    if (req.user.role !== 'coordinator' && req.user.role !== 'hod') {
+        return res.status(403).json({ success: false, message: "Unauthorized." });
+    }
+    const { student_id } = req.body;
+    if (!student_id) {
+        return res.status(400).json({ success: false, message: "Missing student_id." });
+    }
+
+    db.run("UPDATE users SET attendance_locked = 0 WHERE id = ?", [student_id], (err) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true, message: "Student check-in privileges unlocked successfully!" });
     });
 });
 
