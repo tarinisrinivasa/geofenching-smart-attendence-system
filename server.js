@@ -283,30 +283,59 @@ app.post('/api/alerts/:alert_id/reverse-attendance', authenticateToken, (req, re
     }
 
     const alertId = parseInt(req.params.alert_id);
+    console.log(`[REVERSE ATTENDANCE REQUEST] Alert ID: ${alertId}`);
 
     db.get("SELECT student_id, class_id FROM alerts WHERE id = ?", [alertId], (err, alertRecord) => {
-        if (err || !alertRecord) {
+        if (err) {
+            console.error(`[REVERSE ATTENDANCE ERROR] Failed to query alert ${alertId}:`, err);
+            return res.status(500).json({ error: err.message });
+        }
+        if (!alertRecord) {
+            console.log(`[REVERSE ATTENDANCE FAIL] Alert ${alertId} not found in database.`);
             return res.status(404).json({ success: false, message: "Alert not found." });
         }
 
         const { student_id, class_id } = alertRecord;
+        console.log(`[REVERSE ATTENDANCE INFO] Alert details: student_id = ${student_id}, class_id = ${class_id}`);
 
         if (!class_id) {
+            console.log(`[REVERSE ATTENDANCE FAIL] No class_id stored with alert ${alertId}.`);
             return res.status(400).json({ success: false, message: "No valid class session associated with this alert." });
         }
 
-        // Insert or replace present attendance status for that student and class
-        const insertAttendance = `
-            INSERT OR REPLACE INTO attendance (class_id, student_id, status, timestamp) 
-            VALUES (?, ?, 'present', datetime('now', 'localtime'))
-        `;
-        db.run(insertAttendance, [class_id, student_id], function(err) {
-            if (err) return res.status(500).json({ error: err.message });
+        // Verify class session exists in classes table
+        db.get("SELECT name FROM classes WHERE id = ?", [class_id], (err, cls) => {
+            if (err) {
+                console.error(`[REVERSE ATTENDANCE ERROR] Class verification query failed:`, err);
+                return res.status(500).json({ error: err.message });
+            }
+            if (!cls) {
+                console.log(`[REVERSE ATTENDANCE FAIL] Referenced class ID ${class_id} does not exist in classes table.`);
+                return res.status(400).json({ success: false, message: "The class session associated with this alert no longer exists." });
+            }
 
-            // Mark the alert as resolved (status = 2)
-            db.run("UPDATE alerts SET status = 2 WHERE id = ?", [alertId], function(err) {
-                if (err) return res.status(500).json({ error: err.message });
-                res.json({ success: true, message: "Attendance successfully reversed from Absent to Present!" });
+            console.log(`[REVERSE ATTENDANCE INFO] Class verified: "${cls.name}"`);
+
+            // Insert or replace present attendance status for that student and class
+            const insertAttendance = `
+                INSERT OR REPLACE INTO attendance (class_id, student_id, status, timestamp) 
+                VALUES (?, ?, 'present', datetime('now', 'localtime'))
+            `;
+            db.run(insertAttendance, [class_id, student_id], function(err) {
+                if (err) {
+                    console.error(`[REVERSE ATTENDANCE ERROR] Failed to update attendance:`, err);
+                    return res.status(500).json({ error: err.message });
+                }
+
+                // Mark the alert as resolved (status = 2)
+                db.run("UPDATE alerts SET status = 2 WHERE id = ?", [alertId], function(err) {
+                    if (err) {
+                        console.error(`[REVERSE ATTENDANCE ERROR] Failed to update alert status to 2:`, err);
+                        return res.status(500).json({ error: err.message });
+                    }
+                    console.log(`[REVERSE ATTENDANCE SUCCESS] Successfully marked student ${student_id} present in class ${class_id}`);
+                    res.json({ success: true, message: "Attendance successfully reversed from Absent to Present!" });
+                });
             });
         });
     });
@@ -749,14 +778,23 @@ app.post('/api/alerts/campus-breach', authenticateToken, (req, res) => {
                         message = `🚨 Out-Pass Expired: Student "${student_name}" did not return to campus within the permitted ${pass.duration_mins} minutes for "${pass.reason}" (Current distance: ${distance}m, Limit: ${campusRadius}m).`;
                     }
                     
-                    db.run("INSERT INTO alerts (student_id, message, latitude, longitude) VALUES (?, ?, ?, ?)", [student_id, message, latitude, longitude], function(err) {
-                        if (err) return res.status(500).json({ error: err.message });
+                    // Resolve currently active class session to link to this alert
+                    db.get("SELECT id FROM classes WHERE active = 1 ORDER BY id DESC LIMIT 1", [], (err, activeClass) => {
+                        const classIdToInsert = activeClass ? activeClass.id : null;
                         
-                        const alertId = this.lastID;
-                        db.run("UPDATE users SET attendance_locked = 1 WHERE id = ?", [student_id], (lockErr) => {
-                            if (lockErr) console.error("Failed to lock attendance for student", student_id, lockErr);
-                            res.json({ success: true, message: isExpiredPass ? "Expired pass breach logged." : "Breach logged.", alert_id: alertId });
-                        });
+                        db.run(
+                            "INSERT INTO alerts (student_id, class_id, message, latitude, longitude) VALUES (?, ?, ?, ?, ?)",
+                            [student_id, classIdToInsert, message, latitude, longitude],
+                            function(err) {
+                                if (err) return res.status(500).json({ error: err.message });
+                                
+                                const alertId = this.lastID;
+                                db.run("UPDATE users SET attendance_locked = 1 WHERE id = ?", [student_id], (lockErr) => {
+                                    if (lockErr) console.error("Failed to lock attendance for student", student_id, lockErr);
+                                    res.json({ success: true, message: isExpiredPass ? "Expired pass breach logged." : "Breach logged.", alert_id: alertId });
+                                });
+                            }
+                        );
                     });
                 });
             });
