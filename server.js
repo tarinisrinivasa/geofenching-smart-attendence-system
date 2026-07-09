@@ -13,7 +13,7 @@ const rateLimit = require('express-rate-limit');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_key_for_attendance_system';
 
-const isRender = process.env.RENDER === 'true';
+const isRender = process.env.RENDER === 'true' || process.env.PORT !== undefined;
 
 let httpsOptions = null;
 if (!isRender) {
@@ -27,6 +27,7 @@ if (!isRender) {
 }
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3000;
 
 // Configure High-Level WAF (Web Application Firewall) Security Headers
