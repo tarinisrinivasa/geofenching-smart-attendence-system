@@ -8,6 +8,8 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const db = require('./db');
 const { getDistance } = require('./utils/geofence');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_key_for_attendance_system';
 
@@ -27,9 +29,86 @@ if (!isRender) {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Configure High-Level WAF (Web Application Firewall) Security Headers
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdn.jsdelivr.net", "https://unpkg.com"],
+            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+            fontSrc: ["'self'", "https://fonts.gstatic.com"],
+            imgSrc: ["'self'", "data:", "https://images.unsplash.com", "https://bwipjs-api.metafloor.com", "https://*.onrender.com"],
+            connectSrc: ["'self'", "https://*.onrender.com", "wss://*.onrender.com"],
+            mediaSrc: ["'self'", "data:"]
+        }
+    }
+}));
+
+// DDoS & Brute Force Rate Limiter (General Limit: 500 requests per 15 minutes per IP)
+const generalLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 500,
+    message: {
+        success: false,
+        message: "❌ Too many requests from this IP. Please try again after 15 minutes."
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+app.use(generalLimiter);
+
+// Stricter Rate Limiter for Authentication & Verification Endpoints (15 requests per 15 minutes per IP)
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 15,
+    message: {
+        success: false,
+        message: "❌ Stricter Rate Limit: Too many authentication/verification attempts from this IP. Please try again after 15 minutes."
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+app.use('/api/login', authLimiter);
+app.use('/api/verify-password', authLimiter);
+app.use('/api/coordinator/verify-keypad-otp', authLimiter);
+
+// Custom Request Sanitizer (SQL Injection & XSS Guard)
+function securityFirewall(req, res, next) {
+    const sqlInjectionPattern = /(\bUNION\b|\bSELECT\b|\bDROP\b|\bDELETE\b|\bINSERT\b|\bUPDATE\b|' OR '|" OR "|OR 1=1|OR TRUE|--|#)/i;
+    const xssPattern = /(<script\b[^>]*>|javascript:|onerror\s*=|onload\s*=|onclick\s*=)/i;
+
+    const checkValue = (val) => {
+        if (typeof val === 'string') {
+            if (sqlInjectionPattern.test(val)) {
+                console.warn(`[WAF FIREWALL ALERT] Blocked potential SQL Injection payload: "${val}"`);
+                return false;
+            }
+            if (xssPattern.test(val)) {
+                console.warn(`[WAF FIREWALL ALERT] Blocked potential XSS payload: "${val}"`);
+                return false;
+            }
+        } else if (typeof val === 'object' && val !== null) {
+            for (const key in val) {
+                if (val.hasOwnProperty(key)) {
+                    if (!checkValue(val[key])) return false;
+                }
+            }
+        }
+        return true;
+    };
+
+    if (!checkValue(req.body) || !checkValue(req.query) || !checkValue(req.params)) {
+        return res.status(403).json({ 
+            success: false, 
+            message: "❌ Web Application Firewall (WAF) Violation: Potential SQL Injection or XSS injection pattern detected in your request payload. This action has been logged." 
+        });
+    }
+    next();
+}
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+app.use(securityFirewall);
 
 // JWT authentication verification middleware
 function authenticateToken(req, res, next) {
