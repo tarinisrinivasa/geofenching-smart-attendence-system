@@ -9,12 +9,14 @@ const persistentDirs = ['/var/data', '/data'];
 for (const dir of persistentDirs) {
     try {
         if (fs.existsSync(dir)) {
+            // Verify write permission to prevent SQLITE_CANTOPEN errors on read-only environments
+            fs.accessSync(dir, fs.constants.W_OK);
             dbPath = path.resolve(dir, 'database.sqlite');
-            console.log(`Persistent disk detected! Storing database at: ${dbPath}`);
+            console.log(`Writable persistent disk detected! Storing database at: ${dbPath}`);
             break;
         }
     } catch (e) {
-        // Directory not accessible or exists check failed
+        // Directory not accessible or not writable
     }
 }
 const db = new sqlite3.Database(dbPath, (err) => {
@@ -99,7 +101,10 @@ const db = new sqlite3.Database(dbPath, (err) => {
             });
 
             // Migration: Helper to add columns dynamically if the database file was already created
-            db.run("ALTER TABLE users ADD COLUMN barcode TEXT UNIQUE", (err) => { /* Ignore duplicate column errors */ });
+            db.run("ALTER TABLE users ADD COLUMN barcode TEXT", (err) => {
+                // Once column exists, create index
+                db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_barcode ON users (barcode)", (err) => {});
+            });
             db.run("ALTER TABLE users ADD COLUMN device_id TEXT", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE users ADD COLUMN parent_phone TEXT", (err) => { /* Ignore duplicate column errors */ });
             db.run("ALTER TABLE users ADD COLUMN device_biometric_id TEXT", (err) => { /* Ignore duplicate column errors */ });
