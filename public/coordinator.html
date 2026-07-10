@@ -184,7 +184,9 @@
             window.location.href = `${targetPage}?token=${encodeURIComponent(token)}&user=${encodeURIComponent(JSON.stringify(user))}`;
         }
 
-        document.getElementById('coordinatorDetails').innerText = `Coordinator Account: ${user.username} | Class ID: ${user.coordinator_class_id || 'N/A'}`;
+        if (user) {
+            document.getElementById('coordinatorDetails').innerText = `Coordinator Account: ${user.username} | Class ID: ${user.coordinator_class_id || 'N/A'}`;
+        }
 
         // Stagger fade-in animations on load
         document.addEventListener("DOMContentLoaded", () => {

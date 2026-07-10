@@ -22,7 +22,7 @@
                 <h3>HOD Portal</h3>
                 <p style="font-size: 0.8rem; color: var(--text-muted);">Head of Department Analytics</p>
             </div>
-            <button class="logout-btn" onclick="logout(event)">Logout</button>
+            <button class="logout-btn" onclick="logout()">Logout</button>
         </div>
 
         <!-- AI Metrics Cards -->
@@ -213,7 +213,7 @@
         });
 
         function logout(e) {
-            e.preventDefault();
+            if (e && e.preventDefault) e.preventDefault();
             setTimeout(() => {
                 safeStorage.removeItem('user');
                 safeStorage.removeItem('token');

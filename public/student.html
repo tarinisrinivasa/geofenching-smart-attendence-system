@@ -21,7 +21,7 @@
     <div class="container" style="max-width: 500px;">
         <div class="top-bar">
             <h3>Student Portal</h3>
-            <button class="logout-btn" onclick="logout(event)">Logout</button>
+            <button class="logout-btn" onclick="logout()">Logout</button>
         </div>
 
         <!-- Active Out-pass Info Banner -->
@@ -216,18 +216,20 @@
         }
 
         // Initialize student profile view
-        document.getElementById('usernameTag').innerText = `Welcome, ${user.username}`;
-        
-        if (user.is_keypad === 1) {
-            document.getElementById('currentBarcodeTag').innerHTML = `
-                <span style="color: var(--success); font-weight:700; font-size: 0.85rem; background: rgba(16, 185, 129, 0.15); padding: 4px 8px; border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.2);">
-                    🎫 Mobile-Free Exemption Active (No Geofence/Biometrics Required)
-                </span>
-            `;
-        } else {
-            document.getElementById('currentBarcodeTag').innerText = `ID Barcode: ${user.barcode || 'Unregistered'}`;
+        if (user) {
+            document.getElementById('usernameTag').innerText = `Welcome, ${user.username}`;
+            
+            if (user.is_keypad === 1) {
+                document.getElementById('currentBarcodeTag').innerHTML = `
+                    <span style="color: var(--success); font-weight:700; font-size: 0.85rem; background: rgba(16, 185, 129, 0.15); padding: 4px 8px; border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.2);">
+                        🎫 Mobile-Free Exemption Active (No Geofence/Biometrics Required)
+                    </span>
+                `;
+            } else {
+                document.getElementById('currentBarcodeTag').innerText = `ID Barcode: ${user.barcode || 'Unregistered'}`;
+            }
+            document.getElementById('barcodeUpdateInput').value = user.barcode || '';
         }
-        document.getElementById('barcodeUpdateInput').value = user.barcode || '';
 
         function toggleBarcodeSettings() {
             const area = document.getElementById('barcodeSettingsArea');

@@ -28,7 +28,7 @@
                 <h3 id="welcomeMsg">Teacher Dashboard</h3>
                 <p style="font-size: 0.8rem; color: var(--text-muted);" id="userTag"></p>
             </div>
-            <button class="logout-btn" onclick="logout(event)">Logout</button>
+            <button class="logout-btn" onclick="logout()">Logout</button>
         </div>
 
         <!-- Class Session Setup Card -->
@@ -250,8 +250,10 @@
             window.location.href = `${targetPage}?token=${encodeURIComponent(token)}&user=${encodeURIComponent(JSON.stringify(user))}`;
         }
 
-        document.getElementById('welcomeMsg').innerText = `Welcome, ${user.username}`;
-        document.getElementById('userTag').innerText = `Teacher ID: ${user.id}`;
+        if (user) {
+            document.getElementById('welcomeMsg').innerText = `Welcome, ${user.username}`;
+            document.getElementById('userTag').innerText = `Teacher ID: ${user.id}`;
+        }
 
         let activeSessionId = null;
         let endedSessionId = null;
@@ -285,7 +287,7 @@
         });
 
         function logout(e) {
-            e.preventDefault();
+            if (e && e.preventDefault) e.preventDefault();
             setTimeout(() => {
                 safeStorage.removeItem('user');
                 safeStorage.removeItem('token');
