@@ -960,6 +960,58 @@ app.post('/api/teacher/generate-otp', authenticateToken, (req, res) => {
     );
 });
 
+// Deterministic Time-based OTP (TOTP) verification helper for student-generated codes
+// Derives code from studentId + current 20-second time window to avoid database overhead
+function verifyStudentLocalOTP(studentId, submittedOtp) {
+    const timeIndex = Math.floor(Date.now() / 20000); // 20-second windows
+    
+    // Check current window and previous window (20s grace period for latency)
+    for (let i = 0; i <= 1; i++) {
+        const idx = timeIndex - i;
+        const raw = (parseInt(studentId, 10) * 7919) + (idx * 104729);
+        const expected = (Math.abs(raw) % 9000 + 1000).toString();
+        if (expected === submittedOtp.trim()) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Teacher API: Verify student-generated rotating OTP
+app.post('/api/teacher/verify-student-otp', authenticateToken, (req, res) => {
+    if (req.user.role !== 'teacher') {
+        return res.status(403).json({ success: false, message: "Unauthorized." });
+    }
+
+    const { student_id, otp_code, class_id } = req.body;
+    if (!student_id || !otp_code || !class_id) {
+        return res.status(400).json({ success: false, message: "Missing student_id, otp_code, or class_id." });
+    }
+
+    if (!verifyStudentLocalOTP(student_id, otp_code)) {
+        return res.status(400).json({ success: false, message: "Incorrect or expired student OTP. Ask student for a fresh code." });
+    }
+
+    // OTP verified! Mark student present
+    db.run(
+        "INSERT OR REPLACE INTO attendance (class_id, student_id, status) VALUES (?, ?, 'present')",
+        [class_id, student_id],
+        function(err) {
+            if (err) {
+                if (err.message.includes("UNIQUE")) {
+                    db.run("UPDATE attendance SET status = 'present' WHERE class_id = ? AND student_id = ? AND status = 'pending'", [class_id, student_id], function(updateErr) {
+                        if (updateErr) return res.status(500).json({ error: updateErr.message });
+                        return res.json({ success: true, message: "OTP verified! Student marked present." });
+                    });
+                    return;
+                }
+                return res.status(500).json({ error: err.message });
+            }
+            res.json({ success: true, message: "Student OTP verified! Attendance marked successfully." });
+        }
+    );
+});
+
 // Student API: Check if they have an active out-pass
 app.get('/api/student/active-pass', authenticateToken, (req, res) => {
     if (req.user.role !== 'student') {
