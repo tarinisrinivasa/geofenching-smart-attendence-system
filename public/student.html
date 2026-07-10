@@ -9,8 +9,21 @@
     <script src="https://cdn.jsdelivr.net/npm/motion@11.11.13/dist/motion.js"></script>
     <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
     <script src="animations.js?v=2" defer></script>
-    <!-- QR and Barcode Scanning Library -->
     <script src="https://unpkg.com/html5-qrcode"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(registrations => {
+                for (const reg of registrations) {
+                    reg.unregister().then(() => {
+                        caches.keys().then(keys => {
+                            for (let key of keys) caches.delete(key);
+                        });
+                        window.location.reload();
+                    });
+                }
+            });
+        }
+    </script>
 </head>
 <body>
     <div class="grid-overlay"></div>
