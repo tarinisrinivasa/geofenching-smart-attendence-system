@@ -619,6 +619,8 @@
                             ? `<button class="btn" style="width: auto; padding: 2px 8px; font-size: 0.7rem; height: 24px; background: var(--success); border-color: var(--success); box-shadow: none;" onclick="unlockStudent(${s.id})">🔓 Unlock</button>`
                             : '';
 
+                        const resetBtn = `<button class="btn" style="width: auto; padding: 2px 8px; font-size: 0.7rem; height: 24px; background: rgba(244,63,94,0.15); border-color: rgba(244,63,94,0.2); color: var(--error); box-shadow: none;" onclick="resetStudentDevice(${s.id})">📲 Reset Device</button>`;
+
                         div.innerHTML = `
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 <span style="font-weight: 600; font-size: 0.85rem; color: var(--text-main);">${s.username}</span>
@@ -626,6 +628,7 @@
                             </div>
                             <div style="display: flex; align-items: center; gap: 8px;">
                                 ${statusBadge}
+                                ${resetBtn}
                                 ${unlockBtn}
                             </div>
                         `;
@@ -634,6 +637,30 @@
                 }
             } catch (err) {
                 console.error("Failed to load students tracking feeds:", err);
+            }
+        }
+
+        async function resetStudentDevice(studentId) {
+            if (!confirm("Are you sure you want to reset this student's registered device lock? This allows them to login from a new device.")) return;
+            try {
+                const res = await fetch('/api/coordinator/reset-device', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ student_id: studentId })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert("✅ Student device lock reset successfully!");
+                    fetchStudentTrackingStatuses();
+                } else {
+                    alert(`❌ Reset error: ${data.message}`);
+                }
+            } catch (err) {
+                console.error(err);
+                alert("❌ Server connection error.");
             }
         }
 
