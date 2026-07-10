@@ -5,20 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Smart Attendance Login</title>
     <link rel="stylesheet" href="styles.css">
-    <link rel="manifest" href="manifest.json">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#4f46e5">
-    <!-- Motion.dev and LottieFiles -->
-    <script src="https://cdn.jsdelivr.net/npm/motion@11.11.13/dist/motion.js"></script>
-    <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
     <script src="animations.js" defer></script>
     <script>
         if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('sw.js')
-                    .then(reg => console.log('PWA Service Worker active:', reg.scope))
-                    .catch(err => console.error('PWA Registration failed:', err));
+            navigator.serviceWorker.getRegistrations().then(registrations => {
+                for (let registration of registrations) {
+                    registration.unregister().then(success => {
+                        if (success) {
+                            console.log('PWA Service Worker unregistered successfully.');
+                            // Purge any local caches
+                            if ('caches' in window) {
+                                caches.keys().then(names => {
+                                    for (let name of names) caches.delete(name);
+                                });
+                            }
+                        }
+                    });
+                }
             });
         }
     </script>
