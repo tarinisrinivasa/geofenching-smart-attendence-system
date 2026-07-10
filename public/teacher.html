@@ -360,17 +360,18 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label class="form-label">📍 Latitude</label>
-                        <input type="number" class="form-input" id="classLat" placeholder="Auto-detect" step="any">
+                        <input type="number" class="form-input" id="classLat" value="17.385000" step="any">
                     </div>
                     <div class="form-group">
                         <label class="form-label">📍 Longitude</label>
-                        <input type="number" class="form-input" id="classLng" placeholder="Auto-detect" step="any">
+                        <input type="number" class="form-input" id="classLng" value="78.486700" step="any">
                     </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
                         <label class="form-label">📏 Radius (meters)</label>
                         <input type="number" class="form-input" id="classRadius" value="50" min="0" placeholder="50">
+                        <span style="font-size:10px;color:var(--text3);margin-top:4px;display:block;">💡 Enter 0 to disable geofencing (students can mark from anywhere)</span>
                     </div>
                     <div class="form-group">
                         <label class="form-label">🎯 GPS Accuracy (m)</label>
@@ -813,7 +814,13 @@ function displayPastSessions(sessions) {
 function detectLocation() {
     const btn = document.getElementById('detectLocBtn');
     btn.classList.add('loading'); btn.disabled = true;
-    if (!navigator.geolocation) { showToast('GPS not supported', 'error'); btn.classList.remove('loading'); btn.disabled = false; return; }
+    if (!navigator.geolocation) {
+        showToast('GPS not supported. Using campus default.', 'info');
+        document.getElementById('classLat').value = '17.385000';
+        document.getElementById('classLng').value = '78.486700';
+        btn.classList.remove('loading'); btn.disabled = false;
+        return;
+    }
     navigator.geolocation.getCurrentPosition(pos => {
         document.getElementById('classLat').value = pos.coords.latitude.toFixed(6);
         document.getElementById('classLng').value = pos.coords.longitude.toFixed(6);
@@ -822,7 +829,11 @@ function detectLocation() {
         showToast('Location detected!', 'success');
         btn.classList.remove('loading'); btn.disabled = false;
     }, () => {
-        showToast('Could not get location. Enter manually.', 'error');
+        showToast('Could not get GPS. Using campus default.', 'info');
+        document.getElementById('classLat').value = '17.385000';
+        document.getElementById('classLng').value = '78.486700';
+        document.getElementById('locDetected').style.display = 'block';
+        document.getElementById('locDetected').textContent = `📍 Using default campus coordinates: 17.3850, 78.4867`;
         btn.classList.remove('loading'); btn.disabled = false;
     }, { enableHighAccuracy: true, timeout: 10000 });
 }
