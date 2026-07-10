@@ -382,7 +382,7 @@
                     Once registered, <strong style="color:var(--accent2);">only your biometric</strong> can access this account.
                     Any other attempt will be <strong style="color:var(--red);">blocked and reported</strong> to your HOD.
                 </div>
-                <button class="btn btn-primary btn-sm" onclick="switchTab('profile')" style="margin-top:10px;width:auto;">
+                <button class="btn btn-primary btn-sm" id="bannerRegisterBtn" style="margin-top:10px;width:auto;">
                     🔐 Register Now →
                 </button>
             </div>
@@ -463,7 +463,7 @@
                     <label class="form-label">Update Barcode ID</label>
                     <div style="display:flex;gap:8px;">
                         <input type="text" class="form-input" id="barcodeInput" placeholder="e.g. STU001" style="flex:1;">
-                        <button class="btn btn-primary btn-sm" onclick="updateBarcode()" id="barcodeBtn" style="width:auto;white-space:nowrap;">
+                        <button class="btn btn-primary btn-sm" id="barcodeBtn" style="width:auto;white-space:nowrap;">
                             <span class="btn-text">Update</span>
                             <div class="spinner-sm"></div>
                         </button>
@@ -501,26 +501,26 @@
     <div class="modal">
         <div class="modal-header">
             <div class="modal-title" id="attendModalTitle">Mark Attendance</div>
-            <button class="modal-close" onclick="closeAttendModal()">✕</button>
+            <button class="modal-close" id="modalCloseBtn">✕</button>
         </div>
 
         <!-- Method Selection -->
         <div id="methodSelect">
             <p style="font-size:13px;color:var(--text2);margin-bottom:16px;">Choose how to mark your attendance:</p>
             <div class="method-grid">
-                <div class="method-btn" onclick="selectMethod('gps')" id="method-gps">
+                <div class="method-btn" id="method-gps">
                     <div class="method-icon">📍</div>
                     <div class="method-name">GPS Location</div>
                 </div>
-                <div class="method-btn" onclick="selectMethod('qr')" id="method-qr">
+                <div class="method-btn" id="method-qr">
                     <div class="method-icon">📷</div>
                     <div class="method-name">Scan QR Code</div>
                 </div>
-                <div class="method-btn" onclick="selectMethod('otp')" id="method-otp">
+                <div class="method-btn" id="method-otp">
                     <div class="method-icon">🔑</div>
                     <div class="method-name">Enter OTP</div>
                 </div>
-                <div class="method-btn" onclick="selectMethod('manual')" id="method-manual">
+                <div class="method-btn" id="method-manual">
                     <div class="method-icon">✋</div>
                     <div class="method-name">Request Approval</div>
                 </div>
@@ -545,7 +545,7 @@
                     <div class="distance-fill" id="distanceFill" style="width:0%;background:var(--green);"></div>
                 </div>
             </div>
-            <button class="btn btn-green" onclick="markByGPS()" id="gpsMarkBtn">
+            <button class="btn btn-green" id="gpsMarkBtn">
                 <span class="btn-text">📍 Mark with GPS</span>
                 <div class="spinner-sm"></div>
             </button>
@@ -565,7 +565,7 @@
                 <label class="form-label">4-Digit OTP Code</label>
                 <input type="number" class="form-input" id="otpInput" placeholder="Enter OTP" maxlength="4" style="letter-spacing:8px;font-size:22px;text-align:center;">
             </div>
-            <button class="btn btn-primary" onclick="markByOTP()" id="otpMarkBtn">
+            <button class="btn btn-primary" id="otpMarkBtn">
                 <span class="btn-text">🔑 Verify & Mark</span>
                 <div class="spinner-sm"></div>
             </button>
@@ -581,7 +581,7 @@
                     <div class="gps-coords" id="manualGpsCoords">This helps the teacher verify your position</div>
                 </div>
             </div>
-            <button class="btn btn-secondary" onclick="sendManualRequest()" id="manualSendBtn">
+            <button class="btn btn-secondary" id="manualSendBtn">
                 <span class="btn-text">📤 Send Request to Teacher</span>
                 <div class="spinner-sm"></div>
             </button>
@@ -649,6 +649,98 @@ window.addEventListener('DOMContentLoaded', async () => {
             logoutBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 triggerSignOut();
+            });
+        }
+
+        // Bind banner register button programmatically
+        const bannerRegisterBtn = document.getElementById('bannerRegisterBtn');
+        if (bannerRegisterBtn) {
+            bannerRegisterBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                switchTab('profile');
+            });
+        }
+
+        // Bind barcode update button programmatically
+        const barcodeBtn = document.getElementById('barcodeBtn');
+        if (barcodeBtn) {
+            barcodeBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                updateBarcode();
+            });
+        }
+
+        // Bind modal close button programmatically
+        const modalCloseBtn = document.getElementById('modalCloseBtn');
+        if (modalCloseBtn) {
+            modalCloseBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                closeAttendModal();
+            });
+        }
+
+        // Bind GPS mark button programmatically
+        const gpsMarkBtn = document.getElementById('gpsMarkBtn');
+        if (gpsMarkBtn) {
+            gpsMarkBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                markByGPS();
+            });
+        }
+
+        // Bind OTP verification button programmatically
+        const otpMarkBtn = document.getElementById('otpMarkBtn');
+        if (otpMarkBtn) {
+            otpMarkBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                markByOTP();
+            });
+        }
+
+        // Bind manual request button programmatically
+        const manualSendBtn = document.getElementById('manualSendBtn');
+        if (manualSendBtn) {
+            manualSendBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                sendManualRequest();
+            });
+        }
+
+        // Bind method selection buttons programmatically
+        document.querySelectorAll('.method-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const method = btn.id.replace('method-', '');
+                selectMethod(method);
+            });
+        });
+
+        // Event delegation for dynamically rendered active class list buttons
+        const classesList = document.getElementById('classesList');
+        if (classesList) {
+            classesList.addEventListener('click', (e) => {
+                const markBtn = e.target.closest('.btn-mark-attendance');
+                if (markBtn) {
+                    e.preventDefault();
+                    const classId = markBtn.dataset.classId;
+                    const name = markBtn.dataset.name;
+                    const lat = parseFloat(markBtn.dataset.lat);
+                    const lng = parseFloat(markBtn.dataset.lng);
+                    const radius = parseFloat(markBtn.dataset.radius);
+                    openAttendModal(classId, name, lat, lng, radius);
+                }
+            });
+        }
+
+        // Event delegation for dynamically rendered biometric register button
+        const bioSec = document.getElementById('biometricSection');
+        if (bioSec) {
+            bioSec.addEventListener('click', (e) => {
+                const regBtn = e.target.closest('#bioRegBtn');
+                if (regBtn) {
+                    e.preventDefault();
+                    registerBiometrics();
+                }
             });
         }
 
@@ -777,7 +869,7 @@ async function loadClasses() {
                     </div>
                 </div>
                 <div class="class-actions">
-                    ${!isPresent ? `<button class="btn btn-green btn-sm" onclick="openAttendModal(${cls.id}, '${cls.name}', ${cls.latitude}, ${cls.longitude}, ${cls.radius})">
+                    ${!isPresent ? `<button class="btn btn-green btn-sm btn-mark-attendance" data-class-id="${cls.id}" data-name="${cls.name}" data-lat="${cls.latitude}" data-lng="${cls.longitude}" data-radius="${cls.radius}">
                         📍 Mark Attendance
                     </button>` : ''}
                 </div>
@@ -897,7 +989,7 @@ async function loadBiometrics() {
                 Once registered, <strong style="color:var(--accent2);">only you</strong> can log in — any mismatch triggers an <strong style="color:var(--red);">HOD alert</strong>.
             </div>
             <p style="font-size:13px;color:var(--text2);margin-bottom:14px;">Register your fingerprint or Face ID now:</p>
-            <button class="btn btn-primary" onclick="registerBiometrics()" id="bioRegBtn">
+            <button class="btn btn-primary" id="bioRegBtn">
                 <span class="btn-text">🔐 Register Biometrics Now</span>
                 <div class="spinner-sm"></div>
             </button>
