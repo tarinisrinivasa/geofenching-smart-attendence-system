@@ -4,11 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Student Dashboard</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=2">
     <!-- Motion.dev and LottieFiles -->
     <script src="https://cdn.jsdelivr.net/npm/motion@11.11.13/dist/motion.js"></script>
     <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
-    <script src="animations.js" defer></script>
+    <script src="animations.js?v=2" defer></script>
     <!-- QR and Barcode Scanning Library -->
     <script src="https://unpkg.com/html5-qrcode"></script>
 </head>
@@ -518,7 +518,10 @@
         }
 
         function base64ToBuffer(base64) {
-            const standardBase64 = base64.replace(/-/g, '+').replace(/_/g, '/');
+            let standardBase64 = base64.replace(/-/g, '+').replace(/_/g, '/');
+            while (standardBase64.length % 4) {
+                standardBase64 += '=';
+            }
             const binaryString = window.atob(standardBase64);
             const bytes = new Uint8Array(binaryString.length);
             for (let i = 0; i < binaryString.length; i++) {
