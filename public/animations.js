@@ -66,7 +66,7 @@
     // ── 2. Add Magnetic Spring Hover to Interactive Controls ──────────
     function wireInteractiveSprings(root) {
         if (!hasMotion) return;
-        const selector = '.btn, .tab-btn, .logout-btn, .success-modal-card button';
+        const selector = '.btn, .tab-btn, .success-modal-card button';
         root.querySelectorAll(selector).forEach(btn => {
             if (btn._springWired) return;
             btn._springWired = true;
@@ -76,12 +76,6 @@
             });
             btn.addEventListener('mouseleave', () => {
                 Motion.animate(btn, { scale: 1.0 }, { duration: 0.2, easing: "ease-out" });
-            });
-            btn.addEventListener('mousedown', () => {
-                Motion.animate(btn, { scale: 0.95 }, { duration: 0.1 });
-            });
-            btn.addEventListener('mouseup', () => {
-                Motion.animate(btn, { scale: 1.04 }, { duration: 0.15 });
             });
         });
     }
