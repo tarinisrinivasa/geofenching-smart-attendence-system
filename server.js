@@ -13,7 +13,8 @@ const rateLimit = require('express-rate-limit');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_key_for_attendance_system';
 
-const isRender = process.env.RENDER === 'true' || process.env.PORT !== undefined;
+// Only treat as Render/cloud when explicitly signalled — avoids false-positive on Windows where PORT may already be set in env
+const isRender = process.env.RENDER === 'true' || process.env.RENDER_EXTERNAL_URL !== undefined;
 
 let httpsOptions = null;
 if (!isRender) {
@@ -39,7 +40,8 @@ app.use(helmet({
             styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
             fontSrc: ["'self'", "https://fonts.gstatic.com"],
             imgSrc: ["'self'", "data:", "https://images.unsplash.com", "https://bwipjs-api.metafloor.com", "https://*.onrender.com"],
-            connectSrc: ["'self'", "https://*.onrender.com", "wss://*.onrender.com"],
+            // Include localhost wildcard so local dev fetch() calls are not blocked by CSP
+            connectSrc: ["'self'", "http://localhost:*", "https://localhost:*", "https://*.onrender.com", "wss://*.onrender.com"],
             mediaSrc: ["'self'", "data:"]
         }
     }
@@ -421,16 +423,23 @@ app.post('/api/alerts/:alert_id/reverse-attendance', authenticateToken, (req, re
     });
 });
 
-// HOD API: Mark alert as read
+// HOD & Coordinator API: Dismiss / Mark alert as read
+// BUG FIX: was previously hod-only; coordinators also view alerts and must be able to dismiss them
 app.post('/api/alerts/:alert_id/read', authenticateToken, (req, res) => {
-    if (req.user.role !== 'hod') {
+    if (req.user.role !== 'hod' && req.user.role !== 'coordinator') {
         return res.status(403).json({ success: false, message: "Unauthorized access." });
     }
 
-    const alertId = req.params.alert_id;
+    const alertId = parseInt(req.params.alert_id, 10);
+    if (isNaN(alertId)) {
+        return res.status(400).json({ success: false, message: "Invalid alert ID." });
+    }
     db.run("UPDATE alerts SET status = 2 WHERE id = ?", [alertId], function(err) {
         if (err) return res.status(500).json({ error: err.message });
-        res.json({ success: true, message: "Alert marked as resolved." });
+        if (this.changes === 0) {
+            return res.status(404).json({ success: false, message: "Alert not found." });
+        }
+        res.json({ success: true, message: "Alert dismissed successfully." });
     });
 });
 
@@ -1427,10 +1436,29 @@ app.post('/api/coordinator/reset-device', authenticateToken, (req, res) => {
 
 const useHttps = process.env.USE_HTTPS === 'true';
 
+// ─── Logout Endpoint ──────────────────────────────────────────────────────────
+// BUG FIX: This endpoint was MISSING — it is the root cause why logout/signout
+// failed across all portals (hod, teacher, coordinator, student).
+// Since JWT is stateless, the server cannot invalidate tokens. The client portal
+// is responsible for clearing localStorage. This endpoint exists so the portals
+// have a clean server-side acknowledgement before wiping client storage.
+app.post('/api/logout', authenticateToken, (req, res) => {
+    // Log the logout event for audit trail
+    console.log(`[LOGOUT] User "${req.user.username}" (role: ${req.user.role}) logged out at ${new Date().toISOString()}`);
+    res.json({ success: true, message: 'Logged out successfully.' });
+});
+
+// Also support GET /api/logout (some browsers call it with GET from links)
+app.get('/api/logout', (req, res) => {
+    res.json({ success: true, message: 'Logged out.' });
+});
+// ─────────────────────────────────────────────────────────────────────────────
+
 if (isRender || !useHttps) {
     // Start standard HTTP server (default for local development and cloud hosting)
     app.listen(PORT, '0.0.0.0', () => {
         console.log(`HTTP Server running on http://localhost:${PORT}`);
+        console.log(`Portals: http://localhost:${PORT}/hod.html | /teacher.html | /coordinator.html | /student.html`);
     });
 } else {
     // Start secure HTTPS server for local network phone access (run with USE_HTTPS=true node server.js)
