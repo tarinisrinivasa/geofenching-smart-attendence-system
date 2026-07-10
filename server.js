@@ -148,17 +148,32 @@ app.post('/api/login', (req, res) => {
         }
 
         // Helper to sign JWT and return response
+        // For students: also return biometric registration status so the login page
+        // can enforce the 2-step biometric verification flow BEFORE granting portal access.
         const completeLogin = () => {
             const token = jwt.sign(
-                { id: row.id, username: row.username, role: row.role, coordinator_class_id: row.coordinator_class_id }, 
-                JWT_SECRET, 
+                { id: row.id, username: row.username, role: row.role, coordinator_class_id: row.coordinator_class_id },
+                JWT_SECRET,
                 { expiresIn: '12h' }
             );
-            res.json({ 
-                success: true, 
-                token, 
-                user: { id: row.id, username: row.username, role: row.role, barcode: row.barcode, coordinator_class_id: row.coordinator_class_id } 
-            });
+            const baseUser = { id: row.id, username: row.username, role: row.role, barcode: row.barcode, coordinator_class_id: row.coordinator_class_id };
+
+            if (row.role === 'student') {
+                // Fetch biometric status for the 2-step login flow
+                db.get("SELECT device_biometric_id FROM users WHERE id = ?", [row.id], (bioErr, bioRow) => {
+                    const hasBiometric = !!(bioRow && bioRow.device_biometric_id);
+                    res.json({
+                        success: true,
+                        token,
+                        user: baseUser,
+                        has_biometric: hasBiometric,
+                        // Only expose credential ID when biometric is registered so frontend can call WebAuthn
+                        biometric_credential_id: hasBiometric ? bioRow.device_biometric_id : null
+                    });
+                });
+            } else {
+                res.json({ success: true, token, user: baseUser });
+            }
         };
 
         // Enforce hardware lock for students
@@ -1436,21 +1451,48 @@ app.post('/api/coordinator/reset-device', authenticateToken, (req, res) => {
 
 const useHttps = process.env.USE_HTTPS === 'true';
 
-// ─── Logout Endpoint ──────────────────────────────────────────────────────────
-// BUG FIX: This endpoint was MISSING — it is the root cause why logout/signout
-// failed across all portals (hod, teacher, coordinator, student).
-// Since JWT is stateless, the server cannot invalidate tokens. The client portal
-// is responsible for clearing localStorage. This endpoint exists so the portals
-// have a clean server-side acknowledgement before wiping client storage.
+// ─── Logout Endpoint ─────────────────────────────────────────────────────────
 app.post('/api/logout', authenticateToken, (req, res) => {
-    // Log the logout event for audit trail
     console.log(`[LOGOUT] User "${req.user.username}" (role: ${req.user.role}) logged out at ${new Date().toISOString()}`);
     res.json({ success: true, message: 'Logged out successfully.' });
 });
-
-// Also support GET /api/logout (some browsers call it with GET from links)
 app.get('/api/logout', (req, res) => {
     res.json({ success: true, message: 'Logged out.' });
+});
+
+// ─── Biometric Breach Alert (NO AUTH REQUIRED — called BEFORE login completes) ─
+// Triggered by the login page when a student's biometric credential_id returned
+// by WebAuthn does NOT match the one stored in the database. This means someone
+// attempted to log in to this account using a DIFFERENT fingerprint or face —
+// possible shared-device fraud, spoofing attempt, or stolen credentials.
+// Rate-limited by the general limiter (500 req / 15 min per IP).
+app.post('/api/alerts/biometric-breach', (req, res) => {
+    const { username, device_info } = req.body;
+    if (!username || typeof username !== 'string') {
+        return res.status(400).json({ success: false, message: 'Username required.' });
+    }
+
+    // Look up the student so we can link the alert to their ID
+    db.get("SELECT id, username FROM users WHERE username = ? AND role = 'student'", [username.trim()], (err, student) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!student) return res.status(404).json({ success: false, message: 'Student not found.' });
+
+        const deviceHint = device_info ? ` (Device info: ${device_info})` : '';
+        const alertMessage = `🚨 BIOMETRIC SECURITY BREACH: Student "${student.username}" attempted login using an UNRECOGNISED fingerprint or face ID. ` +
+            `The biometric credential did not match the registered device binding. ` +
+            `This may indicate account sharing, device swapping, or a spoofing attempt.${deviceHint} ` +
+            `Action Required: Verify with student and reset device binding if necessary.`;
+
+        db.run(
+            "INSERT INTO alerts (student_id, message, status) VALUES (?, ?, 0)",
+            [student.id, alertMessage],
+            function(err) {
+                if (err) return res.status(500).json({ error: err.message });
+                console.warn(`[BIOMETRIC BREACH] Alert #${this.lastID} raised for student "${student.username}"`);
+                res.json({ success: true, alert_id: this.lastID, message: 'Breach alert sent to HOD.' });
+            }
+        );
+    });
 });
 // ─────────────────────────────────────────────────────────────────────────────
 
