@@ -327,7 +327,7 @@
                 </div>
             </div>
 
-            <button class="btn-login" id="loginBtn" onclick="submitLogin()">
+            <button class="btn-login" id="loginBtn">
                 <span class="btn-text">🔐 Sign In</span>
                 <div class="spinner"></div>
             </button>
@@ -358,16 +358,16 @@
                     to confirm it's you
                 </div>
 
-                <button class="btn-login" id="bioRetryBtn" onclick="triggerBiometric()" style="display:none;">
+                <button class="btn-login" id="bioRetryBtn" style="display:none;">
                     <span class="btn-text">🔁 Try Again</span>
                     <div class="spinner"></div>
                 </button>
 
-                <button class="btn-fallback" id="bioFallbackBtn" onclick="showPasswordFallback()" style="display:none;">
+                <button class="btn-fallback" id="bioFallbackBtn" style="display:none;">
                     🔑 Use Password Instead
                 </button>
 
-                <button class="btn-back" onclick="backToLogin()" style="margin-top:10px;">
+                <button class="btn-back" style="margin-top:10px;">
                     ← Back to Login
                 </button>
 
@@ -391,7 +391,7 @@
                     Attempting to access it with a different biometric is a security violation.<br><br>
                     <strong>Next steps:</strong> Visit your HOD or Class Coordinator to reset your biometric binding if your face/fingerprint has genuinely changed.
                 </div>
-                <button class="btn-back" onclick="backToLogin()">← Return to Login</button>
+                <button class="btn-back">← Return to Login</button>
             </div>
         </div>
 
@@ -412,11 +412,11 @@
                 </div>
             </div>
 
-            <button class="btn-login" id="fallbackBtn" onclick="submitFallback()">
+            <button class="btn-login" id="fallbackBtn">
                 <span class="btn-text">✓ Verify & Continue</span>
                 <div class="spinner"></div>
             </button>
-            <button class="btn-back" onclick="backToLogin()" style="margin-top:10px;">← Cancel</button>
+            <button class="btn-back" style="margin-top:10px;">← Cancel</button>
             <div class="msg" id="fallbackMsg"></div>
         </div>
     </div>
@@ -746,6 +746,53 @@ if ('serviceWorker' in navigator) {
         caches.keys().then(names => names.forEach(n => caches.delete(n)));
     }
 }
+
+// ── Bind Event Listeners Programmatically (Fixes mouse clicks failing) ──────
+document.addEventListener('DOMContentLoaded', () => {
+    // 1) Main password login button
+    const loginBtn = document.getElementById('loginBtn');
+    if (loginBtn) {
+        loginBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            submitLogin();
+        });
+    }
+
+    // 2) Biometric retry button
+    const bioRetryBtn = document.getElementById('bioRetryBtn');
+    if (bioRetryBtn) {
+        bioRetryBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            triggerBiometric();
+        });
+    }
+
+    // 3) Biometric fallback button (use password)
+    const bioFallbackBtn = document.getElementById('bioFallbackBtn');
+    if (bioFallbackBtn) {
+        bioFallbackBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            showPasswordFallback();
+        });
+    }
+
+    // 4) Password fallback submission button
+    const fallbackBtn = document.getElementById('fallbackBtn');
+    if (fallbackBtn) {
+        fallbackBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            submitFallback();
+        });
+    }
+
+    // 5) Global back buttons redirecting to login step
+    document.querySelectorAll('.btn-back').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            backToLogin();
+        });
+    });
+});
 </script>
 </body>
 </html>
