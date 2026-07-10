@@ -1,4 +1,4 @@
-const CACHE_NAME = 'geofence-attend-cache-v1';
+const CACHE_NAME = 'geofence-attend-cache-v2';
 const ASSETS = [
   'index.html',
   'student.html',

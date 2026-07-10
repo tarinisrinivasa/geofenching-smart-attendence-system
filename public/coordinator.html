@@ -150,6 +150,10 @@
         });
 
         const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('token') || urlParams.has('user')) {
+            const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+            try { window.history.replaceState({ path: cleanUrl }, '', cleanUrl); } catch(e) {}
+        }
         const safeStorage = {
             getItem(key) {
                 let val = null;
@@ -201,7 +205,7 @@
         function logout() {
             safeStorage.removeItem('user');
             safeStorage.removeItem('token');
-            window.location.href = 'index.html';
+            window.location.replace('index.html');
         }
 
         async function fetchRoster() {
