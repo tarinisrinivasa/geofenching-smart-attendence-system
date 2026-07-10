@@ -618,16 +618,20 @@ window.addEventListener('DOMContentLoaded', async () => {
         window.location.href = 'index.html'; return;
     }
 
-    document.getElementById('userAvatar').textContent = currentUser.username.charAt(0).toUpperCase();
-    document.getElementById('headerTitle').textContent = `${currentUser.username}`;
-    document.getElementById('headerSub').textContent = 'Teacher Console';
+    try {
+        document.getElementById('userAvatar').textContent = currentUser.username.charAt(0).toUpperCase();
+        document.getElementById('headerTitle').textContent = `${currentUser.username}`;
+        document.getElementById('headerSub').textContent = 'Teacher Console';
 
-    await checkActiveSession();
-    loadStudentLists();
-
-    document.getElementById('page-loader').style.display = 'none';
-    document.getElementById('app').style.display = 'flex';
-    document.getElementById('app').style.flexDirection = 'column';
+        await checkActiveSession();
+        loadStudentLists();
+    } catch (e) {
+        console.error('[Teacher Init Error]', e);
+    } finally {
+        document.getElementById('page-loader').style.display = 'none';
+        document.getElementById('app').style.display = 'flex';
+        document.getElementById('app').style.flexDirection = 'column';
+    }
 });
 
 function api(endpoint, method = 'GET', body = null) {
@@ -635,14 +639,29 @@ function api(endpoint, method = 'GET', body = null) {
     if (body) opts.body = JSON.stringify(body);
     return fetch(endpoint, opts).then(async r => {
         const data = await r.json();
-        if (r.status === 401) { showToast('Session expired. Please login again.', 'error'); setTimeout(() => logout(true), 2000); }
+        if (r.status === 401) {
+            try { showToast('Session expired. Please login again.', 'error'); } catch {}
+            safeStorage.removeItem('token');
+            safeStorage.removeItem('user');
+            setTimeout(() => { window.location.href = 'index.html'; }, 1500);
+        }
         return { status: r.status, ...data };
     });
 }
 
 async function logout(silent = false) {
     stopAllIntervals();
-    try { await api('/api/logout', 'POST'); } catch {}
+    
+    try {
+        await Promise.race([
+            fetch('/api/logout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` }
+            }),
+            new Promise(resolve => setTimeout(resolve, 3000))
+        ]);
+    } catch {}
+
     safeStorage.removeItem('token');
     safeStorage.removeItem('user');
     window.location.href = 'index.html';
@@ -650,6 +669,7 @@ async function logout(silent = false) {
 
 function stopAllIntervals() {
     clearInterval(qrInterval); clearInterval(requestInterval); clearInterval(rosterInterval);
+    qrInterval = null; requestInterval = null; rosterInterval = null;
     if (barcodeScanner) { try { barcodeScanner.stop(); } catch {} barcodeScanner = null; }
 }
 

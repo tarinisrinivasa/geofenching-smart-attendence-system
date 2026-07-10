@@ -602,21 +602,26 @@ window.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
-    // Init UI
-    document.getElementById('userAvatar').textContent = currentUser.username.charAt(0).toUpperCase();
-    document.getElementById('profileAvatar').textContent = currentUser.username.charAt(0).toUpperCase();
-    document.getElementById('profileName').textContent = currentUser.username;
-    document.getElementById('profileId').textContent = `User ID: ${currentUser.id}`;
+    // Wrap all init in try/finally — page-loader MUST always be hidden
+    // so buttons are never blocked by the overlay (z-index:999)
+    try {
+        document.getElementById('userAvatar').textContent = currentUser.username.charAt(0).toUpperCase();
+        document.getElementById('profileAvatar').textContent = currentUser.username.charAt(0).toUpperCase();
+        document.getElementById('profileName').textContent = currentUser.username;
+        document.getElementById('profileId').textContent = `User ID: ${currentUser.id}`;
 
-    hidePage();
-    await loadClasses();
-    loadProfile();
-    startHeartbeat();
-    startClassRefresh();
-
-    document.getElementById('page-loader').style.display = 'none';
-    document.getElementById('app').style.display = 'flex';
-    document.getElementById('app').style.flexDirection = 'column';
+        await loadClasses();
+        loadProfile();
+        startHeartbeat();
+        startClassRefresh();
+    } catch (e) {
+        console.error('[Init error]', e);
+    } finally {
+        // Always hide loader and show app — even if init had an error
+        document.getElementById('page-loader').style.display = 'none';
+        document.getElementById('app').style.display = 'flex';
+        document.getElementById('app').style.flexDirection = 'column';
+    }
 });
 
 function hidePage() {}
@@ -636,18 +641,38 @@ function api(endpoint, method = 'GET', body = null) {
     });
 }
 
+// ── Session expiry — redirect directly, do NOT call logout() to avoid recursion
 function handleSessionExpiry() {
-    showToast('Session expired. Please login again.', 'error');
-    setTimeout(() => logout(true), 2000);
+    try { showToast('Session expired. Please login again.', 'error'); } catch {}
+    safeStorage.removeItem('token');
+    safeStorage.removeItem('user');
+    setTimeout(() => { window.location.href = 'index.html'; }, 1500);
 }
 
 async function logout(silent = false) {
-    const btn = document.getElementById('logoutBtn');
-    if (btn) btn.textContent = '...';
-    try { await api('/api/logout', 'POST'); } catch {}
+    // Stop intervals & scanner BEFORE any network call
     clearInterval(heartbeatInterval);
     clearInterval(classRefreshInterval);
-    if (qrScanner) { try { await qrScanner.stop(); } catch {} }
+    heartbeatInterval = null;
+    classRefreshInterval = null;
+    if (qrScanner) {
+        try { qrScanner.stop(); } catch {} // intentionally NOT awaited — can hang
+        qrScanner = null;
+    }
+
+    // Use raw fetch() — NOT the api() wrapper — to avoid triggering
+    // handleSessionExpiry() which would create an infinite recursion loop.
+    // Race against a 3 s timeout so a dead server never blocks the redirect.
+    try {
+        await Promise.race([
+            fetch('/api/logout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` }
+            }),
+            new Promise(resolve => setTimeout(resolve, 3000))
+        ]);
+    } catch {}
+
     safeStorage.removeItem('token');
     safeStorage.removeItem('user');
     window.location.href = 'index.html';
