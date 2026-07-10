@@ -2,9 +2,13 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Student Dashboard</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#4f46e5">
     <!-- Motion.dev and LottieFiles -->
     <script src="https://cdn.jsdelivr.net/npm/motion@11.11.13/dist/motion.js"></script>
     <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
@@ -317,26 +321,27 @@
             }
         });
 
-        function logout(e) {
-            e.preventDefault();
+        function logout(e, force = false) {
+            if (e && e.preventDefault) e.preventDefault();
             
-            // Block logout during college hours if they checked in today
-            if (checkTrackingActive()) {
+            // Block logout during college hours if they checked in today, unless force=true
+            if (!force && checkTrackingActive()) {
                 const now = new Date();
                 const startTime = (campusSettings && campusSettings.college_start_time) ? campusSettings.college_start_time : "09:00";
                 const endTime = (campusSettings && campusSettings.college_end_time) ? campusSettings.college_end_time : "16:00";
                 const currentStr = now.toTimeString().substring(0, 5); // "HH:MM"
                 
                 if (currentStr >= startTime && currentStr <= endTime && now.getDay() !== 0) {
-                    alert("🔒 Logout Restricted:\n\nLogging out is disabled during college hours once attendance is marked to prevent geofence bypasses. Please keep the dashboard open.");
-                    return;
+                    if (!confirm("⚠️ Warning: Logging out during college hours when attendance is active may result in a geofence warning alert. Do you still want to log out?")) {
+                        return;
+                    }
                 }
             }
 
             setTimeout(() => {
                 safeStorage.removeItem('user');
                 safeStorage.removeItem('token');
-                localStorage.removeItem('geofence_tracking_date');
+                try { localStorage.removeItem('geofence_tracking_date'); } catch(err) {}
                 window.location.href = 'index.html';
             }, 300);
         }
@@ -346,7 +351,7 @@
                 const res = await fetch('/api/active-classes', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                if (res.status === 401 || res.status === 403) return logout(new Event('logout'));
+                if (res.status === 401 || res.status === 403) return logout(null, true);
                 
                 const data = await res.json();
                 activeClassesArray = data.classes || [];
@@ -861,12 +866,12 @@
         }
 
         function enableTracking() {
-            localStorage.setItem('geofence_tracking_date', new Date().toDateString());
+            try { localStorage.setItem('geofence_tracking_date', new Date().toDateString()); } catch(e) {}
         }
 
         function checkTrackingActive() {
             if (user && user.is_keypad === 1) return false;
-            return localStorage.getItem('geofence_tracking_date') === new Date().toDateString();
+            try { return localStorage.getItem('geofence_tracking_date') === new Date().toDateString(); } catch(e) { return false; }
         }
 
         function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
