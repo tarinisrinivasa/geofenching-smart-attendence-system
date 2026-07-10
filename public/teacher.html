@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Teacher Console | Smart Attendance</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap">
+    <!-- QR Code Generator -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <!-- Barcode Scanner -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <!-- PDF Export -->
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+    <!-- Excel Export -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --bg: #080a10;
+            --surface: rgba(255,255,255,0.04);
+            --surface2: rgba(255,255,255,0.07);
+            --border: rgba(255,255,255,0.08);
+            --border2: rgba(255,255,255,0.15);
+            --accent: #3b82f6;
+            --accent2: #60a5fa;
+            --green: #10b981;
+            --red: #ef4444;
+            --yellow: #f59e0b;
+            --purple: #8b5cf6;
+            --text: #f1f5f9;
+            --text2: #94a3b8;
+            --text3: #64748b;
+            --radius: 16px;
+            --radius-sm: 10px;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); overflow-x: hidden; }
+
+        body::before {
+            content: ''; position: fixed; inset: 0; z-index: 0;
+            background: radial-gradient(ellipse 70% 50% at 10% 5%, rgba(59,130,246,0.1) 0%, transparent 60%),
+                        radial-gradient(ellipse 60% 40% at 90% 90%, rgba(139,92,246,0.08) 0%, transparent 60%);
+        }
+
+        #app { position: relative; z-index: 1; min-height: 100vh; display: flex; flex-direction: column; }
+
+        /* ── Header ── */
+        .header {
+            background: rgba(8,10,16,0.9); backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
+            padding: 0 20px; display: flex; align-items: center; justify-content: space-between;
+            height: 64px; position: sticky; top: 0; z-index: 100;
+        }
+        .header-left { display: flex; align-items: center; gap: 12px; }
+        .header-logo {
+            width: 36px; height: 36px; border-radius: 10px;
+            background: linear-gradient(135deg, var(--accent), var(--purple));
+            display: flex; align-items: center; justify-content: center; font-size: 18px;
+        }
+        .header-title { font-weight: 700; font-size: 16px; }
+        .header-sub { font-size: 11px; color: var(--text2); }
+        .header-right { display: flex; align-items: center; gap: 10px; }
+        .avatar {
+            width: 36px; height: 36px; border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent), var(--purple));
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 700; font-size: 14px;
+        }
+        .btn-logout {
+            padding: 7px 14px; border-radius: 8px; font-size: 12px; font-weight: 600;
+            background: rgba(239,68,68,0.1); color: #ef4444;
+            border: 1px solid rgba(239,68,68,0.2); cursor: pointer; transition: all 0.2s;
+        }
+        .btn-logout:hover { background: rgba(239,68,68,0.2); }
+
+        /* ── Nav Tabs ── */
+        .nav-tabs {
+            display: flex; background: rgba(255,255,255,0.03);
+            border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none;
+        }
+        .nav-tabs::-webkit-scrollbar { display: none; }
+        .nav-tab {
+            flex: 1; min-width: 75px; padding: 13px 8px;
+            text-align: center; cursor: pointer;
+            font-size: 10px; font-weight: 600; color: var(--text3);
+            border-bottom: 2px solid transparent; transition: all 0.2s;
+            display: flex; flex-direction: column; align-items: center; gap: 3px;
+            white-space: nowrap;
+        }
+        .nav-tab .ti { font-size: 17px; }
+        .nav-tab.active { color: var(--accent2); border-bottom-color: var(--accent); }
+        .nav-tab .badge-count {
+            background: var(--red); color: white; border-radius: 10px;
+            font-size: 9px; padding: 1px 5px; min-width: 16px; text-align: center;
+        }
+
+        /* ── Pages ── */
+        .page { display: none; padding: 16px; max-width: 640px; margin: 0 auto; width: 100%; }
+        .page.active { display: block; }
+
+        /* ── Cards ── */
+        .card {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 18px; margin-bottom: 14px;
+            backdrop-filter: blur(10px);
+        }
+        .card-title {
+            font-size: 11px; font-weight: 700; color: var(--text2);
+            text-transform: uppercase; letter-spacing: 0.8px;
+            margin-bottom: 14px; display: flex; align-items: center; gap: 8px;
+        }
+
+        /* ── Buttons ── */
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+            padding: 12px 18px; border-radius: 10px; font-size: 13px; font-weight: 600;
+            cursor: pointer; border: none; transition: all 0.2s; width: 100%;
+            font-family: 'Inter', sans-serif;
+        }
+        .btn-primary { background: linear-gradient(135deg, var(--accent), var(--purple)); color: white; }
+        .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); box-shadow: 0 8px 20px rgba(59,130,246,0.3); }
+        .btn-green { background: linear-gradient(135deg, #10b981, #059669); color: white; }
+        .btn-green:hover { opacity: 0.9; transform: translateY(-1px); box-shadow: 0 8px 20px rgba(16,185,129,0.3); }
+        .btn-red { background: linear-gradient(135deg, var(--red), #dc2626); color: white; }
+        .btn-red:hover { opacity: 0.9; transform: translateY(-1px); }
+        .btn-yellow { background: linear-gradient(135deg, var(--yellow), #d97706); color: white; }
+        .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border2); }
+        .btn-secondary:hover { background: rgba(255,255,255,0.1); }
+        .btn-sm { padding: 8px 14px; font-size: 11px; border-radius: 8px; width: auto; }
+        .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none !important; }
+        .spinner-sm { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; display: none; }
+        .btn.loading .btn-text { display: none; }
+        .btn.loading .spinner-sm { display: block; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── Form ── */
+        .form-group { margin-bottom: 12px; }
+        .form-label { font-size: 11px; font-weight: 700; color: var(--text2); margin-bottom: 5px; display: block; }
+        .form-input {
+            width: 100%; padding: 11px 14px; border-radius: 9px;
+            background: var(--surface2); border: 1px solid var(--border);
+            color: var(--text); font-size: 13px; font-family: 'Inter', sans-serif;
+            transition: border-color 0.2s;
+        }
+        .form-input:focus { outline: none; border-color: var(--accent); }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+        /* ── Session Banner ── */
+        .session-banner {
+            background: linear-gradient(135deg, rgba(59,130,246,0.15), rgba(139,92,246,0.1));
+            border: 1px solid rgba(59,130,246,0.25);
+            border-radius: var(--radius); padding: 16px; margin-bottom: 14px;
+            display: flex; align-items: center; gap: 14px;
+        }
+        .session-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--green); animation: pulse 1.5s infinite; flex-shrink: 0; }
+        @keyframes pulse { 0%,100% { opacity: 1; box-shadow: 0 0 0 0 rgba(16,185,129,0.4); } 50% { opacity: 0.8; box-shadow: 0 0 0 6px rgba(16,185,129,0); } }
+
+        /* ── QR Code ── */
+        .qr-container {
+            background: white; border-radius: 14px; padding: 16px;
+            display: flex; flex-direction: column; align-items: center; gap: 12px;
+        }
+        #qrCanvas { border-radius: 8px; }
+        .qr-countdown {
+            display: flex; align-items: center; gap: 8px;
+            background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.2);
+            border-radius: 8px; padding: 8px 14px; font-size: 12px; font-weight: 600; color: var(--accent2);
+        }
+        .countdown-ring {
+            width: 28px; height: 28px; position: relative; flex-shrink: 0;
+        }
+        .countdown-ring svg { transform: rotate(-90deg); }
+        .countdown-ring circle { fill: none; stroke: var(--accent); stroke-width: 3; stroke-dasharray: 75; stroke-dashoffset: 0; transition: stroke-dashoffset 1s linear; }
+
+        /* ── Barcode Scanner ── */
+        #bc-reader { width: 100%; border-radius: 10px; overflow: hidden; }
+        .scan-result {
+            padding: 12px; border-radius: 8px; margin-top: 10px;
+            font-size: 13px; font-weight: 600; text-align: center;
+        }
+        .scan-result.success { background: rgba(16,185,129,0.1); color: var(--green); border: 1px solid rgba(16,185,129,0.2); }
+        .scan-result.error { background: rgba(239,68,68,0.1); color: var(--red); border: 1px solid rgba(239,68,68,0.2); }
+
+        /* ── Attendance List ── */
+        .student-row {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 12px; border-radius: 8px;
+            background: var(--surface2); border: 1px solid var(--border);
+            margin-bottom: 8px;
+        }
+        .student-row-left { display: flex; align-items: center; gap: 10px; }
+        .student-mini-avatar {
+            width: 32px; height: 32px; border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent), var(--purple));
+            display: flex; align-items: center; justify-content: center;
+            font-size: 12px; font-weight: 700; flex-shrink: 0;
+        }
+        .student-name { font-size: 13px; font-weight: 600; }
+        .student-meta { font-size: 11px; color: var(--text2); }
+
+        /* ── Badge ── */
+        .badge {
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 3px 9px; border-radius: 20px; font-size: 10px; font-weight: 700;
+        }
+        .badge::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+        .badge.green { background: rgba(16,185,129,0.15); color: var(--green); }
+        .badge.red { background: rgba(239,68,68,0.15); color: var(--red); }
+        .badge.yellow { background: rgba(245,158,11,0.15); color: var(--yellow); }
+        .badge.blue { background: rgba(59,130,246,0.15); color: var(--accent2); }
+
+        /* ── OTP Display ── */
+        .otp-display {
+            font-size: 36px; font-weight: 800; letter-spacing: 10px;
+            text-align: center; padding: 16px;
+            background: linear-gradient(135deg, rgba(59,130,246,0.1), rgba(139,92,246,0.1));
+            border: 2px dashed rgba(59,130,246,0.3); border-radius: var(--radius-sm);
+            color: var(--accent2); font-family: monospace;
+        }
+        .otp-timer { text-align: center; font-size: 12px; color: var(--text2); margin-top: 8px; }
+
+        /* ── Pending Request Card ── */
+        .request-card {
+            background: var(--surface2); border: 1px solid var(--border);
+            border-radius: var(--radius-sm); padding: 14px; margin-bottom: 10px;
+        }
+        .request-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+        .request-actions { display: flex; gap: 8px; }
+
+        /* ── Select Dropdown ── */
+        .form-select {
+            width: 100%; padding: 11px 14px; border-radius: 9px;
+            background: var(--surface2); border: 1px solid var(--border);
+            color: var(--text); font-size: 13px; font-family: 'Inter', sans-serif;
+            cursor: pointer; appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2394a3b8' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14L2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat; background-position: right 12px center;
+            padding-right: 32px;
+        }
+        .form-select:focus { outline: none; border-color: var(--accent); }
+        .form-select option { background: #12131f; }
+
+        /* ── Tab Counter ── */
+        .tab-counter {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 18px; height: 18px; border-radius: 50%; background: var(--red);
+            color: white; font-size: 10px; font-weight: 700;
+        }
+
+        /* ── Download Buttons ── */
+        .download-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+
+        /* ── Toast ── */
+        .toast-container { position: fixed; top: 80px; right: 16px; z-index: 500; display: flex; flex-direction: column; gap: 8px; }
+        .toast {
+            padding: 11px 15px; border-radius: 10px; font-size: 12px; font-weight: 600;
+            display: flex; align-items: center; gap: 8px;
+            animation: toastIn 0.3s ease; max-width: 280px; border: 1px solid;
+        }
+        .toast.success { background: rgba(16,185,129,0.15); border-color: rgba(16,185,129,0.3); color: var(--green); }
+        .toast.error { background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.3); color: var(--red); }
+        .toast.info { background: rgba(59,130,246,0.15); border-color: rgba(59,130,246,0.3); color: var(--accent2); }
+        @keyframes toastIn { from { transform: translateX(100px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        /* ── Page Loader ── */
+        #page-loader {
+            position: fixed; inset: 0; z-index: 999;
+            background: var(--bg); display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 14px;
+        }
+        .loader-ring {
+            width: 44px; height: 44px; border-radius: 50%;
+            border: 3px solid var(--border); border-top-color: var(--accent);
+            animation: spin 0.8s linear infinite;
+        }
+
+        /* ── Empty State ── */
+        .empty-state { text-align: center; padding: 32px 20px; }
+        .empty-icon { font-size: 40px; margin-bottom: 10px; opacity: 0.5; }
+        .empty-title { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+        .empty-sub { font-size: 12px; color: var(--text2); }
+
+        /* ── Divider ── */
+        .divider { display: flex; align-items: center; gap: 8px; margin: 12px 0; }
+        .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+        .divider span { font-size: 10px; color: var(--text3); font-weight: 700; letter-spacing: 0.5px; }
+
+        /* ── Keypad OTP Area ── */
+        .keypad-otp-panel {
+            background: rgba(245,158,11,0.05); border: 1px dashed rgba(245,158,11,0.3);
+            border-radius: var(--radius-sm); padding: 14px; margin-top: 14px;
+        }
+        .keypad-otp-title { font-size: 11px; font-weight: 700; color: var(--yellow); margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+
+        @media (max-width: 400px) {
+            .form-row { grid-template-columns: 1fr; }
+            .download-row { grid-template-columns: 1fr; }
+            .page { padding: 12px; }
+        }
+    </style>
+</head>
+<body>
+<div id="page-loader">
+    <div style="font-size:30px">🎓</div>
+    <div class="loader-ring"></div>
+    <div style="font-size:12px;color:var(--text2)">Loading teacher console...</div>
+</div>
+
+<div id="app" style="display:none;">
+    <header class="header">
+        <div class="header-left">
+            <div class="header-logo">👨‍🏫</div>
+            <div>
+                <div class="header-title" id="headerTitle">Teacher Console</div>
+                <div class="header-sub" id="headerSub">Smart Attendance System</div>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="avatar" id="userAvatar">T</div>
+            <button class="btn-logout" onclick="logout()" id="logoutBtn">Sign Out</button>
+        </div>
+    </header>
+
+    <nav class="nav-tabs" id="mainNav" style="display:none;">
+        <div class="nav-tab active" onclick="switchTab('session')" id="tab-session">
+            <span class="ti">📡</span> Session
+        </div>
+        <div class="nav-tab" onclick="switchTab('qr')" id="tab-qr">
+            <span class="ti">📷</span> QR Code
+        </div>
+        <div class="nav-tab" onclick="switchTab('scan')" id="tab-scan">
+            <span class="ti">🔖</span> Barcode
+        </div>
+        <div class="nav-tab" onclick="switchTab('requests')" id="tab-requests">
+            <span class="ti">⏳</span>
+            Requests&nbsp;<span class="tab-counter" id="requestCount" style="display:none;">0</span>
+        </div>
+        <div class="nav-tab" onclick="switchTab('otp')" id="tab-otp">
+            <span class="ti">🔑</span> OTP
+        </div>
+        <div class="nav-tab" onclick="switchTab('roster')" id="tab-roster">
+            <span class="ti">👥</span> Roster
+        </div>
+    </nav>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- ═══ NO SESSION VIEW ═══ -->
+    <div id="noSessionView" style="display:none;">
+        <div style="padding:16px; max-width:640px; margin:0 auto;">
+            <div class="card" style="border-color:rgba(59,130,246,0.2);">
+                <div style="text-align:center; margin-bottom:20px;">
+                    <div style="font-size:48px; margin-bottom:12px;">🏫</div>
+                    <div style="font-size:18px; font-weight:700; margin-bottom:6px;">Start a Class Session</div>
+                    <div style="font-size:13px; color:var(--text2);">Create a session to begin taking attendance</div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Class Name</label>
+                    <input type="text" class="form-input" id="className" placeholder="e.g. CSE-A Sem 3 - Data Structures">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">📍 Latitude</label>
+                        <input type="number" class="form-input" id="classLat" placeholder="Auto-detect" step="any">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">📍 Longitude</label>
+                        <input type="number" class="form-input" id="classLng" placeholder="Auto-detect" step="any">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">📏 Radius (meters)</label>
+                        <input type="number" class="form-input" id="classRadius" value="50" min="0" placeholder="50">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">🎯 GPS Accuracy (m)</label>
+                        <input type="number" class="form-input" id="classAccuracy" value="15" min="0" placeholder="15">
+                    </div>
+                </div>
+                <button class="btn btn-secondary" onclick="detectLocation()" id="detectLocBtn" style="margin-bottom:10px;">
+                    <span class="btn-text">📡 Detect My Location</span>
+                    <div class="spinner-sm"></div>
+                </button>
+                <div id="locDetected" style="display:none; font-size:11px; color:var(--green); padding:8px; background:rgba(16,185,129,0.05); border-radius:8px; margin-bottom:10px; font-family:monospace;"></div>
+                <button class="btn btn-primary" onclick="createSession()" id="createSessionBtn">
+                    <span class="btn-text">🚀 Start Class Session</span>
+                    <div class="spinner-sm"></div>
+                </button>
+            </div>
+
+            <!-- Previous sessions -->
+            <div class="card">
+                <div class="card-title">📋 Past Sessions</div>
+                <div id="pastSessionsList"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ ACTIVE SESSION TABS ═══ -->
+
+    <!-- Tab: Session Overview -->
+    <div class="page" id="page-session">
+        <div class="session-banner">
+            <div class="session-dot"></div>
+            <div style="flex:1;">
+                <div style="font-size:14px; font-weight:700;" id="sessionClassName">—</div>
+                <div style="font-size:11px; color:var(--text2);" id="sessionInfo">Loading...</div>
+            </div>
+            <span class="badge green">LIVE</span>
+        </div>
+
+        <!-- Attendance Summary -->
+        <div class="card">
+            <div class="card-title">📊 Attendance Summary</div>
+            <div id="attendanceSummary" style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; text-align:center;">
+                <div style="background:var(--surface2); border-radius:10px; padding:14px;">
+                    <div style="font-size:26px; font-weight:800; color:var(--green);" id="countPresent">0</div>
+                    <div style="font-size:11px; color:var(--text2); margin-top:2px;">Present</div>
+                </div>
+                <div style="background:var(--surface2); border-radius:10px; padding:14px;">
+                    <div style="font-size:26px; font-weight:800; color:var(--yellow);" id="countPending">0</div>
+                    <div style="font-size:11px; color:var(--text2); margin-top:2px;">Pending</div>
+                </div>
+                <div style="background:var(--surface2); border-radius:10px; padding:14px;">
+                    <div style="font-size:26px; font-weight:800; color:var(--accent2);" id="countTotal">0</div>
+                    <div style="font-size:11px; color:var(--text2); margin-top:2px;">Total</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- End Session -->
+        <div class="card">
+            <div class="card-title">🔚 End Session</div>
+            <p style="font-size:13px; color:var(--text2); margin-bottom:14px;">Ending the session will freeze attendance records and automatically download the report in PDF and Excel formats.</p>
+            <button class="btn btn-red" onclick="confirmEndSession()" id="endSessionBtn">
+                <span class="btn-text">🛑 End Session & Download Report</span>
+                <div class="spinner-sm"></div>
+            </button>
+        </div>
+    </div>
+
+    <!-- Tab: QR Code -->
+    <div class="page" id="page-qr">
+        <div class="card">
+            <div class="card-title">📷 Dynamic QR Code</div>
+            <p style="font-size:12px; color:var(--text2); margin-bottom:16px;">Students scan this QR code to mark attendance. It refreshes every 15 seconds for security.</p>
+            <div class="qr-container" id="qrContainer">
+                <canvas id="qrCanvas" width="220" height="220"></canvas>
+                <div class="qr-countdown">
+                    <div class="countdown-ring">
+                        <svg width="28" height="28" viewBox="0 0 28 28">
+                            <circle cx="14" cy="14" r="11" stroke="rgba(255,255,255,0.1)" stroke-width="3" fill="none"/>
+                            <circle cx="14" cy="14" r="11" id="countdownCircle" stroke-dasharray="69" stroke-dashoffset="0"/>
+                        </svg>
+                    </div>
+                    <span id="countdownText">— refreshes in —</span>
+                </div>
+                <div style="font-size:11px; color:#666; text-align:center;">Token refreshes every 15 seconds<br>Students must scan before it expires</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab: Barcode Scanner -->
+    <div class="page" id="page-scan">
+        <div class="card">
+            <div class="card-title">🔖 Barcode Scanner</div>
+            <p style="font-size:12px; color:var(--text2); margin-bottom:14px;">Scan student barcode ID or type it manually to mark attendance.</p>
+            <div id="bc-reader" style="margin-bottom:12px;"></div>
+            <div id="scanResult"></div>
+        </div>
+
+        <!-- Manual barcode entry -->
+        <div class="card">
+            <div class="card-title">⌨️ Manual Barcode Entry</div>
+            <p style="font-size:12px; color:var(--text2); margin-bottom:12px;">If barcode scan fails, type the student's barcode ID:</p>
+            <div class="form-group">
+                <label class="form-label">Barcode / Student ID</label>
+                <div style="display:flex; gap:8px;">
+                    <input type="text" class="form-input" id="manualBarcodeInput" placeholder="e.g. STU001" style="flex:1;">
+                    <button class="btn btn-primary btn-sm" onclick="manualBarcodeSubmit()" id="barcodeManualBtn" style="width:auto; white-space:nowrap;">
+                        <span class="btn-text">✓ Mark</span>
+                        <div class="spinner-sm"></div>
+                    </button>
+                </div>
+            </div>
+            <div id="manualBarcodeResult"></div>
+        </div>
+    </div>
+
+    <!-- Tab: Pending Requests -->
+    <div class="page" id="page-requests">
+        <div class="card">
+            <div class="card-title">⏳ Pending Approval Requests</div>
+            <div id="pendingRequestsList">
+                <div class="empty-state"><div class="empty-icon">✅</div><div class="empty-title">No pending requests</div></div>
+            </div>
+            <button class="btn btn-secondary" onclick="loadRequests()" style="margin-top:8px; font-size:12px;">
+                🔄 Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- Tab: OTP Manager -->
+    <div class="page" id="page-otp">
+        <!-- Regular OTP for students without biometrics -->
+        <div class="card">
+            <div class="card-title">🔑 Generate Student OTP</div>
+            <p style="font-size:12px; color:var(--text2); margin-bottom:14px;">For students whose biometrics are not working. Generate a one-time password and tell it to the student verbally.</p>
+            <div class="form-group">
+                <label class="form-label">Select Student</label>
+                <select class="form-select" id="otpStudentSelect">
+                    <option value="">Loading students...</option>
+                </select>
+            </div>
+            <button class="btn btn-primary" onclick="generateStudentOTP()" id="genOtpBtn">
+                <span class="btn-text">🔑 Generate OTP</span>
+                <div class="spinner-sm"></div>
+            </button>
+            <div id="otpResult" style="margin-top:14px; display:none;">
+                <div class="otp-display" id="otpCode">——</div>
+                <div class="otp-timer" id="otpTimerText">Valid for 10 minutes</div>
+                <p style="font-size:12px; color:var(--text2); text-align:center; margin-top:8px;">Tell this code to the student verbally</p>
+            </div>
+        </div>
+
+        <!-- Keypad Phone OTP -->
+        <div class="card">
+            <div class="card-title" style="color:var(--yellow);">📱 Keypad Phone SMS OTP</div>
+            <p style="font-size:12px; color:var(--text2); margin-bottom:14px;">For students with keypad phones who receive OTP via SMS. Select the student, send OTP, then enter the OTP they received to mark them present.</p>
+
+            <div class="form-group">
+                <label class="form-label">Select Keypad Student</label>
+                <select class="form-select" id="keypadStudentSelect">
+                    <option value="">Loading students...</option>
+                </select>
+            </div>
+            <button class="btn btn-yellow" onclick="sendKeypadOTP()" id="sendKeypadBtn" style="margin-bottom:12px;">
+                <span class="btn-text">📲 Send OTP via SMS</span>
+                <div class="spinner-sm"></div>
+            </button>
+
+            <div class="keypad-otp-panel" id="keypadOtpPanel" style="display:none;">
+                <div class="keypad-otp-title">📩 OTP Sent — Enter student's received OTP:</div>
+                <div class="form-group">
+                    <label class="form-label">Student's OTP Code</label>
+                    <input type="number" class="form-input" id="keypadOtpInput" placeholder="Enter 4-digit OTP" style="font-size:18px; letter-spacing:6px; text-align:center;">
+                </div>
+                <button class="btn btn-green" onclick="verifyKeypadOTP()" id="verifyKeypadBtn">
+                    <span class="btn-text">✅ Verify & Mark Present</span>
+                    <div class="spinner-sm"></div>
+                </button>
+                <div id="keypadVerifyResult" style="margin-top:10px;"></div>
+            </div>
+
+            <div id="smsSentResult" style="margin-top:10px;"></div>
+        </div>
+    </div>
+
+    <!-- Tab: Roster -->
+    <div class="page" id="page-roster">
+        <div class="card">
+            <div class="card-title">👥 Present Students</div>
+            <div id="rosterList">
+                <div class="empty-state"><div class="empty-icon">👥</div><div class="empty-title">No one marked yet</div></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ END SESSION CONFIRM ═══ -->
+<div id="endConfirmOverlay" style="position:fixed;inset:0;z-index:300;background:rgba(0,0,0,0.7);backdrop-filter:blur(8px);display:none;align-items:center;justify-content:center;padding:20px;">
+    <div style="background:#12131f;border:1px solid var(--border2);border-radius:20px;padding:24px;max-width:400px;width:100%;">
+        <div style="font-size:36px;text-align:center;margin-bottom:12px;">⚠️</div>
+        <div style="font-size:17px;font-weight:700;text-align:center;margin-bottom:8px;">End Class Session?</div>
+        <div style="font-size:13px;color:var(--text2);text-align:center;margin-bottom:20px;">This will freeze attendance records and download the report. This cannot be undone.</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <button class="btn btn-secondary" onclick="document.getElementById('endConfirmOverlay').style.display='none'">Cancel</button>
+            <button class="btn btn-red" onclick="endSession()" id="confirmEndBtn">
+                <span class="btn-text">End Session</span>
+                <div class="spinner-sm"></div>
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+const safeStorage = {
+    getItem(k) { try { return localStorage.getItem(k); } catch { try { return sessionStorage.getItem(k); } catch { return null; } } },
+    setItem(k, v) { try { localStorage.setItem(k, v); } catch { try { sessionStorage.setItem(k, v); } catch {} } },
+    removeItem(k) { try { localStorage.removeItem(k); } catch { try { sessionStorage.removeItem(k); } catch {} } }
+};
+
+let currentUser = null;
+let authToken = null;
+let activeSession = null; // { id, name, latitude, longitude, radius }
+let qrInterval = null;
+let requestInterval = null;
+let rosterInterval = null;
+let countdownValue = 15;
+let barcodeScanner = null;
+let studentList = [];
+let keypadStudentList = [];
+
+// ── Init ───────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', async () => {
+    const params = new URLSearchParams(window.location.search);
+    const urlToken = params.get('token');
+    const urlUser = params.get('user');
+    if (urlToken) safeStorage.setItem('token', urlToken);
+    if (urlUser) { try { safeStorage.setItem('user', urlUser); } catch {} }
+
+    authToken = safeStorage.getItem('token');
+    try { currentUser = JSON.parse(safeStorage.getItem('user')); } catch {}
+
+    if (!authToken || !currentUser || currentUser.role !== 'teacher') {
+        window.location.href = 'index.html'; return;
+    }
+
+    document.getElementById('userAvatar').textContent = currentUser.username.charAt(0).toUpperCase();
+    document.getElementById('headerTitle').textContent = `${currentUser.username}`;
+    document.getElementById('headerSub').textContent = 'Teacher Console';
+
+    await checkActiveSession();
+    loadStudentLists();
+
+    document.getElementById('page-loader').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    document.getElementById('app').style.flexDirection = 'column';
+});
+
+function api(endpoint, method = 'GET', body = null) {
+    const opts = { method, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` } };
+    if (body) opts.body = JSON.stringify(body);
+    return fetch(endpoint, opts).then(async r => {
+        const data = await r.json();
+        if (r.status === 401) { showToast('Session expired. Please login again.', 'error'); setTimeout(() => logout(true), 2000); }
+        return { status: r.status, ...data };
+    });
+}
+
+async function logout(silent = false) {
+    stopAllIntervals();
+    try { await api('/api/logout', 'POST'); } catch {}
+    safeStorage.removeItem('token');
+    safeStorage.removeItem('user');
+    window.location.href = 'index.html';
+}
+
+function stopAllIntervals() {
+    clearInterval(qrInterval); clearInterval(requestInterval); clearInterval(rosterInterval);
+    if (barcodeScanner) { try { barcodeScanner.stop(); } catch {} barcodeScanner = null; }
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────────
+function showToast(msg, type = 'info', dur = 3500) {
+    const icons = { success: '✅', error: '❌', info: 'ℹ️' };
+    const el = document.createElement('div');
+    el.className = `toast ${type}`;
+    el.innerHTML = `<span>${icons[type]}</span><span>${msg}</span>`;
+    document.getElementById('toastContainer').appendChild(el);
+    setTimeout(() => { el.style.opacity = '0'; el.style.transform = 'translateX(100px)'; el.style.transition = 'all 0.3s'; setTimeout(() => el.remove(), 300); }, dur);
+}
+
+// ── Tabs ───────────────────────────────────────────────────────────────────
+function switchTab(tab) {
+    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById(`tab-${tab}`).classList.add('active');
+    document.getElementById(`page-${tab}`).classList.add('active');
+
+    if (tab === 'qr') startQRRefresh();
+    else stopQR();
+
+    if (tab === 'scan') startBarcodeScanner();
+    else stopBarcode();
+
+    if (tab === 'requests') loadRequests();
+    if (tab === 'roster') loadRoster();
+    if (tab === 'session') loadRosterSummary();
+}
+
+// ── Session Check ──────────────────────────────────────────────────────────
+async function checkActiveSession() {
+    const data = await api(`/api/classes/${currentUser.id}`);
+    const classes = data.classes || [];
+    const active = classes.find(c => c.active === 1);
+    if (active) {
+        activeSession = active;
+        showActiveSessionUI();
+    } else {
+        showNoSessionUI();
+        displayPastSessions(classes);
+    }
+}
+
+function showActiveSessionUI() {
+    document.getElementById('noSessionView').style.display = 'none';
+    document.getElementById('mainNav').style.display = 'flex';
+    document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
+    document.getElementById('page-session').style.display = 'block';
+    document.getElementById('tab-session').classList.add('active');
+
+    document.getElementById('sessionClassName').textContent = activeSession.name;
+    document.getElementById('sessionInfo').textContent = `Radius: ${activeSession.radius > 0 ? activeSession.radius + 'm' : 'Disabled'} | Class ID: ${activeSession.id}`;
+    document.getElementById('countTotal').textContent = studentList.length || '—';
+
+    loadRosterSummary();
+    requestInterval = setInterval(loadRequestCount, 15000);
+    loadRequestCount();
+}
+
+function showNoSessionUI() {
+    document.getElementById('noSessionView').style.display = 'block';
+    document.getElementById('mainNav').style.display = 'none';
+    activeSession = null;
+    stopAllIntervals();
+}
+
+function displayPastSessions(sessions) {
+    const el = document.getElementById('pastSessionsList');
+    const past = sessions.filter(s => s.active === 0);
+    if (past.length === 0) {
+        el.innerHTML = `<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">No past sessions</div></div>`;
+        return;
+    }
+    el.innerHTML = past.slice(0, 5).map(s => `
+        <div class="student-row">
+            <div class="student-row-left">
+                <div class="student-mini-avatar">📋</div>
+                <div>
+                    <div class="student-name">${s.name}</div>
+                    <div class="student-meta">ID: ${s.id} | Radius: ${s.radius}m</div>
+                </div>
+            </div>
+            <span class="badge" style="background:rgba(100,116,139,0.15);color:var(--text3);">Ended</span>
+        </div>
+    `).join('');
+}
+
+// ── Create Session ─────────────────────────────────────────────────────────
+function detectLocation() {
+    const btn = document.getElementById('detectLocBtn');
+    btn.classList.add('loading'); btn.disabled = true;
+    if (!navigator.geolocation) { showToast('GPS not supported', 'error'); btn.classList.remove('loading'); btn.disabled = false; return; }
+    navigator.geolocation.getCurrentPosition(pos => {
+        document.getElementById('classLat').value = pos.coords.latitude.toFixed(6);
+        document.getElementById('classLng').value = pos.coords.longitude.toFixed(6);
+        document.getElementById('locDetected').style.display = 'block';
+        document.getElementById('locDetected').textContent = `📍 Lat: ${pos.coords.latitude.toFixed(6)}, Lng: ${pos.coords.longitude.toFixed(6)} (±${Math.round(pos.coords.accuracy)}m accuracy)`;
+        showToast('Location detected!', 'success');
+        btn.classList.remove('loading'); btn.disabled = false;
+    }, () => {
+        showToast('Could not get location. Enter manually.', 'error');
+        btn.classList.remove('loading'); btn.disabled = false;
+    }, { enableHighAccuracy: true, timeout: 10000 });
+}
+
+async function createSession() {
+    const name = document.getElementById('className').value.trim();
+    const lat = parseFloat(document.getElementById('classLat').value);
+    const lng = parseFloat(document.getElementById('classLng').value);
+    const radius = parseFloat(document.getElementById('classRadius').value) || 50;
+    const accuracy = parseFloat(document.getElementById('classAccuracy').value) || 15;
+
+    if (!name) { showToast('Enter a class name', 'error'); return; }
+    if (isNaN(lat) || isNaN(lng)) { showToast('Detect or enter your location first', 'error'); return; }
+
+    const btn = document.getElementById('createSessionBtn');
+    btn.classList.add('loading'); btn.disabled = true;
+
+    const data = await api('/api/classes', 'POST', { name, latitude: lat, longitude: lng, radius, accuracy });
+    btn.classList.remove('loading'); btn.disabled = false;
+
+    if (data.success) {
+        showToast('Class session started!', 'success');
+        activeSession = { id: data.class_id, name, latitude: lat, longitude: lng, radius };
+        showActiveSessionUI();
+    } else {
+        showToast(data.message || 'Failed to create session', 'error');
+    }
+}
+
+// ── QR Code ────────────────────────────────────────────────────────────────
+function startQRRefresh() {
+    refreshQR();
+    qrInterval = setInterval(refreshQR, 15000);
+    startCountdown();
+}
+function stopQR() {
+    clearInterval(qrInterval); qrInterval = null;
+    clearInterval(window._cdInterval); window._cdInterval = null;
+}
+
+async function refreshQR() {
+    if (!activeSession) return;
+    const data = await api(`/api/classes/${activeSession.id}/token`);
+    if (data.token) {
+        const canvas = document.getElementById('qrCanvas');
+        try {
+            await QRCode.toCanvas(canvas, data.token, { width: 220, margin: 1, color: { dark: '#000', light: '#fff' } });
+        } catch (e) {}
+    }
+    countdownValue = 15;
+    startCountdown();
+}
+
+function startCountdown() {
+    clearInterval(window._cdInterval);
+    countdownValue = 15;
+    const circle = document.getElementById('countdownCircle');
+    const text = document.getElementById('countdownText');
+    const circumference = 69;
+    function tick() {
+        if (text) text.textContent = `Refreshes in ${countdownValue}s`;
+        if (circle) circle.style.strokeDashoffset = circumference - (circumference * countdownValue / 15);
+        countdownValue--;
+        if (countdownValue < 0) { countdownValue = 15; }
+    }
+    tick();
+    window._cdInterval = setInterval(tick, 1000);
+}
+
+// ── Barcode Scanner ────────────────────────────────────────────────────────
+function startBarcodeScanner() {
+    if (barcodeScanner) return;
+    const resultEl = document.getElementById('scanResult');
+    resultEl.innerHTML = '';
+    try {
+        barcodeScanner = new Html5Qrcode('bc-reader');
+        barcodeScanner.start(
+            { facingMode: 'environment' },
+            { fps: 10, qrbox: { width: 280, height: 120 } },
+            async (text) => {
+                resultEl.innerHTML = `<div class="scan-result"><span>🔍 Scanning barcode: ${text}...</span></div>`;
+                await submitBarcode(text, resultEl);
+                // Continue scanning after 2 seconds
+                setTimeout(() => { resultEl.innerHTML = ''; }, 3000);
+            },
+            () => {}
+        ).catch(e => {
+            document.getElementById('bc-reader').innerHTML = `<div style="padding:20px;text-align:center;color:var(--text2);">Camera not available. Use manual entry below.</div>`;
+        });
+    } catch (e) {
+        document.getElementById('bc-reader').innerHTML = `<div style="padding:20px;text-align:center;color:var(--text2);">Scanner not supported. Use manual entry below.</div>`;
+    }
+}
+
+function stopBarcode() {
+    if (barcodeScanner) { try { barcodeScanner.stop().catch(() => {}); } catch {} barcodeScanner = null; }
+}
+
+async function submitBarcode(barcode, resultEl) {
+    if (!activeSession) { if (resultEl) resultEl.innerHTML = `<div class="scan-result error">❌ No active session</div>`; return; }
+    const data = await api('/api/mark-barcode', 'POST', { class_id: activeSession.id, barcode });
+    if (data.success) {
+        if (resultEl) resultEl.innerHTML = `<div class="scan-result success">✅ ${data.message}</div>`;
+        showToast(data.message, 'success');
+        loadRosterSummary();
+    } else {
+        if (resultEl) resultEl.innerHTML = `<div class="scan-result error">❌ ${data.message}</div>`;
+        showToast(data.message || 'Not found', 'error');
+    }
+}
+
+async function manualBarcodeSubmit() {
+    const input = document.getElementById('manualBarcodeInput');
+    const barcode = input.value.trim();
+    if (!barcode) { showToast('Enter a barcode ID', 'error'); return; }
+    const btn = document.getElementById('barcodeManualBtn');
+    btn.classList.add('loading'); btn.disabled = true;
+    const resultEl = document.getElementById('manualBarcodeResult');
+    await submitBarcode(barcode, resultEl);
+    btn.classList.remove('loading'); btn.disabled = false;
+    input.value = '';
+}
+
+// ── Requests ───────────────────────────────────────────────────────────────
+async function loadRequestCount() {
+    if (!activeSession) return;
+    const data = await api(`/api/pending-requests/${activeSession.id}`);
+    const count = (data.requests || []).length;
+    const el = document.getElementById('requestCount');
+    if (count > 0) { el.style.display = 'inline-flex'; el.textContent = count; }
+    else { el.style.display = 'none'; }
+}
+
+async function loadRequests() {
+    if (!activeSession) return;
+    const container = document.getElementById('pendingRequestsList');
+    container.innerHTML = `<div class="empty-state"><div class="loader-ring" style="margin:0 auto;"></div></div>`;
+    const data = await api(`/api/pending-requests/${activeSession.id}`);
+    const requests = data.requests || [];
+    loadRequestCount();
+    if (requests.length === 0) {
+        container.innerHTML = `<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-title">No pending requests</div><div class="empty-sub">All students are accounted for</div></div>`;
+        return;
+    }
+    container.innerHTML = requests.map(r => `
+        <div class="request-card">
+            <div class="request-header">
+                <div>
+                    <div style="font-size:14px;font-weight:700;">${r.username}</div>
+                    <div style="font-size:11px;color:var(--text2);">Distance: ${r.distance}m from classroom | ${r.timestamp ? new Date(r.timestamp + 'Z').toLocaleTimeString() : ''}</div>
+                </div>
+                <span class="badge ${r.distance <= activeSession.radius ? 'green' : 'yellow'}">${r.distance <= activeSession.radius ? 'In Zone' : 'Out of Zone'}</span>
+            </div>
+            <div class="request-actions">
+                <button class="btn btn-green btn-sm" onclick="approveRequest(${r.student_id}, '${r.username}', this)">
+                    <span class="btn-text">✓ Approve</span><div class="spinner-sm"></div>
+                </button>
+                <button class="btn btn-red btn-sm" onclick="declineRequest(${r.student_id}, '${r.username}', this)">
+                    <span class="btn-text">✕ Decline</span><div class="spinner-sm"></div>
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function approveRequest(studentId, name, btn) {
+    btn.classList.add('loading'); btn.disabled = true;
+    const data = await api('/api/approve-request', 'POST', { class_id: activeSession.id, student_id: studentId });
+    if (data.success) {
+        showToast(`${name} approved!`, 'success');
+        loadRequests(); loadRosterSummary();
+    } else {
+        showToast(data.message || 'Failed', 'error');
+        btn.classList.remove('loading'); btn.disabled = false;
+    }
+}
+
+async function declineRequest(studentId, name) {
+    showToast(`${name}'s request declined.`, 'info');
+    loadRequests();
+}
+
+// ── OTP ────────────────────────────────────────────────────────────────────
+async function loadStudentLists() {
+    const data = await api('/api/students');
+    if (!data.success) return;
+    studentList = data.students || [];
+    const allSel = document.getElementById('otpStudentSelect');
+    const keypadSel = document.getElementById('keypadStudentSelect');
+    const keypadStudents = studentList.filter(s => s.is_keypad === 1);
+
+    allSel.innerHTML = `<option value="">Select student…</option>` + studentList.map(s =>
+        `<option value="${s.id}">${s.username}${s.is_keypad ? ' 📱' : ''}</option>`
+    ).join('');
+
+    keypadSel.innerHTML = keypadStudents.length > 0
+        ? `<option value="">Select keypad student…</option>` + keypadStudents.map(s =>
+            `<option value="${s.id}">${s.username} (${s.student_phone || 'No phone'})</option>`
+        ).join('')
+        : `<option value="">No keypad students found</option>`;
+}
+
+async function generateStudentOTP() {
+    const studentId = document.getElementById('otpStudentSelect').value;
+    if (!studentId) { showToast('Select a student', 'error'); return; }
+    if (!activeSession) { showToast('No active session', 'error'); return; }
+    const btn = document.getElementById('genOtpBtn');
+    btn.classList.add('loading'); btn.disabled = true;
+    const data = await api('/api/teacher/generate-otp', 'POST', { class_id: activeSession.id, student_id: studentId });
+    btn.classList.remove('loading'); btn.disabled = false;
+    if (data.success) {
+        document.getElementById('otpResult').style.display = 'block';
+        document.getElementById('otpCode').textContent = data.otp;
+        document.getElementById('otpTimerText').textContent = 'Valid for 10 minutes — tell this to the student verbally';
+        showToast(`OTP generated: ${data.otp}`, 'success');
+    } else {
+        showToast(data.message || 'Failed', 'error');
+    }
+}
+
+async function sendKeypadOTP() {
+    const studentId = document.getElementById('keypadStudentSelect').value;
+    if (!studentId) { showToast('Select a keypad student', 'error'); return; }
+    if (!activeSession) { showToast('No active session', 'error'); return; }
+    const btn = document.getElementById('sendKeypadBtn');
+    btn.classList.add('loading'); btn.disabled = true;
+    const data = await api('/api/coordinator/send-keypad-otp', 'POST', { student_id: studentId, class_id: activeSession.id });
+    btn.classList.remove('loading'); btn.disabled = false;
+    if (data.success) {
+        document.getElementById('smsSentResult').innerHTML = `<div style="padding:10px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2);border-radius:8px;font-size:12px;color:var(--green);">✅ OTP sent via SMS successfully! (Demo OTP: <strong>${data.otp}</strong>)</div>`;
+        document.getElementById('keypadOtpPanel').style.display = 'block';
+        showToast(`SMS OTP sent! Code: ${data.otp}`, 'success', 6000);
+    } else {
+        showToast(data.message || 'Failed to send OTP', 'error');
+    }
+}
+
+async function verifyKeypadOTP() {
+    const studentId = document.getElementById('keypadStudentSelect').value;
+    const otp = document.getElementById('keypadOtpInput').value.trim();
+    if (!otp) { showToast('Enter the OTP received by student', 'error'); return; }
+    if (!activeSession) { showToast('No active session', 'error'); return; }
+    const btn = document.getElementById('verifyKeypadBtn');
+    btn.classList.add('loading'); btn.disabled = true;
+    const data = await api('/api/coordinator/verify-keypad-otp', 'POST', { student_id: studentId, otp_code: otp, class_id: activeSession.id });
+    btn.classList.remove('loading'); btn.disabled = false;
+    const resEl = document.getElementById('keypadVerifyResult');
+    if (data.success) {
+        resEl.innerHTML = `<div style="padding:10px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2);border-radius:8px;font-size:12px;color:var(--green);">✅ ${data.message}</div>`;
+        showToast('Student marked present!', 'success');
+        document.getElementById('keypadOtpInput').value = '';
+        document.getElementById('keypadOtpPanel').style.display = 'none';
+        document.getElementById('smsSentResult').innerHTML = '';
+        loadRosterSummary();
+    } else {
+        resEl.innerHTML = `<div style="padding:10px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);border-radius:8px;font-size:12px;color:var(--red);">❌ ${data.message}</div>`;
+        showToast(data.message || 'Incorrect OTP', 'error');
+    }
+}
+
+// ── Roster ─────────────────────────────────────────────────────────────────
+async function loadRosterSummary() {
+    if (!activeSession) return;
+    const data = await api(`/api/attendance/${activeSession.id}`);
+    const present = data.attendance || [];
+    document.getElementById('countPresent').textContent = present.length;
+
+    const reqData = await api(`/api/pending-requests/${activeSession.id}`);
+    const pending = (reqData.requests || []).length;
+    document.getElementById('countPending').textContent = pending;
+
+    const studData = await api('/api/students');
+    const totalStudents = (studData.students || []).length;
+    document.getElementById('countTotal').textContent = totalStudents;
+}
+
+async function loadRoster() {
+    if (!activeSession) return;
+    const container = document.getElementById('rosterList');
+    container.innerHTML = `<div class="empty-state"><div class="loader-ring" style="margin:0 auto;"></div></div>`;
+    const data = await api(`/api/attendance/${activeSession.id}`);
+    const students = data.attendance || [];
+    if (students.length === 0) {
+        container.innerHTML = `<div class="empty-state"><div class="empty-icon">👥</div><div class="empty-title">No one present yet</div><div class="empty-sub">Students who mark attendance will appear here</div></div>`;
+        return;
+    }
+    container.innerHTML = students.map((s, i) => `
+        <div class="student-row">
+            <div class="student-row-left">
+                <div class="student-mini-avatar">${s.username.charAt(0).toUpperCase()}</div>
+                <div>
+                    <div class="student-name">${s.username}</div>
+                    <div class="student-meta">${s.timestamp ? new Date(s.timestamp + 'Z').toLocaleTimeString() : 'Time unknown'}</div>
+                </div>
+            </div>
+            <span class="badge green">Present</span>
+        </div>
+    `).join('');
+}
+
+// ── End Session ────────────────────────────────────────────────────────────
+function confirmEndSession() {
+    document.getElementById('endConfirmOverlay').style.display = 'flex';
+}
+
+async function endSession() {
+    const btn = document.getElementById('confirmEndBtn');
+    btn.classList.add('loading'); btn.disabled = true;
+
+    // Fetch full attendance data for report BEFORE ending
+    const attData = await api(`/api/attendance/${activeSession.id}`);
+    const presentStudents = attData.attendance || [];
+    const allStudentsData = await api('/api/students');
+    const allStudents = allStudentsData.students || [];
+
+    // End the session
+    const data = await api(`/api/classes/${activeSession.id}/end`, 'POST');
+    btn.classList.remove('loading'); btn.disabled = false;
+
+    if (data.success) {
+        document.getElementById('endConfirmOverlay').style.display = 'none';
+        showToast('Session ended! Generating report...', 'success');
+        stopAllIntervals();
+
+        // Generate the report
+        await generateReport(activeSession.name, presentStudents, allStudents);
+
+        setTimeout(() => {
+            showNoSessionUI();
+            checkActiveSession();
+        }, 1500);
+    } else {
+        showToast(data.message || 'Failed to end session', 'error');
+    }
+}
+
+// ── Report Generator ───────────────────────────────────────────────────────
+async function generateReport(className, presentStudents, allStudents) {
+    const presentIds = new Set(presentStudents.map(s => s.username));
+    const timestamp = new Date().toLocaleString('en-IN');
+
+    // Merge: all students get a present/absent status
+    const reportRows = allStudents.map(s => ({
+        name: s.username,
+        status: presentIds.has(s.username) ? 'Present' : 'Absent',
+        time: presentStudents.find(p => p.username === s.username)?.timestamp
+            ? new Date(presentStudents.find(p => p.username === s.username).timestamp + 'Z').toLocaleTimeString()
+            : '—'
+    }));
+
+    // ── PDF ────────────────────────────────────────────────────────────────
+    try {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+
+        // Header
+        doc.setFillColor(30, 30, 50);
+        doc.rect(0, 0, 210, 35, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(18); doc.setFont(undefined, 'bold');
+        doc.text('Smart Attendance System', 14, 15);
+        doc.setFontSize(11); doc.setFont(undefined, 'normal');
+        doc.text(`Class: ${className}`, 14, 24);
+        doc.text(`Generated: ${timestamp}`, 14, 31);
+
+        // Summary
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(12);
+        const present = reportRows.filter(r => r.status === 'Present').length;
+        const absent = reportRows.length - present;
+        doc.setFillColor(240, 255, 245);
+        doc.rect(14, 42, 55, 18, 'F');
+        doc.setFontSize(9); doc.text('PRESENT', 41, 50, { align: 'center' });
+        doc.setFontSize(16); doc.setFont(undefined, 'bold'); doc.setTextColor(16, 185, 129);
+        doc.text(present.toString(), 41, 58, { align: 'center' });
+
+        doc.setFillColor(255, 245, 240);
+        doc.rect(75, 42, 55, 18, 'F');
+        doc.setFontSize(9); doc.setFont(undefined, 'normal'); doc.setTextColor(0,0,0);
+        doc.text('ABSENT', 102, 50, { align: 'center' });
+        doc.setFontSize(16); doc.setFont(undefined, 'bold'); doc.setTextColor(239, 68, 68);
+        doc.text(absent.toString(), 102, 58, { align: 'center' });
+
+        doc.setFillColor(240, 248, 255);
+        doc.rect(136, 42, 55, 18, 'F');
+        doc.setFontSize(9); doc.setFont(undefined, 'normal'); doc.setTextColor(0,0,0);
+        doc.text('TOTAL', 163, 50, { align: 'center' });
+        doc.setFontSize(16); doc.setFont(undefined, 'bold'); doc.setTextColor(59, 130, 246);
+        doc.text(reportRows.length.toString(), 163, 58, { align: 'center' });
+
+        // Table
+        doc.autoTable({
+            startY: 68,
+            head: [['#', 'Student Name', 'Status', 'Check-in Time']],
+            body: reportRows.map((r, i) => [i + 1, r.name, r.status, r.time]),
+            styles: { fontSize: 10, cellPadding: 5 },
+            headStyles: { fillColor: [30, 30, 50], textColor: [255,255,255], fontStyle: 'bold' },
+            alternateRowStyles: { fillColor: [248, 250, 252] },
+            didDrawCell: (data) => {
+                if (data.section === 'body' && data.column.index === 2) {
+                    const val = data.cell.raw;
+                    if (val === 'Present') { doc.setTextColor(16, 185, 129); }
+                    else { doc.setTextColor(239, 68, 68); }
+                }
+            }
+        });
+
+        const safeName = className.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_');
+        doc.save(`Attendance_${safeName}_${new Date().toISOString().slice(0,10)}.pdf`);
+        showToast('PDF downloaded!', 'success');
+    } catch (e) {
+        showToast('PDF generation failed: ' + e.message, 'error');
+    }
+
+    // ── Excel ──────────────────────────────────────────────────────────────
+    try {
+        const wb = XLSX.utils.book_new();
+        const wsData = [
+            ['Smart Attendance System — Report'],
+            [`Class: ${className}`],
+            [`Generated: ${timestamp}`],
+            [],
+            ['#', 'Student Name', 'Status', 'Check-in Time'],
+            ...reportRows.map((r, i) => [i + 1, r.name, r.status, r.time])
+        ];
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+        ws['!cols'] = [{ wch: 5 }, { wch: 20 }, { wch: 12 }, { wch: 16 }];
+        XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
+        const safeName = className.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_');
+        XLSX.writeFile(wb, `Attendance_${safeName}_${new Date().toISOString().slice(0,10)}.xlsx`);
+        showToast('Excel downloaded!', 'success');
+    } catch (e) {
+        showToast('Excel generation failed: ' + e.message, 'error');
+    }
+}
+</script>
+</body>
+</html>

@@ -3,162 +3,749 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Smart Attendance Login</title>
-    <link rel="stylesheet" href="styles.css?v=2">
-    <script src="animations.js?v=2" defer></script>
-    <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.getRegistrations().then(registrations => {
-                for (let registration of registrations) {
-                    registration.unregister().then(success => {
-                        if (success) {
-                            console.log('PWA Service Worker unregistered successfully.');
-                            // Purge any local caches
-                            if ('caches' in window) {
-                                caches.keys().then(names => {
-                                    for (let name of names) caches.delete(name);
-                                });
-                            }
-                        }
-                    });
-                }
-            });
+    <title>Smart Attendance — Login</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap">
+    <style>
+        :root {
+            --bg: #07080f;
+            --card: rgba(255,255,255,0.04);
+            --card2: rgba(255,255,255,0.07);
+            --border: rgba(255,255,255,0.08);
+            --border2: rgba(255,255,255,0.18);
+            --accent: #6c63ff;
+            --accent2: #a78bfa;
+            --green: #10b981;
+            --red: #ef4444;
+            --yellow: #f59e0b;
+            --text: #f1f5f9;
+            --text2: #94a3b8;
+            --text3: #475569;
         }
-    </script>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body {
+            min-height: 100%; font-family: 'Inter', sans-serif;
+            background: var(--bg); color: var(--text);
+            display: flex; align-items: center; justify-content: center;
+            overflow: hidden;
+        }
+
+        /* ── Animated Background ── */
+        .bg-orbs {
+            position: fixed; inset: 0; z-index: 0; overflow: hidden;
+            pointer-events: none;
+        }
+        .orb {
+            position: absolute; border-radius: 50%;
+            filter: blur(80px); opacity: 0.35;
+            animation: orbFloat 12s ease-in-out infinite alternate;
+        }
+        .orb1 { width: 400px; height: 400px; background: radial-gradient(circle, #6c63ff, transparent); top: -100px; left: -100px; animation-duration: 14s; }
+        .orb2 { width: 300px; height: 300px; background: radial-gradient(circle, #10b981, transparent); bottom: -80px; right: -80px; animation-duration: 10s; animation-delay: -5s; }
+        .orb3 { width: 200px; height: 200px; background: radial-gradient(circle, #a78bfa, transparent); top: 50%; right: 20%; animation-duration: 8s; animation-delay: -3s; }
+        @keyframes orbFloat { from { transform: translate(0,0) scale(1); } to { transform: translate(30px,20px) scale(1.08); } }
+
+        /* Grid lines */
+        .grid {
+            position: fixed; inset: 0; z-index: 0;
+            background-image: linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+                              linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+
+        /* ── Main Container ── */
+        .container {
+            position: relative; z-index: 1;
+            width: 100%; max-width: 420px; padding: 20px;
+        }
+
+        /* ── Logo ── */
+        .logo-wrap { text-align: center; margin-bottom: 32px; }
+        .logo-icon {
+            width: 70px; height: 70px; border-radius: 20px; margin: 0 auto 14px;
+            background: linear-gradient(135deg, var(--accent), var(--accent2));
+            display: flex; align-items: center; justify-content: center;
+            font-size: 34px;
+            box-shadow: 0 0 40px rgba(108,99,255,0.4), 0 0 80px rgba(108,99,255,0.15);
+            animation: logoPulse 3s ease-in-out infinite;
+        }
+        @keyframes logoPulse {
+            0%,100% { box-shadow: 0 0 40px rgba(108,99,255,0.4), 0 0 80px rgba(108,99,255,0.15); }
+            50% { box-shadow: 0 0 60px rgba(108,99,255,0.6), 0 0 100px rgba(108,99,255,0.25); }
+        }
+        .logo-title { font-size: 24px; font-weight: 800; letter-spacing: -0.5px; }
+        .logo-sub { font-size: 13px; color: var(--text2); margin-top: 4px; }
+
+        /* ── Card ── */
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 28px 24px;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 24px 64px rgba(0,0,0,0.4);
+        }
+
+        /* ── Steps ── */
+        .step { display: none; }
+        .step.active { display: block; animation: fadeSlide 0.4s ease; }
+        @keyframes fadeSlide { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* ── Form Elements ── */
+        .form-group { margin-bottom: 16px; }
+        .form-label {
+            display: block; font-size: 11px; font-weight: 700;
+            color: var(--text2); text-transform: uppercase; letter-spacing: 0.8px;
+            margin-bottom: 8px;
+        }
+        .form-input {
+            width: 100%; padding: 14px 16px; border-radius: 12px;
+            background: var(--card2); border: 1px solid var(--border);
+            color: var(--text); font-size: 15px; font-family: 'Inter', sans-serif;
+            transition: all 0.2s; outline: none;
+        }
+        .form-input:focus {
+            border-color: var(--accent);
+            background: rgba(108,99,255,0.08);
+            box-shadow: 0 0 0 3px rgba(108,99,255,0.15);
+        }
+        .form-input::placeholder { color: var(--text3); }
+
+        /* ── Password wrapper ── */
+        .pw-wrap { position: relative; }
+        .pw-toggle {
+            position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+            background: none; border: none; cursor: pointer; font-size: 18px;
+            color: var(--text2); padding: 4px; user-select: none;
+        }
+
+        /* ── Login Button ── */
+        .btn-login {
+            width: 100%; padding: 15px; border-radius: 12px;
+            background: linear-gradient(135deg, var(--accent), var(--accent2));
+            color: white; font-size: 15px; font-weight: 700;
+            border: none; cursor: pointer; margin-top: 8px;
+            transition: all 0.2s; position: relative; overflow: hidden;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            font-family: 'Inter', sans-serif;
+        }
+        .btn-login:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px rgba(108,99,255,0.4);
+        }
+        .btn-login:active:not(:disabled) { transform: translateY(0); }
+        .btn-login:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        .spinner {
+            width: 18px; height: 18px; border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: white; animation: spin 0.7s linear infinite;
+            display: none;
+        }
+        .btn-login.loading .btn-text { display: none; }
+        .btn-login.loading .spinner { display: block; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── Message ── */
+        .msg {
+            margin-top: 14px; padding: 12px 16px; border-radius: 10px;
+            font-size: 13px; font-weight: 600; text-align: center;
+            display: none; align-items: center; gap: 8px; justify-content: center;
+        }
+        .msg.show { display: flex; }
+        .msg.error { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.25); color: var(--red); }
+        .msg.success { background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.25); color: var(--green); }
+        .msg.info { background: rgba(108,99,255,0.12); border: 1px solid rgba(108,99,255,0.25); color: var(--accent2); }
+
+        /* ── Role Chips (login page header) ── */
+        .role-chips {
+            display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;
+            margin-bottom: 22px;
+        }
+        .role-chip {
+            padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600;
+            border: 1px solid var(--border); color: var(--text2);
+            background: var(--card2);
+        }
+
+        /* ─────────────────────────────────────────────────────────────────
+           STEP 2: BIOMETRIC VERIFICATION SCREEN
+        ──────────────────────────────────────────────────────────────── */
+        .bio-screen { text-align: center; }
+        .bio-user-chip {
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: 8px 16px; border-radius: 20px;
+            background: rgba(108,99,255,0.1); border: 1px solid rgba(108,99,255,0.2);
+            font-size: 13px; font-weight: 600; color: var(--accent2);
+            margin-bottom: 24px;
+        }
+        .bio-user-chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+
+        /* Fingerprint / Face ring animation */
+        .bio-ring-wrap {
+            position: relative; width: 140px; height: 140px;
+            margin: 0 auto 24px;
+        }
+        .bio-ring {
+            width: 140px; height: 140px; border-radius: 50%;
+            border: 2px solid rgba(108,99,255,0.2);
+            position: absolute; inset: 0;
+        }
+        .bio-ring-spin {
+            width: 140px; height: 140px; border-radius: 50%;
+            border: 2px solid transparent;
+            border-top-color: var(--accent);
+            border-right-color: var(--accent2);
+            position: absolute; inset: 0;
+            animation: bioSpin 1.5s linear infinite;
+        }
+        .bio-ring-spin2 {
+            width: 110px; height: 110px; border-radius: 50%;
+            border: 1.5px solid transparent;
+            border-bottom-color: var(--green);
+            position: absolute; top: 15px; left: 15px;
+            animation: bioSpin 2s linear infinite reverse;
+        }
+        @keyframes bioSpin { to { transform: rotate(360deg); } }
+        .bio-icon {
+            position: absolute; inset: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 52px;
+            animation: bioIconPulse 2s ease-in-out infinite;
+        }
+        @keyframes bioIconPulse {
+            0%,100% { transform: scale(1); filter: drop-shadow(0 0 8px rgba(108,99,255,0.5)); }
+            50% { transform: scale(1.08); filter: drop-shadow(0 0 20px rgba(108,99,255,0.9)); }
+        }
+
+        .bio-status-text {
+            font-size: 16px; font-weight: 700; margin-bottom: 8px;
+        }
+        .bio-hint {
+            font-size: 13px; color: var(--text2); margin-bottom: 24px;
+            line-height: 1.5;
+        }
+
+        /* Status ring changes */
+        .bio-ring-wrap.success .bio-ring-spin { border-top-color: var(--green); border-right-color: var(--green); animation: none; border: 2px solid var(--green); }
+        .bio-ring-wrap.success .bio-ring-spin2 { display: none; }
+        .bio-ring-wrap.error .bio-ring-spin { border-top-color: var(--red); border-right-color: var(--red); animation: none; border: 2px solid var(--red); }
+        .bio-ring-wrap.error .bio-ring-spin2 { display: none; }
+
+        /* ── BREACH ALERT SCREEN ── */
+        .breach-screen { text-align: center; }
+        .breach-icon-wrap {
+            width: 90px; height: 90px; border-radius: 50%;
+            background: rgba(239,68,68,0.1); border: 2px solid rgba(239,68,68,0.3);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 40px; margin: 0 auto 20px;
+            animation: breachPulse 1s ease-in-out 3;
+        }
+        @keyframes breachPulse {
+            0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); }
+            50% { box-shadow: 0 0 0 16px rgba(239,68,68,0); }
+        }
+        .breach-title { font-size: 18px; font-weight: 800; color: var(--red); margin-bottom: 10px; }
+        .breach-desc { font-size: 13px; color: var(--text2); line-height: 1.6; margin-bottom: 20px; }
+        .breach-alert-box {
+            background: rgba(239,68,68,0.07); border: 1px solid rgba(239,68,68,0.2);
+            border-radius: 12px; padding: 14px; margin-bottom: 20px;
+            font-size: 12px; color: #fca5a5; line-height: 1.6; text-align: left;
+        }
+        .breach-alert-box strong { color: var(--red); }
+        .btn-back {
+            width: 100%; padding: 13px; border-radius: 12px;
+            background: var(--card2); border: 1px solid var(--border2);
+            color: var(--text); font-size: 14px; font-weight: 600;
+            cursor: pointer; font-family: 'Inter', sans-serif; transition: all 0.2s;
+        }
+        .btn-back:hover { background: rgba(255,255,255,0.1); }
+
+        /* ── No-biometric fallback button ── */
+        .btn-fallback {
+            width: 100%; padding: 13px; border-radius: 12px; margin-top: 10px;
+            background: transparent; border: 1px solid var(--border);
+            color: var(--text2); font-size: 13px; font-weight: 600;
+            cursor: pointer; font-family: 'Inter', sans-serif; transition: all 0.2s;
+        }
+        .btn-fallback:hover { border-color: var(--border2); color: var(--text); }
+
+        /* ── Footer ── */
+        .footer { text-align: center; margin-top: 24px; font-size: 11px; color: var(--text3); }
+
+        /* ── Ripple ── */
+        .ripple {
+            position: absolute; border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transform: scale(0);
+            animation: rippleAnim 0.6s linear;
+            pointer-events: none;
+        }
+        @keyframes rippleAnim { to { transform: scale(4); opacity: 0; } }
+    </style>
 </head>
 <body>
-    <div class="grid-overlay"></div>
-    <div class="container">
-        <h2>Welcome Back 👋</h2>
-        <form id="loginForm">
-            <div class="form-group">
-                <label>Username</label>
-                <input type="text" id="username" placeholder="teacher or student" required autocomplete="username">
-            </div>
-            <div class="form-group">
-                <label>Password</label>
-                <input type="password" id="password" placeholder="pass" required autocomplete="current-password">
-            </div>
-            <div style="display: flex; justify-content: center; margin-top: 2.25rem;">
-                <button type="submit" class="btn" id="loginBtn" style="max-width: 250px;">
-                    <span class="btn-text">Login</span>
-                    <div class="spinner"></div>
-                </button>
-            </div>
-            <div id="msg" class="message"></div>
-        </form>
+<div class="bg-orbs">
+    <div class="orb orb1"></div>
+    <div class="orb orb2"></div>
+    <div class="orb orb3"></div>
+</div>
+<div class="grid"></div>
+
+<div class="container">
+    <!-- Logo -->
+    <div class="logo-wrap">
+        <div class="logo-icon">🎓</div>
+        <div class="logo-title">Smart Attendance</div>
+        <div class="logo-sub">Geofencing · Biometrics · Realtime</div>
     </div>
 
-    <script>
-        // Global Ripple Effect for Buttons
-        document.addEventListener('click', function (e) {
-            const btn = e.target.closest('.btn');
-            if (btn) {
-                const circle = document.createElement('span');
-                const diameter = Math.max(btn.clientWidth, btn.clientHeight);
-                const radius = diameter / 2;
-                
-                circle.style.width = circle.style.height = `${diameter}px`;
-                circle.style.left = `${e.clientX - btn.getBoundingClientRect().left - radius}px`;
-                circle.style.top = `${e.clientY - btn.getBoundingClientRect().top - radius}px`;
-                circle.classList.add('ripple');
-                
-                const existing = btn.querySelector('.ripple');
-                if (existing) {
-                    existing.remove();
-                }
-                
-                btn.appendChild(circle);
-                circle.addEventListener('animationend', () => circle.remove());
-            }
+    <div class="card">
+        <!-- ═══════════════ STEP 1: PASSWORD LOGIN ═══════════════ -->
+        <div class="step active" id="step-login">
+            <div class="role-chips">
+                <span class="role-chip">👨‍🎓 Student</span>
+                <span class="role-chip">👨‍🏫 Teacher</span>
+                <span class="role-chip">🏫 HOD</span>
+                <span class="role-chip">📋 Coordinator</span>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Username</label>
+                <input type="text" id="username" class="form-input"
+                    placeholder="Enter your username"
+                    autocomplete="username" autocapitalize="none" spellcheck="false" required>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Password</label>
+                <div class="pw-wrap">
+                    <input type="password" id="password" class="form-input"
+                        placeholder="Enter your password"
+                        autocomplete="current-password" required>
+                    <button type="button" class="pw-toggle" onclick="togglePw()" id="pwToggle" title="Show/hide password">👁</button>
+                </div>
+            </div>
+
+            <button class="btn-login" id="loginBtn" onclick="submitLogin()">
+                <span class="btn-text">🔐 Sign In</span>
+                <div class="spinner"></div>
+            </button>
+
+            <div class="msg" id="loginMsg"></div>
+        </div>
+
+        <!-- ═══════════════ STEP 2: BIOMETRIC VERIFICATION ═══════════════ -->
+        <div class="step" id="step-biometric">
+            <div class="bio-screen">
+                <div class="bio-user-chip">
+                    <span class="dot"></span>
+                    <span id="bioUsername">student</span>
+                    <span style="color:var(--text3);">—</span>
+                    <span style="color:var(--text2);">Biometric required</span>
+                </div>
+
+                <div class="bio-ring-wrap" id="bioRing">
+                    <div class="bio-ring"></div>
+                    <div class="bio-ring-spin" id="bioRingSpin"></div>
+                    <div class="bio-ring-spin2" id="bioRingSpin2"></div>
+                    <div class="bio-icon" id="bioIcon">🔐</div>
+                </div>
+
+                <div class="bio-status-text" id="bioStatusText">Verifying your identity</div>
+                <div class="bio-hint" id="bioHint">
+                    Touch the fingerprint sensor or look at the front camera<br>
+                    to confirm it's you
+                </div>
+
+                <button class="btn-login" id="bioRetryBtn" onclick="triggerBiometric()" style="display:none;">
+                    <span class="btn-text">🔁 Try Again</span>
+                    <div class="spinner"></div>
+                </button>
+
+                <button class="btn-fallback" id="bioFallbackBtn" onclick="showPasswordFallback()" style="display:none;">
+                    🔑 Use Password Instead
+                </button>
+
+                <button class="btn-back" onclick="backToLogin()" style="margin-top:10px;">
+                    ← Back to Login
+                </button>
+
+                <div class="msg" id="bioMsg"></div>
+            </div>
+        </div>
+
+        <!-- ═══════════════ STEP 3: BREACH DETECTED ═══════════════ -->
+        <div class="step" id="step-breach">
+            <div class="breach-screen">
+                <div class="breach-icon-wrap">🚨</div>
+                <div class="breach-title">Security Alert Raised</div>
+                <div class="breach-desc">
+                    An unrecognised biometric was used to attempt access to this account.
+                    Your HOD and Class Coordinator have been notified automatically.
+                </div>
+                <div class="breach-alert-box">
+                    <strong>What happened:</strong><br>
+                    The fingerprint or face detected does not match the one registered to this account.
+                    This account is <strong>bound to a single registered identity</strong>.
+                    Attempting to access it with a different biometric is a security violation.<br><br>
+                    <strong>Next steps:</strong> Visit your HOD or Class Coordinator to reset your biometric binding if your face/fingerprint has genuinely changed.
+                </div>
+                <button class="btn-back" onclick="backToLogin()">← Return to Login</button>
+            </div>
+        </div>
+
+        <!-- ═══════════════ STEP 4: PASSWORD FALLBACK (when biometric not working) ═══════════════ -->
+        <div class="step" id="step-fallback">
+            <div style="text-align:center;margin-bottom:20px;">
+                <div style="font-size:36px;margin-bottom:10px;">🔑</div>
+                <div style="font-size:16px;font-weight:700;margin-bottom:6px;">Password Verification</div>
+                <div style="font-size:13px;color:var(--text2);">Enter your password to confirm identity</div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Password</label>
+                <div class="pw-wrap">
+                    <input type="password" id="fallbackPassword" class="form-input"
+                        placeholder="Enter your password" autocomplete="current-password">
+                    <button type="button" class="pw-toggle" onclick="toggleFallbackPw()">👁</button>
+                </div>
+            </div>
+
+            <button class="btn-login" id="fallbackBtn" onclick="submitFallback()">
+                <span class="btn-text">✓ Verify & Continue</span>
+                <div class="spinner"></div>
+            </button>
+            <button class="btn-back" onclick="backToLogin()" style="margin-top:10px;">← Cancel</button>
+            <div class="msg" id="fallbackMsg"></div>
+        </div>
+    </div>
+
+    <div class="footer">
+        Secured with end-to-end JWT · Device-bound biometrics · WebAuthn
+    </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+const safeStorage = {
+    getItem(k) { try { return localStorage.getItem(k); } catch { try { return sessionStorage.getItem(k); } catch { return null; } } },
+    setItem(k, v) { try { localStorage.setItem(k, v); } catch { try { sessionStorage.setItem(k, v); } catch {} } },
+    removeItem(k) { try { localStorage.removeItem(k); } catch { try { sessionStorage.removeItem(k); } catch {} } }
+};
+
+// Pending login data (token + user held until biometric passes)
+let pendingToken = null;
+let pendingUser = null;
+let pendingCredentialId = null; // base64url string stored in DB
+let currentUsername = '';
+
+// ── Device ID ──────────────────────────────────────────────────────────────
+let deviceId = safeStorage.getItem('device_id');
+if (!deviceId) {
+    deviceId = 'dev-' + Math.random().toString(36).slice(2, 15) + Math.random().toString(36).slice(2, 15);
+    safeStorage.setItem('device_id', deviceId);
+}
+
+// ── WebAuthn helpers ───────────────────────────────────────────────────────
+function base64urlToUint8Array(b64url) {
+    if (!b64url) return new Uint8Array(0);
+    const base64 = b64url.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64 + '='.repeat((4 - base64.length % 4) % 4);
+    const bin = atob(padded);
+    return new Uint8Array([...bin].map(c => c.charCodeAt(0)));
+}
+
+function arrayBufferToBase64url(buf) {
+    return btoa(String.fromCharCode(...new Uint8Array(buf)))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+// ── Step Manager ───────────────────────────────────────────────────────────
+function showStep(id) {
+    document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+}
+
+// ── Ripple ─────────────────────────────────────────────────────────────────
+document.addEventListener('click', e => {
+    const btn = e.target.closest('.btn-login, .btn-back, .btn-fallback');
+    if (!btn) return;
+    const r = document.createElement('span');
+    const d = Math.max(btn.clientWidth, btn.clientHeight);
+    r.style.cssText = `width:${d}px;height:${d}px;left:${e.clientX - btn.getBoundingClientRect().left - d/2}px;top:${e.clientY - btn.getBoundingClientRect().top - d/2}px;`;
+    r.className = 'ripple';
+    btn.style.position = 'relative'; btn.style.overflow = 'hidden';
+    btn.appendChild(r);
+    r.addEventListener('animationend', () => r.remove());
+});
+
+// ── Toggle password visibility ─────────────────────────────────────────────
+function togglePw() {
+    const inp = document.getElementById('password');
+    inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+function toggleFallbackPw() {
+    const inp = document.getElementById('fallbackPassword');
+    inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
+// ── Message helper ─────────────────────────────────────────────────────────
+function setMsg(id, text, type) {
+    const el = document.getElementById(id);
+    el.className = `msg ${type} show`;
+    el.innerHTML = `<span>${text}</span>`;
+}
+function clearMsg(id) { const el = document.getElementById(id); el.className = 'msg'; el.innerHTML = ''; }
+
+// ── Back to login ──────────────────────────────────────────────────────────
+function backToLogin() {
+    pendingToken = null; pendingUser = null; pendingCredentialId = null;
+    clearMsg('loginMsg'); clearMsg('bioMsg');
+    resetBioRing();
+    showStep('step-login');
+}
+
+// ── STEP 1: Submit Password Login ──────────────────────────────────────────
+async function submitLogin() {
+    const btn = document.getElementById('loginBtn');
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+    clearMsg('loginMsg');
+
+    if (!username || !password) {
+        setMsg('loginMsg', '⚠️ Please enter username and password', 'error'); return;
+    }
+
+    btn.classList.add('loading'); btn.disabled = true;
+
+    try {
+        const res = await fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password, device_id: deviceId })
         });
+        const data = await res.json();
 
-        // Create Magnetic Cursor Glow element
-        const glow = document.createElement('div');
-        glow.className = 'cursor-glow';
-        document.body.appendChild(glow);
-        document.addEventListener('mousemove', (e) => {
-            glow.style.left = `${e.clientX}px`;
-            glow.style.top = `${e.clientY}px`;
-        });
-
-        const safeStorage = {
-            getItem(key) {
-                try { return localStorage.getItem(key); } catch(e) { 
-                    try { return sessionStorage.getItem(key) || null; } catch(err) { return null; }
-                }
-            },
-            setItem(key, value) {
-                try { localStorage.setItem(key, value); } catch(e) { 
-                    try { sessionStorage.setItem(key, value); } catch(err) {}
-                }
-            }
-        };
-
-        let deviceId = '';
-        try {
-            deviceId = safeStorage.getItem('device_id');
-            if (!deviceId) {
-                deviceId = 'dev-' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-                safeStorage.setItem('device_id', deviceId);
-            }
-        } catch (e) {
-            deviceId = 'dev-fallback-' + Math.random().toString(36).substring(2, 15);
+        if (!data.success) {
+            setMsg('loginMsg', `❌ ${data.message || 'Invalid credentials'}`, 'error');
+            btn.classList.remove('loading'); btn.disabled = false;
+            return;
         }
 
-        document.getElementById('loginForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const btn = document.getElementById('loginBtn');
-            const msg = document.getElementById('msg');
-            btn.classList.add('loading');
-            msg.className = 'message';
+        // ── Student with biometric registered → go to step 2 ──────────────
+        if (data.user.role === 'student' && data.has_biometric) {
+            pendingToken = data.token;
+            pendingUser = data.user;
+            pendingCredentialId = data.biometric_credential_id;
+            currentUsername = data.user.username;
+            btn.classList.remove('loading'); btn.disabled = false;
+            launchBiometricStep();
+            return;
+        }
 
-            const username = document.getElementById('username').value.trim();
-            const password = document.getElementById('password').value;
+        // ── Student without biometric / All other roles → direct login ─────
+        completeLogin(data.token, data.user);
 
-            try {
-                const res = await fetch('/api/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password, device_id: deviceId })
-                });
-                const data = await res.json();
-                
-                if (data.success) {
-                    safeStorage.setItem('user', JSON.stringify(data.user));
-                    safeStorage.setItem('token', data.token); // Store secure JWT session token
-                    msg.classList.add('success');
-                    msg.innerText = 'Login successful! Redirecting...';
-                    setTimeout(() => {
-                        let targetPage = '';
-                        if (data.user.role === 'hod') {
-                            targetPage = 'hod.html';
-                        } else if (data.user.role === 'coordinator') {
-                            targetPage = 'coordinator.html';
-                        } else {
-                            targetPage = data.user.role === 'teacher' ? 'teacher.html' : 'student.html';
-                        }
-                        
-                        // Check if localStorage works, otherwise append credentials to URL for legacy Safari
-                        try {
-                            localStorage.setItem('__test', '1');
-                            localStorage.removeItem('__test');
-                            window.location.href = targetPage;
-                        } catch(e) {
-                            window.location.href = `${targetPage}?token=${encodeURIComponent(data.token)}&user=${encodeURIComponent(JSON.stringify(data.user))}`;
-                        }
-                    }, 600);
-                } else {
-                    msg.classList.add('error');
-                    msg.innerText = data.message;
-                }
-            } catch (err) {
-                msg.classList.add('error');
-                msg.innerText = 'Server error. Please try again.';
-            } finally {
-                btn.classList.remove('loading');
+    } catch (err) {
+        setMsg('loginMsg', '❌ Server error. Please try again.', 'error');
+        btn.classList.remove('loading'); btn.disabled = false;
+    }
+}
+
+// Allow Enter key on login form
+document.getElementById('username').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('password').focus(); });
+document.getElementById('password').addEventListener('keydown', e => { if (e.key === 'Enter') submitLogin(); });
+
+// ── STEP 2: Biometric Verification ────────────────────────────────────────
+function launchBiometricStep() {
+    document.getElementById('bioUsername').textContent = currentUsername;
+    document.getElementById('bioRetryBtn').style.display = 'none';
+    document.getElementById('bioFallbackBtn').style.display = 'none';
+    clearMsg('bioMsg');
+    resetBioRing();
+    setBioStatus('Verifying your identity', 'Touch the fingerprint sensor or look at the front camera\nto confirm it\'s you');
+    showStep('step-biometric');
+    // Auto-trigger after short delay so animation is visible
+    setTimeout(() => triggerBiometric(), 600);
+}
+
+function resetBioRing() {
+    const ring = document.getElementById('bioRing');
+    ring.classList.remove('success', 'error');
+    const spin = document.getElementById('bioRingSpin');
+    const spin2 = document.getElementById('bioRingSpin2');
+    spin.style.display = 'block'; spin2.style.display = 'block';
+    document.getElementById('bioIcon').textContent = '🔐';
+}
+
+function setBioStatus(title, hint) {
+    document.getElementById('bioStatusText').textContent = title;
+    document.getElementById('bioHint').innerHTML = hint.replace(/\n/g, '<br>');
+}
+
+async function triggerBiometric() {
+    const retryBtn = document.getElementById('bioRetryBtn');
+    const fallbackBtn = document.getElementById('bioFallbackBtn');
+    retryBtn.style.display = 'none';
+    fallbackBtn.style.display = 'none';
+    clearMsg('bioMsg');
+    resetBioRing();
+    setBioStatus('Verifying your identity…', 'Touch the fingerprint sensor or look at the front camera');
+
+    // Check WebAuthn support
+    if (!window.PublicKeyCredential) {
+        setBioStatus('Biometrics not supported', 'Your browser doesn\'t support WebAuthn. Use password instead.');
+        fallbackBtn.style.display = 'block';
+        return;
+    }
+
+    const challenge = new Uint8Array(32);
+    crypto.getRandomValues(challenge);
+
+    const allowCreds = [];
+    if (pendingCredentialId) {
+        const credBytes = base64urlToUint8Array(pendingCredentialId);
+        if (credBytes.length > 0) {
+            allowCreds.push({ type: 'public-key', id: credBytes });
+        }
+    }
+
+    try {
+        const assertion = await navigator.credentials.get({
+            publicKey: {
+                challenge,
+                allowCredentials: allowCreds,
+                userVerification: 'required',
+                timeout: 60000
             }
         });
-    </script>
+
+        // Got an assertion — now verify against server
+        const returnedCredId = arrayBufferToBase64url(assertion.rawId);
+        setBioStatus('Checking identity…', 'Please wait…');
+
+        const verifyRes = await fetch('/api/biometrics/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${pendingToken}` },
+            body: JSON.stringify({ credential_id: returnedCredId })
+        });
+        const verifyData = await verifyRes.json();
+
+        if (verifyData.success) {
+            // ✅ Biometric matched — grant access
+            document.getElementById('bioRing').classList.add('success');
+            document.getElementById('bioIcon').textContent = '✅';
+            setBioStatus('Identity verified!', 'Redirecting to your portal…');
+            setTimeout(() => completeLogin(pendingToken, pendingUser), 1200);
+        } else {
+            // ❌ Credential ID mismatch — BREACH
+            await reportBiometricBreach();
+        }
+
+    } catch (e) {
+        // User cancelled or WebAuthn timed out
+        const cancelled = e.name === 'NotAllowedError';
+        document.getElementById('bioRing').classList.add('error');
+        document.getElementById('bioIcon').textContent = '⚠️';
+
+        if (cancelled) {
+            setBioStatus('Verification cancelled', 'The biometric prompt was cancelled.\nTap "Try Again" or use your password.');
+        } else {
+            setBioStatus('Biometric failed', 'Could not complete verification.\nTap "Try Again" or use your password.');
+        }
+
+        retryBtn.style.display = 'block';
+        fallbackBtn.style.display = 'block';
+    }
+}
+
+// ── Breach Handler ─────────────────────────────────────────────────────────
+async function reportBiometricBreach() {
+    document.getElementById('bioRing').classList.add('error');
+    document.getElementById('bioIcon').textContent = '🚨';
+    setBioStatus('Security Alert!', 'Unrecognised biometric detected. Alerting HOD…');
+
+    // Collect device info for the alert
+    const deviceInfo = `${navigator.platform || ''} ${navigator.userAgent.substring(0, 80)}`.trim();
+
+    try {
+        await fetch('/api/alerts/biometric-breach', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: currentUsername, device_info: deviceInfo })
+        });
+    } catch {}
+
+    // Clear pending data — do NOT grant access
+    pendingToken = null;
+    pendingUser = null;
+    pendingCredentialId = null;
+
+    // Show breach screen after a moment
+    setTimeout(() => showStep('step-breach'), 1500);
+}
+
+// ── Password Fallback for biometric failures ───────────────────────────────
+function showPasswordFallback() {
+    document.getElementById('fallbackPassword').value = '';
+    clearMsg('fallbackMsg');
+    showStep('step-fallback');
+}
+
+async function submitFallback() {
+    const password = document.getElementById('fallbackPassword').value;
+    if (!password) { setMsg('fallbackMsg', '⚠️ Enter your password', 'error'); return; }
+
+    const btn = document.getElementById('fallbackBtn');
+    btn.classList.add('loading'); btn.disabled = true;
+
+    try {
+        const res = await fetch('/api/verify-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${pendingToken}` },
+            body: JSON.stringify({ password })
+        });
+        const data = await res.json();
+        btn.classList.remove('loading'); btn.disabled = false;
+
+        if (data.success) {
+            setMsg('fallbackMsg', '✅ Verified! Redirecting…', 'success');
+            setTimeout(() => completeLogin(pendingToken, pendingUser), 800);
+        } else {
+            setMsg('fallbackMsg', '❌ Incorrect password. Try again.', 'error');
+        }
+    } catch {
+        btn.classList.remove('loading'); btn.disabled = false;
+        setMsg('fallbackMsg', '❌ Server error. Try again.', 'error');
+    }
+}
+
+// ── Complete Login & Redirect ──────────────────────────────────────────────
+function completeLogin(token, user) {
+    safeStorage.setItem('token', token);
+    safeStorage.setItem('user', JSON.stringify(user));
+
+    const pages = { hod: 'hod.html', coordinator: 'coordinator.html', teacher: 'teacher.html', student: 'student.html' };
+    const target = pages[user.role] || 'index.html';
+
+    try {
+        localStorage.setItem('__t', '1'); localStorage.removeItem('__t');
+        window.location.href = target;
+    } catch {
+        window.location.href = `${target}?token=${encodeURIComponent(token)}&user=${encodeURIComponent(JSON.stringify(user))}`;
+    }
+}
+
+// ── PWA Service Worker cleanup (prevents stale caches) ─────────────────────
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(regs => {
+        regs.forEach(r => r.unregister());
+    });
+    if ('caches' in window) {
+        caches.keys().then(names => names.forEach(n => caches.delete(n)));
+    }
+}
+</script>
 </body>
 </html>

@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Student Portal | Smart Attendance</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap">
+    <!-- QR Scanner -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <!-- Barcode Generator -->
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+    <style>
+        :root {
+            --bg: #0a0b0f;
+            --surface: rgba(255,255,255,0.04);
+            --surface2: rgba(255,255,255,0.08);
+            --border: rgba(255,255,255,0.08);
+            --border2: rgba(255,255,255,0.15);
+            --accent: #6c63ff;
+            --accent2: #a78bfa;
+            --green: #10b981;
+            --red: #ef4444;
+            --yellow: #f59e0b;
+            --blue: #3b82f6;
+            --text: #f1f5f9;
+            --text2: #94a3b8;
+            --text3: #64748b;
+            --radius: 16px;
+            --radius-sm: 10px;
+            --glow: 0 0 40px rgba(108,99,255,0.15);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); overflow-x: hidden; }
+        
+        /* ── Background ── */
+        body::before {
+            content: '';
+            position: fixed; inset: 0; z-index: 0;
+            background: radial-gradient(ellipse 80% 50% at 20% 10%, rgba(108,99,255,0.12) 0%, transparent 60%),
+                        radial-gradient(ellipse 60% 40% at 80% 80%, rgba(16,185,129,0.08) 0%, transparent 60%);
+        }
+        
+        /* ── Layout ── */
+        #app { position: relative; z-index: 1; min-height: 100vh; display: flex; flex-direction: column; }
+        
+        /* ── Header ── */
+        .header {
+            background: rgba(10,11,15,0.85);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
+            padding: 0 20px;
+            display: flex; align-items: center; justify-content: space-between;
+            height: 64px; position: sticky; top: 0; z-index: 100;
+        }
+        .header-left { display: flex; align-items: center; gap: 12px; }
+        .header-logo {
+            width: 36px; height: 36px; border-radius: 10px;
+            background: linear-gradient(135deg, var(--accent), var(--accent2));
+            display: flex; align-items: center; justify-content: center;
+            font-size: 18px;
+        }
+        .header-title { font-weight: 700; font-size: 16px; }
+        .header-sub { font-size: 11px; color: var(--text2); margin-top: 1px; }
+        .header-right { display: flex; align-items: center; gap: 10px; }
+        .avatar {
+            width: 36px; height: 36px; border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent), var(--green));
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 700; font-size: 14px;
+        }
+        .btn-logout {
+            padding: 7px 14px; border-radius: 8px; font-size: 12px; font-weight: 600;
+            background: rgba(239,68,68,0.1); color: #ef4444;
+            border: 1px solid rgba(239,68,68,0.2); cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-logout:hover { background: rgba(239,68,68,0.2); }
+        
+        /* ── Nav Tabs ── */
+        .nav-tabs {
+            display: flex; gap: 0;
+            background: rgba(255,255,255,0.03);
+            border-bottom: 1px solid var(--border);
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+        .nav-tabs::-webkit-scrollbar { display: none; }
+        .nav-tab {
+            flex: 1; min-width: 80px; padding: 14px 10px;
+            text-align: center; cursor: pointer;
+            font-size: 11px; font-weight: 600; color: var(--text3);
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s; white-space: nowrap;
+            display: flex; flex-direction: column; align-items: center; gap: 4px;
+        }
+        .nav-tab .tab-icon { font-size: 18px; }
+        .nav-tab.active { color: var(--accent2); border-bottom-color: var(--accent); }
+        
+        /* ── Page Content ── */
+        .page { display: none; padding: 20px; max-width: 600px; margin: 0 auto; width: 100%; }
+        .page.active { display: block; }
+        
+        /* ── Cards ── */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+            margin-bottom: 16px;
+            backdrop-filter: blur(10px);
+        }
+        .card-title {
+            font-size: 13px; font-weight: 700; color: var(--text2);
+            text-transform: uppercase; letter-spacing: 0.5px;
+            margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
+        }
+        
+        /* ── Status Badge ── */
+        .badge {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+        }
+        .badge.green { background: rgba(16,185,129,0.15); color: var(--green); }
+        .badge.red { background: rgba(239,68,68,0.15); color: var(--red); }
+        .badge.yellow { background: rgba(245,158,11,0.15); color: var(--yellow); }
+        .badge.purple { background: rgba(108,99,255,0.15); color: var(--accent2); }
+        .badge.blue { background: rgba(59,130,246,0.15); color: var(--blue); }
+        .badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+        
+        /* ── Buttons ── */
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+            padding: 12px 20px; border-radius: 10px; font-size: 14px; font-weight: 600;
+            cursor: pointer; border: none; transition: all 0.2s; width: 100%;
+        }
+        .btn-primary { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: white; }
+        .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); box-shadow: 0 8px 20px rgba(108,99,255,0.3); }
+        .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border2); }
+        .btn-secondary:hover { background: rgba(255,255,255,0.12); }
+        .btn-green { background: linear-gradient(135deg, #10b981, #059669); color: white; }
+        .btn-green:hover { opacity: 0.9; transform: translateY(-1px); box-shadow: 0 8px 20px rgba(16,185,129,0.3); }
+        .btn-sm { padding: 8px 14px; font-size: 12px; border-radius: 8px; width: auto; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+        .btn .spinner-sm {
+            width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite;
+            display: none;
+        }
+        .btn.loading .btn-text { display: none; }
+        .btn.loading .spinner-sm { display: block; }
+        
+        /* ── Class Session Card ── */
+        .class-item {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 16px;
+            margin-bottom: 12px;
+            transition: border-color 0.2s;
+        }
+        .class-item:hover { border-color: var(--accent); }
+        .class-item-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+        .class-name { font-weight: 700; font-size: 15px; }
+        .class-meta { font-size: 12px; color: var(--text2); margin-top: 3px; }
+        .class-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        
+        /* ── Modal ── */
+        .modal-overlay {
+            position: fixed; inset: 0; z-index: 200;
+            background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
+            display: none; align-items: flex-end; justify-content: center;
+            padding: 0;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal {
+            background: #12131a;
+            border: 1px solid var(--border2);
+            border-radius: 24px 24px 0 0;
+            padding: 24px 20px 40px;
+            width: 100%; max-width: 600px;
+            max-height: 90vh; overflow-y: auto;
+            animation: slideUp 0.3s ease;
+        }
+        @keyframes slideUp { from { transform: translateY(100px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .modal-title { font-size: 17px; font-weight: 700; }
+        .modal-close {
+            width: 32px; height: 32px; border-radius: 50%;
+            background: var(--surface2); border: none; cursor: pointer;
+            color: var(--text2); font-size: 18px; display: flex;
+            align-items: center; justify-content: center;
+        }
+        
+        /* ── Method Options ── */
+        .method-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+        .method-btn {
+            padding: 16px 12px; border-radius: var(--radius-sm);
+            background: var(--surface2); border: 1px solid var(--border);
+            cursor: pointer; text-align: center; transition: all 0.2s;
+        }
+        .method-btn:hover, .method-btn.active { border-color: var(--accent); background: rgba(108,99,255,0.1); }
+        .method-btn .method-icon { font-size: 28px; margin-bottom: 6px; }
+        .method-btn .method-name { font-size: 12px; font-weight: 600; }
+        
+        /* ── QR Scanner ── */
+        #qr-reader { width: 100%; border-radius: var(--radius-sm); overflow: hidden; }
+        
+        /* ── Profile / Barcode ── */
+        .profile-header {
+            display: flex; align-items: center; gap: 16px;
+            padding: 20px; background: linear-gradient(135deg, rgba(108,99,255,0.15), rgba(16,185,129,0.1));
+            border-radius: var(--radius); border: 1px solid var(--border); margin-bottom: 16px;
+        }
+        .profile-avatar {
+            width: 64px; height: 64px; border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent), var(--green));
+            display: flex; align-items: center; justify-content: center;
+            font-size: 28px; font-weight: 800; flex-shrink: 0;
+        }
+        .profile-name { font-size: 20px; font-weight: 700; }
+        .profile-role { font-size: 12px; color: var(--accent2); font-weight: 600; margin-top: 2px; }
+        .profile-id { font-size: 11px; color: var(--text2); margin-top: 4px; font-family: monospace; }
+        
+        .barcode-box {
+            background: white; border-radius: var(--radius-sm);
+            padding: 20px; text-align: center; margin-bottom: 12px;
+        }
+        .barcode-box svg { max-width: 100%; height: auto; }
+        .barcode-id { font-size: 13px; color: #333; margin-top: 8px; font-weight: 600; font-family: monospace; }
+        
+        /* ── Input Field ── */
+        .form-group { margin-bottom: 14px; }
+        .form-label { font-size: 12px; font-weight: 600; color: var(--text2); margin-bottom: 6px; display: block; }
+        .form-input {
+            width: 100%; padding: 12px 14px; border-radius: 10px;
+            background: var(--surface2); border: 1px solid var(--border);
+            color: var(--text); font-size: 14px; font-family: 'Inter', sans-serif;
+            transition: border-color 0.2s;
+        }
+        .form-input:focus { outline: none; border-color: var(--accent); }
+        
+        /* ── GPS Pin ── */
+        .gps-status {
+            display: flex; align-items: center; gap: 12px;
+            padding: 14px; border-radius: 10px;
+            background: rgba(16,185,129,0.05); border: 1px solid rgba(16,185,129,0.15);
+            margin-bottom: 14px;
+        }
+        .gps-icon { font-size: 24px; }
+        .gps-label { font-size: 12px; font-weight: 600; color: var(--green); }
+        .gps-coords { font-size: 11px; color: var(--text2); margin-top: 2px; font-family: monospace; }
+        
+        /* ── Toast ── */
+        .toast-container { position: fixed; top: 80px; right: 16px; z-index: 500; display: flex; flex-direction: column; gap: 8px; }
+        .toast {
+            padding: 12px 16px; border-radius: 10px; font-size: 13px; font-weight: 600;
+            display: flex; align-items: center; gap: 10px;
+            animation: toastIn 0.3s ease; max-width: 300px;
+            border: 1px solid;
+        }
+        .toast.success { background: rgba(16,185,129,0.15); border-color: rgba(16,185,129,0.3); color: var(--green); }
+        .toast.error { background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.3); color: var(--red); }
+        .toast.info { background: rgba(59,130,246,0.15); border-color: rgba(59,130,246,0.3); color: var(--blue); }
+        @keyframes toastIn { from { transform: translateX(100px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        
+        /* ── Empty State ── */
+        .empty-state { text-align: center; padding: 40px 20px; }
+        .empty-icon { font-size: 48px; margin-bottom: 12px; opacity: 0.5; }
+        .empty-title { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+        .empty-sub { font-size: 13px; color: var(--text2); }
+        
+        /* ── Divider ── */
+        .divider { display: flex; align-items: center; gap: 10px; margin: 16px 0; }
+        .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+        .divider span { font-size: 11px; color: var(--text3); font-weight: 600; }
+        
+        /* ── Loading overlay ── */
+        #page-loader {
+            position: fixed; inset: 0; z-index: 999;
+            background: var(--bg); display: flex; align-items: center; justify-content: center;
+            flex-direction: column; gap: 16px;
+        }
+        .loader-ring {
+            width: 48px; height: 48px; border-radius: 50%;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        /* ── Pull indicator ── */
+        .pulse-dot {
+            display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+            background: var(--green); animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(0.8); } }
+        
+        /* ── Distance meter ── */
+        .distance-meter { margin-bottom: 14px; }
+        .distance-bar { height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; margin-top: 8px; }
+        .distance-fill { height: 100%; border-radius: 3px; transition: width 0.5s, background 0.3s; }
+
+        /* ── Biometric Banner (onboarding) ── */
+        .bio-required-banner {
+            background: linear-gradient(135deg, rgba(108,99,255,0.12), rgba(167,139,250,0.08));
+            border: 1px solid rgba(108,99,255,0.3);
+            border-radius: var(--radius); padding: 16px;
+            margin-bottom: 16px; display: flex; gap: 14px;
+            align-items: flex-start;
+        }
+        .bio-banner-icon { font-size: 28px; flex-shrink: 0; }
+        .bio-banner-title { font-size: 14px; font-weight: 700; color: var(--accent2); margin-bottom: 4px; }
+        .bio-banner-desc { font-size: 12px; color: var(--text2); line-height: 1.5; }
+        .bio-status-registered {
+            display: flex; align-items: center; gap: 12px; padding: 14px;
+            background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.2);
+            border-radius: 10px;
+        }
+        .bio-status-locked {
+            display: flex; align-items: center; gap: 12px; padding: 14px;
+            background: rgba(239,68,68,0.06); border: 1px dashed rgba(239,68,68,0.3);
+            border-radius: 10px; margin-bottom: 12px;
+        }
+        .bio-lock-info { font-size: 11px; color: var(--text2); margin-top: 10px; line-height: 1.6;
+            padding: 10px; background: rgba(255,255,255,0.03); border-radius: 8px; }
+
+        @media (max-width: 400px) {
+            .method-grid { grid-template-columns: 1fr 1fr; }
+            .page { padding: 14px; }
+        }
+    </style>
+</head>
+<body>
+<div id="page-loader">
+    <div style="font-size:32px">🎓</div>
+    <div class="loader-ring"></div>
+    <div style="font-size:13px;color:var(--text2);">Loading portal...</div>
+</div>
+
+<div id="app" style="display:none;">
+    <!-- ── Header ── -->
+    <header class="header">
+        <div class="header-left">
+            <div class="header-logo">🎓</div>
+            <div>
+                <div class="header-title">Student Portal</div>
+                <div class="header-sub">Smart Attendance System</div>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="avatar" id="userAvatar">S</div>
+            <button class="btn-logout" onclick="logout()" id="logoutBtn">Sign Out</button>
+        </div>
+    </header>
+
+    <!-- ── Nav Tabs ── -->
+    <nav class="nav-tabs">
+        <div class="nav-tab active" onclick="switchTab('attend')" id="tab-attend">
+            <span class="tab-icon">📍</span> Attendance
+        </div>
+        <div class="nav-tab" onclick="switchTab('profile')" id="tab-profile">
+            <span class="tab-icon">🪪</span> My Card
+        </div>
+        <div class="nav-tab" onclick="switchTab('history')" id="tab-history">
+            <span class="tab-icon">📋</span> History
+        </div>
+    </nav>
+
+    <!-- ── Toast Container ── -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- ═══ PAGE: ATTENDANCE ═══ -->
+    <div class="page active" id="page-attend">
+        <!-- Biometric registration reminder (shown only if not registered) -->
+        <div class="bio-required-banner" id="bioRequiredBanner" style="display:none;">
+            <div class="bio-banner-icon">🔐</div>
+            <div>
+                <div class="bio-banner-title">Register Biometrics to Secure Your Account</div>
+                <div class="bio-banner-desc">
+                    Your account does not have a registered fingerprint or Face ID yet.<br>
+                    Once registered, <strong style="color:var(--accent2);">only your biometric</strong> can access this account.
+                    Any other attempt will be <strong style="color:var(--red);">blocked and reported</strong> to your HOD.
+                </div>
+                <button class="btn btn-primary btn-sm" onclick="switchTab('profile')" style="margin-top:10px;width:auto;">
+                    🔐 Register Now →
+                </button>
+            </div>
+        </div>
+        <!-- Campus status -->
+        <div class="card" id="campusCard" style="display:none;">
+            <div class="card-title">📡 Campus Tracking</div>
+            <div id="campusStatusContent"></div>
+        </div>
+
+        <!-- Active classes -->
+        <div class="card">
+            <div class="card-title" style="margin-bottom:12px;">
+                🏫 Active Class Sessions
+                <span class="pulse-dot" style="margin-left:auto;"></span>
+            </div>
+            <div id="classesList">
+                <div class="empty-state">
+                    <div class="empty-icon">⏳</div>
+                    <div class="empty-title">Loading sessions...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pass info -->
+        <div id="passCard" style="display:none;" class="card">
+            <div class="card-title">🎫 Active Out-Pass</div>
+            <div id="passInfo"></div>
+        </div>
+    </div>
+
+    <!-- ═══ PAGE: PROFILE / CARD ═══ -->
+    <div class="page" id="page-profile">
+        <div id="profileHeader" class="profile-header">
+            <div class="profile-avatar" id="profileAvatar">S</div>
+            <div>
+                <div class="profile-name" id="profileName">Student</div>
+                <div class="profile-role">Student Account</div>
+                <div class="profile-id" id="profileId">ID: —</div>
+            </div>
+        </div>
+
+        <!-- Device Status -->
+        <div class="card">
+            <div class="card-title">📱 Device Registration</div>
+            <div id="deviceStatus"></div>
+        </div>
+
+        <!-- Barcode Card -->
+        <div class="card">
+            <div class="card-title">🔖 Student Barcode ID</div>
+            <div id="barcodeSection">
+                <div class="barcode-box" id="barcodeBox">
+                    <div style="color:#999;font-size:13px;padding:20px;">No barcode registered</div>
+                </div>
+                <div class="form-group" style="margin-top:14px;">
+                    <label class="form-label">Update Barcode ID</label>
+                    <div style="display:flex;gap:8px;">
+                        <input type="text" class="form-input" id="barcodeInput" placeholder="e.g. STU001" style="flex:1;">
+                        <button class="btn btn-primary btn-sm" onclick="updateBarcode()" id="barcodeBtn" style="width:auto;white-space:nowrap;">
+                            <span class="btn-text">Update</span>
+                            <div class="spinner-sm"></div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Biometric Card -->
+        <div class="card">
+            <div class="card-title">🔐 Biometric Authentication</div>
+            <div id="biometricSection">
+                <div class="empty-state"><div class="loader-ring" style="margin:0 auto;"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══ PAGE: HISTORY ═══ -->
+    <div class="page" id="page-history">
+        <div class="card">
+            <div class="card-title">📅 Attendance History</div>
+            <div id="historyList">
+                <div class="empty-state">
+                    <div class="empty-icon">📋</div>
+                    <div class="empty-title">Loading history...</div>
+                    <div class="empty-sub">Your attendance records will appear here</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ MODAL: MARK ATTENDANCE ═══ -->
+<div class="modal-overlay" id="attendModal">
+    <div class="modal">
+        <div class="modal-header">
+            <div class="modal-title" id="attendModalTitle">Mark Attendance</div>
+            <button class="modal-close" onclick="closeAttendModal()">✕</button>
+        </div>
+
+        <!-- Method Selection -->
+        <div id="methodSelect">
+            <p style="font-size:13px;color:var(--text2);margin-bottom:16px;">Choose how to mark your attendance:</p>
+            <div class="method-grid">
+                <div class="method-btn" onclick="selectMethod('gps')" id="method-gps">
+                    <div class="method-icon">📍</div>
+                    <div class="method-name">GPS Location</div>
+                </div>
+                <div class="method-btn" onclick="selectMethod('qr')" id="method-qr">
+                    <div class="method-icon">📷</div>
+                    <div class="method-name">Scan QR Code</div>
+                </div>
+                <div class="method-btn" onclick="selectMethod('otp')" id="method-otp">
+                    <div class="method-icon">🔑</div>
+                    <div class="method-name">Enter OTP</div>
+                </div>
+                <div class="method-btn" onclick="selectMethod('manual')" id="method-manual">
+                    <div class="method-icon">✋</div>
+                    <div class="method-name">Request Approval</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- GPS Method -->
+        <div id="panel-gps" style="display:none;">
+            <div class="gps-status" id="gpsStatus">
+                <div class="gps-icon">📡</div>
+                <div>
+                    <div class="gps-label">Fetching location...</div>
+                    <div class="gps-coords" id="gpsCoords">Please allow location access</div>
+                </div>
+            </div>
+            <div class="distance-meter" id="distanceMeter" style="display:none;">
+                <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);">
+                    <span>Distance from classroom</span>
+                    <span id="distanceLabel">—</span>
+                </div>
+                <div class="distance-bar">
+                    <div class="distance-fill" id="distanceFill" style="width:0%;background:var(--green);"></div>
+                </div>
+            </div>
+            <button class="btn btn-green" onclick="markByGPS()" id="gpsMarkBtn">
+                <span class="btn-text">📍 Mark with GPS</span>
+                <div class="spinner-sm"></div>
+            </button>
+        </div>
+
+        <!-- QR Method -->
+        <div id="panel-qr" style="display:none;">
+            <p style="font-size:13px;color:var(--text2);margin-bottom:14px;">Point camera at the QR code shown by your teacher:</p>
+            <div id="qr-reader"></div>
+            <div id="qrResult" style="margin-top:12px;"></div>
+        </div>
+
+        <!-- OTP Method -->
+        <div id="panel-otp" style="display:none;">
+            <p style="font-size:13px;color:var(--text2);margin-bottom:14px;">Enter the OTP provided by your teacher:</p>
+            <div class="form-group">
+                <label class="form-label">4-Digit OTP Code</label>
+                <input type="number" class="form-input" id="otpInput" placeholder="Enter OTP" maxlength="4" style="letter-spacing:8px;font-size:22px;text-align:center;">
+            </div>
+            <button class="btn btn-primary" onclick="markByOTP()" id="otpMarkBtn">
+                <span class="btn-text">🔑 Verify & Mark</span>
+                <div class="spinner-sm"></div>
+            </button>
+        </div>
+
+        <!-- Manual Method -->
+        <div id="panel-manual" style="display:none;">
+            <p style="font-size:13px;color:var(--text2);margin-bottom:14px;">Send a manual attendance request to your teacher for approval.</p>
+            <div class="gps-status" id="manualGpsStatus">
+                <div class="gps-icon">📍</div>
+                <div>
+                    <div class="gps-label" id="manualGpsLabel">Fetching your location...</div>
+                    <div class="gps-coords" id="manualGpsCoords">This helps the teacher verify your position</div>
+                </div>
+            </div>
+            <button class="btn btn-secondary" onclick="sendManualRequest()" id="manualSendBtn">
+                <span class="btn-text">📤 Send Request to Teacher</span>
+                <div class="spinner-sm"></div>
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+const safeStorage = {
+    getItem(k) { try { return localStorage.getItem(k); } catch { try { return sessionStorage.getItem(k); } catch { return null; } } },
+    setItem(k, v) { try { localStorage.setItem(k, v); } catch { try { sessionStorage.setItem(k, v); } catch {} } },
+    removeItem(k) { try { localStorage.removeItem(k); } catch { try { sessionStorage.removeItem(k); } catch {} } }
+};
+
+let currentUser = null;
+let authToken = null;
+let activeClassId = null;
+let userLat = null;
+let userLng = null;
+let qrScanner = null;
+let heartbeatInterval = null;
+let classRefreshInterval = null;
+
+// ── Auth & Init ────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', async () => {
+    // Try to get token from URL params (legacy Safari fallback)
+    const params = new URLSearchParams(window.location.search);
+    const urlToken = params.get('token');
+    const urlUser = params.get('user');
+    if (urlToken) { safeStorage.setItem('token', urlToken); }
+    if (urlUser) { try { safeStorage.setItem('user', urlUser); } catch {} }
+
+    authToken = safeStorage.getItem('token');
+    try { currentUser = JSON.parse(safeStorage.getItem('user')); } catch {}
+
+    if (!authToken || !currentUser || currentUser.role !== 'student') {
+        window.location.href = 'index.html';
+        return;
+    }
+
+    // Init UI
+    document.getElementById('userAvatar').textContent = currentUser.username.charAt(0).toUpperCase();
+    document.getElementById('profileAvatar').textContent = currentUser.username.charAt(0).toUpperCase();
+    document.getElementById('profileName').textContent = currentUser.username;
+    document.getElementById('profileId').textContent = `User ID: ${currentUser.id}`;
+
+    hidePage();
+    await loadClasses();
+    loadProfile();
+    startHeartbeat();
+    startClassRefresh();
+
+    document.getElementById('page-loader').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    document.getElementById('app').style.flexDirection = 'column';
+});
+
+function hidePage() {}
+
+function api(endpoint, method = 'GET', body = null) {
+    const opts = {
+        method,
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` }
+    };
+    if (body) opts.body = JSON.stringify(body);
+    return fetch(endpoint, opts).then(async r => {
+        const data = await r.json();
+        if (r.status === 401 || r.status === 403) {
+            if (data.message && data.message.includes('expired')) { handleSessionExpiry(); }
+        }
+        return { status: r.status, ...data };
+    });
+}
+
+function handleSessionExpiry() {
+    showToast('Session expired. Please login again.', 'error');
+    setTimeout(() => logout(true), 2000);
+}
+
+async function logout(silent = false) {
+    const btn = document.getElementById('logoutBtn');
+    if (btn) btn.textContent = '...';
+    try { await api('/api/logout', 'POST'); } catch {}
+    clearInterval(heartbeatInterval);
+    clearInterval(classRefreshInterval);
+    if (qrScanner) { try { await qrScanner.stop(); } catch {} }
+    safeStorage.removeItem('token');
+    safeStorage.removeItem('user');
+    window.location.href = 'index.html';
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────────
+function showToast(msg, type = 'info', duration = 3500) {
+    const icons = { success: '✅', error: '❌', info: 'ℹ️' };
+    const el = document.createElement('div');
+    el.className = `toast ${type}`;
+    el.innerHTML = `<span>${icons[type]}</span><span>${msg}</span>`;
+    document.getElementById('toastContainer').appendChild(el);
+    setTimeout(() => { el.style.opacity = '0'; el.style.transform = 'translateX(100px)'; el.style.transition = 'all 0.3s'; setTimeout(() => el.remove(), 300); }, duration);
+}
+
+// ── Tabs ──────────────────────────────────────────────────────────────────
+function switchTab(tab) {
+    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById(`tab-${tab}`).classList.add('active');
+    document.getElementById(`page-${tab}`).classList.add('active');
+    if (tab === 'history') loadHistory();
+    if (tab === 'profile') loadProfile();
+    if (tab === 'attend') loadClasses();
+}
+
+// ── Classes ────────────────────────────────────────────────────────────────
+async function loadClasses() {
+    const container = document.getElementById('classesList');
+    try {
+        const data = await api('/api/active-classes');
+        const classes = data.classes || [];
+        if (classes.length === 0) {
+            container.innerHTML = `<div class="empty-state"><div class="empty-icon">🏫</div><div class="empty-title">No active sessions</div><div class="empty-sub">Your teacher hasn't started a class session yet</div></div>`;
+            return;
+        }
+        container.innerHTML = classes.map(cls => {
+            const isPresent = cls.attendance_status === 'present';
+            const isPending = cls.attendance_status === 'pending';
+            return `<div class="class-item">
+                <div class="class-item-header">
+                    <div>
+                        <div class="class-name">${cls.name}</div>
+                        <div class="class-meta">Radius: ${cls.radius > 0 ? cls.radius + 'm' : 'Disabled'}</div>
+                    </div>
+                    <div>
+                        ${isPresent ? '<span class="badge green">✓ Present</span>' :
+                          isPending ? '<span class="badge yellow">⏳ Pending</span>' :
+                          '<span class="badge red">Absent</span>'}
+                    </div>
+                </div>
+                <div class="class-actions">
+                    ${!isPresent ? `<button class="btn btn-green btn-sm" onclick="openAttendModal(${cls.id}, '${cls.name}', ${cls.latitude}, ${cls.longitude}, ${cls.radius})">
+                        📍 Mark Attendance
+                    </button>` : ''}
+                </div>
+            </div>`;
+        }).join('');
+    } catch (e) {
+        container.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-title">Failed to load sessions</div></div>`;
+    }
+}
+
+function startClassRefresh() {
+    classRefreshInterval = setInterval(loadClasses, 30000);
+}
+
+// ── Profile ────────────────────────────────────────────────────────────────
+async function loadProfile() {
+    // Device status
+    const devEl = document.getElementById('deviceStatus');
+    const storedDeviceId = safeStorage.getItem('device_id') || 'Unknown';
+    devEl.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:10px;background:rgba(16,185,129,0.05);border-radius:8px;border:1px solid rgba(16,185,129,0.15);">
+        <span style="font-size:20px;">📱</span>
+        <div>
+            <div style="font-size:12px;font-weight:700;color:var(--green);">Device Registered</div>
+            <div style="font-size:11px;color:var(--text2);">This account is locked to this specific device</div>
+            <div style="font-size:10px;color:var(--text3);font-family:monospace;margin-top:2px;">${storedDeviceId.substring(0,28)}…</div>
+        </div>
+    </div>`;
+
+    // Barcode
+    try {
+        const barcode = currentUser.barcode;
+        if (barcode) {
+            document.getElementById('barcodeInput').value = barcode;
+            renderBarcode(barcode);
+        }
+    } catch {}
+
+    // Biometrics
+    await loadBiometrics();
+}
+
+function renderBarcode(code) {
+    const box = document.getElementById('barcodeBox');
+    box.innerHTML = `<svg id="barcodeSvg"></svg><div class="barcode-id">${code}</div>`;
+    try {
+        JsBarcode('#barcodeSvg', code, {
+            format: 'CODE128', width: 2, height: 80,
+            displayValue: false, background: 'white', lineColor: '#000'
+        });
+    } catch (e) {
+        box.innerHTML = `<div style="color:#999;font-size:13px;padding:20px;">Barcode: ${code}</div>`;
+    }
+}
+
+async function updateBarcode() {
+    const input = document.getElementById('barcodeInput').value.trim();
+    if (!input) { showToast('Enter a barcode ID', 'error'); return; }
+    const btn = document.getElementById('barcodeBtn');
+    btn.classList.add('loading'); btn.disabled = true;
+    const data = await api('/api/update-barcode', 'POST', { barcode: input });
+    btn.classList.remove('loading'); btn.disabled = false;
+    if (data.success) {
+        showToast('Barcode updated!', 'success');
+        currentUser.barcode = input;
+        safeStorage.setItem('user', JSON.stringify(currentUser));
+        renderBarcode(input);
+    } else {
+        showToast(data.message || 'Failed to update barcode', 'error');
+    }
+}
+
+async function loadBiometrics() {
+    const el = document.getElementById('biometricSection');
+    const banner = document.getElementById('bioRequiredBanner');
+    el.innerHTML = `<div style="text-align:center;padding:10px;"><div class="loader-ring" style="margin:0 auto;"></div></div>`;
+
+    const data = await api('/api/biometrics/device-id');
+    const registered = data.device_biometric_id;
+
+    if (registered) {
+        // ─ REGISTERED STATE ─
+        banner.style.display = 'none';
+        const credShort = registered.substring(0, 20);
+        el.innerHTML = `
+            <div class="bio-status-registered">
+                <span style="font-size:28px;">✅</span>
+                <div>
+                    <div style="font-size:13px;font-weight:700;color:var(--green);">Biometric Bound to This Device</div>
+                    <div style="font-size:11px;color:var(--text2);margin-top:2px;font-family:monospace;">${credShort}…</div>
+                </div>
+            </div>
+            <div class="bio-lock-info">
+                🔒 <strong>Device-locked security is active.</strong><br>
+                Your fingerprint or Face ID is the only biometric that can access this account.
+                Any attempt using a <strong>different fingerprint or face</strong> will be <strong>blocked</strong> and
+                a security alert will be sent automatically to your <strong>HOD and Coordinator</strong>.
+            </div>
+            <div style="margin-top:12px;">
+                <div style="font-size:11px;color:var(--text3);margin-bottom:6px;font-weight:600;">RESET BINDING</div>
+                <p style="font-size:12px;color:var(--text2);margin-bottom:8px;">If your biometrics have changed (e.g., new fingerprint enrolled), visit your HOD to reset the binding. You cannot reset it yourself — this prevents unauthorised removal.</p>
+            </div>
+        `;
+    } else {
+        // ─ NOT REGISTERED STATE ─
+        banner.style.display = 'flex';
+        el.innerHTML = `
+            <div class="bio-status-locked" style="margin-bottom:14px;">
+                <span style="font-size:28px;">⚠️</span>
+                <div>
+                    <div style="font-size:13px;font-weight:700;color:var(--red);">No Biometric Registered</div>
+                    <div style="font-size:11px;color:var(--text2);">Your account is not yet biometrically protected</div>
+                </div>
+            </div>
+            <div class="bio-lock-info" style="margin-bottom:14px;">
+                🔓 Without a registered biometric, your account relies only on your password.
+                Register your fingerprint or Face ID below to enable full security.
+                Once registered, <strong style="color:var(--accent2);">only you</strong> can log in — any mismatch triggers an <strong style="color:var(--red);">HOD alert</strong>.
+            </div>
+            <p style="font-size:13px;color:var(--text2);margin-bottom:14px;">Register your fingerprint or Face ID now:</p>
+            <button class="btn btn-primary" onclick="registerBiometrics()" id="bioRegBtn">
+                <span class="btn-text">🔐 Register Biometrics Now</span>
+                <div class="spinner-sm"></div>
+            </button>
+        `;
+    }
+}
+
+async function registerBiometrics() {
+    if (!window.PublicKeyCredential) {
+        showToast('Biometrics not supported on this browser', 'error'); return;
+    }
+    const btn = document.getElementById('bioRegBtn');
+    if (btn) { btn.classList.add('loading'); btn.disabled = true; }
+    try {
+        const challenge = new Uint8Array(32);
+        crypto.getRandomValues(challenge);
+        const credential = await navigator.credentials.create({
+            publicKey: {
+                challenge, rp: { name: 'SmartAttendance', id: window.location.hostname },
+                user: { id: new TextEncoder().encode(currentUser.id.toString()), name: currentUser.username, displayName: currentUser.username },
+                pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
+                authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required' },
+                timeout: 60000
+            }
+        });
+        const credId = btoa(String.fromCharCode(...new Uint8Array(credential.rawId))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+        const res = await api('/api/biometrics/register', 'POST', { credential_id: credId });
+        if (res.success) { showToast('Biometrics registered!', 'success'); loadBiometrics(); }
+        else showToast(res.message || 'Registration failed', 'error');
+    } catch (e) {
+        showToast('Biometric registration cancelled or failed', 'error');
+    }
+    if (btn) { btn.classList.remove('loading'); btn.disabled = false; }
+}
+
+// ── Heartbeat ──────────────────────────────────────────────────────────────
+function startHeartbeat() {
+    const beat = () => api('/api/student/heartbeat', 'POST');
+    beat();
+    heartbeatInterval = setInterval(beat, 60000);
+}
+
+// ── History ────────────────────────────────────────────────────────────────
+async function loadHistory() {
+    const el = document.getElementById('historyList');
+    el.innerHTML = `<div class="empty-state"><div class="loader-ring" style="margin:0 auto;"></div></div>`;
+    // Fetch all classes (active + inactive) to show attendance
+    const data = await api('/api/active-classes');
+    const classes = data.classes || [];
+    if (classes.length === 0) {
+        el.innerHTML = `<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">No records yet</div><div class="empty-sub">Your attendance history will appear here</div></div>`;
+        return;
+    }
+    el.innerHTML = classes.map(cls => {
+        const statusMap = { present: { badge: 'green', label: '✓ Present' }, pending: { badge: 'yellow', label: '⏳ Pending' }, null: { badge: 'red', label: '✗ Absent' }, undefined: { badge: 'red', label: '✗ Absent' } };
+        const s = statusMap[cls.attendance_status] || { badge: 'red', label: '✗ Absent' };
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:12px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);margin-bottom:8px;">
+            <div>
+                <div style="font-size:14px;font-weight:600;">${cls.name}</div>
+                <div style="font-size:11px;color:var(--text2);">Active Session</div>
+            </div>
+            <span class="badge ${s.badge}">${s.label}</span>
+        </div>`;
+    }).join('');
+}
+
+// ── Attend Modal ───────────────────────────────────────────────────────────
+let modalClassLat = null, modalClassLng = null, modalClassRadius = null, modalClassName = '';
+
+function openAttendModal(classId, name, lat, lng, radius) {
+    activeClassId = classId;
+    modalClassLat = lat; modalClassLng = lng; modalClassRadius = radius;
+    modalClassName = name;
+    document.getElementById('attendModalTitle').textContent = name;
+    // Reset panels
+    document.querySelectorAll('[id^="panel-"]').forEach(p => p.style.display = 'none');
+    document.getElementById('methodSelect').style.display = 'block';
+    document.querySelectorAll('.method-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('attendModal').classList.add('active');
+    // Stop any active scanner
+    if (qrScanner) { try { qrScanner.stop(); } catch {} qrScanner = null; }
+}
+
+function closeAttendModal() {
+    document.getElementById('attendModal').classList.remove('active');
+    if (qrScanner) { try { qrScanner.stop(); } catch {} qrScanner = null; }
+}
+
+function selectMethod(method) {
+    document.querySelectorAll('.method-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(`method-${method}`).classList.add('active');
+    document.querySelectorAll('[id^="panel-"]').forEach(p => p.style.display = 'none');
+    document.getElementById(`panel-${method}`).style.display = 'block';
+
+    if (method === 'gps') initGPS();
+    if (method === 'qr') initQRScanner();
+    if (method === 'manual') initManualGPS();
+}
+
+// ── GPS ────────────────────────────────────────────────────────────────────
+function initGPS() {
+    const statusEl = document.getElementById('gpsStatus');
+    const coordsEl = document.getElementById('gpsCoords');
+    const label = statusEl.querySelector('.gps-label');
+    statusEl.style.borderColor = 'rgba(245,158,11,0.3)';
+    statusEl.style.background = 'rgba(245,158,11,0.05)';
+    label.style.color = 'var(--yellow)';
+    label.textContent = 'Getting your location...';
+    coordsEl.textContent = 'Please allow location access';
+    document.getElementById('distanceMeter').style.display = 'none';
+    document.getElementById('gpsMarkBtn').disabled = true;
+
+    if (!navigator.geolocation) {
+        label.textContent = 'GPS not supported';
+        label.style.color = 'var(--red)';
+        return;
+    }
+    navigator.geolocation.getCurrentPosition(pos => {
+        userLat = pos.coords.latitude;
+        userLng = pos.coords.longitude;
+        const acc = Math.round(pos.coords.accuracy);
+        coordsEl.textContent = `Lat: ${userLat.toFixed(5)}, Lng: ${userLng.toFixed(5)} (±${acc}m)`;
+        label.textContent = 'Location acquired!';
+        label.style.color = 'var(--green)';
+        statusEl.style.borderColor = 'rgba(16,185,129,0.3)';
+        statusEl.style.background = 'rgba(16,185,129,0.05)';
+        document.getElementById('gpsMarkBtn').disabled = false;
+
+        // Show distance
+        if (modalClassLat && modalClassRadius > 0) {
+            const dist = Math.round(getDistance(userLat, userLng, modalClassLat, modalClassLng));
+            const pct = Math.min(100, (dist / (modalClassRadius * 2)) * 100);
+            document.getElementById('distanceMeter').style.display = 'block';
+            document.getElementById('distanceLabel').textContent = `${dist}m / ${modalClassRadius}m limit`;
+            const fill = document.getElementById('distanceFill');
+            fill.style.width = pct + '%';
+            fill.style.background = dist <= modalClassRadius ? 'var(--green)' : 'var(--red)';
+        }
+    }, () => {
+        label.textContent = 'Location denied';
+        label.style.color = 'var(--red)';
+    }, { enableHighAccuracy: true, timeout: 10000 });
+}
+
+function getDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371000;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+async function markByGPS() {
+    if (!userLat || !userLng) { showToast('Location not acquired yet', 'error'); return; }
+    const btn = document.getElementById('gpsMarkBtn');
+    btn.classList.add('loading'); btn.disabled = true;
+    const data = await api('/api/mark-attendance', 'POST', {
+        class_id: activeClassId, latitude: userLat, longitude: userLng, accuracy: 20
+    });
+    btn.classList.remove('loading'); btn.disabled = false;
+    if (data.success) {
+        showToast(data.message || 'Attendance marked!', 'success');
+        closeAttendModal();
+        loadClasses();
+    } else if (data.attendance_locked) {
+        showToast('⚠️ Your account is locked. Visit your HOD.', 'error', 5000);
+        closeAttendModal();
+    } else {
+        showToast(data.message || 'Failed to mark attendance', 'error');
+    }
+}
+
+// ── QR Scanner ─────────────────────────────────────────────────────────────
+function initQRScanner() {
+    const panel = document.getElementById('panel-qr');
+    panel.style.display = 'block';
+    document.getElementById('qrResult').innerHTML = '';
+    setTimeout(() => {
+        try {
+            qrScanner = new Html5Qrcode('qr-reader');
+            qrScanner.start(
+                { facingMode: 'environment' },
+                { fps: 10, qrbox: { width: 250, height: 250 } },
+                (decodedText) => {
+                    qrScanner.stop().then(() => { qrScanner = null; submitQR(decodedText); });
+                },
+                () => {}
+            ).catch(e => {
+                document.getElementById('qr-reader').innerHTML = `<div style="padding:20px;text-align:center;color:var(--red);">Camera access denied. Please allow camera in browser settings.</div>`;
+            });
+        } catch (e) {
+            document.getElementById('qr-reader').innerHTML = `<div style="padding:20px;text-align:center;color:var(--red);">QR Scanner not available.</div>`;
+        }
+    }, 100);
+}
+
+async function submitQR(token) {
+    const resEl = document.getElementById('qrResult');
+    resEl.innerHTML = `<div class="badge yellow">🔄 Verifying QR...</div>`;
+    if (!userLat) {
+        navigator.geolocation.getCurrentPosition(async pos => {
+            userLat = pos.coords.latitude; userLng = pos.coords.longitude;
+            await doQRSubmit(token, resEl);
+        }, async () => { await doQRSubmit(token, resEl); });
+    } else {
+        await doQRSubmit(token, resEl);
+    }
+}
+
+async function doQRSubmit(token, resEl) {
+    const data = await api('/api/mark-attendance', 'POST', {
+        class_id: activeClassId, latitude: userLat || 0, longitude: userLng || 0, qr_token: token, accuracy: 20
+    });
+    if (data.success) {
+        resEl.innerHTML = `<div class="badge green" style="font-size:14px;padding:10px 16px;">✅ Attendance Marked!</div>`;
+        showToast('Attendance marked via QR!', 'success');
+        setTimeout(() => { closeAttendModal(); loadClasses(); }, 1500);
+    } else {
+        resEl.innerHTML = `<div class="badge red" style="font-size:13px;padding:8px 14px;">❌ ${data.message}</div>`;
+        // Restart scanner
+        setTimeout(() => initQRScanner(), 2000);
+    }
+}
+
+// ── OTP ────────────────────────────────────────────────────────────────────
+async function markByOTP() {
+    const otp = document.getElementById('otpInput').value.trim();
+    if (otp.length < 4) { showToast('Enter the 4-digit OTP', 'error'); return; }
+    const btn = document.getElementById('otpMarkBtn');
+    btn.classList.add('loading'); btn.disabled = true;
+    const data = await api('/api/mark-attendance', 'POST', {
+        class_id: activeClassId, latitude: userLat || 0, longitude: userLng || 0, otp_code: otp
+    });
+    btn.classList.remove('loading'); btn.disabled = false;
+    if (data.success) {
+        showToast('Attendance marked via OTP!', 'success');
+        closeAttendModal(); loadClasses();
+    } else {
+        showToast(data.message || 'OTP invalid', 'error');
+    }
+}
+
+// ── Manual Request ─────────────────────────────────────────────────────────
+function initManualGPS() {
+    const labelEl = document.getElementById('manualGpsLabel');
+    const coordsEl = document.getElementById('manualGpsCoords');
+    labelEl.textContent = 'Fetching your location...';
+    labelEl.style.color = 'var(--yellow)';
+    if (!navigator.geolocation) { labelEl.textContent = 'GPS unavailable'; return; }
+    navigator.geolocation.getCurrentPosition(pos => {
+        userLat = pos.coords.latitude; userLng = pos.coords.longitude;
+        labelEl.textContent = 'Location ready';
+        labelEl.style.color = 'var(--green)';
+        coordsEl.textContent = `Lat: ${userLat.toFixed(5)}, Lng: ${userLng.toFixed(5)}`;
+    }, () => {
+        labelEl.textContent = 'Could not get location';
+        labelEl.style.color = 'var(--text2)';
+        coordsEl.textContent = 'Request will still be sent without GPS';
+    });
+}
+
+async function sendManualRequest() {
+    const btn = document.getElementById('manualSendBtn');
+    btn.classList.add('loading'); btn.disabled = true;
+    const data = await api('/api/request-approval', 'POST', {
+        class_id: activeClassId, latitude: userLat || 0, longitude: userLng || 0
+    });
+    btn.classList.remove('loading'); btn.disabled = false;
+    if (data.success) {
+        showToast('Request sent! Waiting for teacher approval.', 'success');
+        closeAttendModal(); loadClasses();
+    } else {
+        showToast(data.message || 'Request failed', 'error');
+    }
+}
+
+// ── Close modal on overlay click ───────────────────────────────────────────
+document.getElementById('attendModal').addEventListener('click', function(e) {
+    if (e.target === this) closeAttendModal();
+});
+</script>
+</body>
+</html>
