@@ -1042,25 +1042,56 @@ function startHeartbeat() {
 async function loadHistory() {
     const el = document.getElementById('historyList');
     el.innerHTML = `<div class="empty-state"><div class="loader-ring" style="margin:0 auto;"></div></div>`;
-    // Fetch all classes (active + inactive) to show attendance
-    const data = await api('/api/active-classes');
-    const classes = data.classes || [];
-    if (classes.length === 0) {
-        el.innerHTML = `<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">No records yet</div><div class="empty-sub">Your attendance history will appear here</div></div>`;
+    const data = await api('/api/student/history');
+    const history = data.history || [];
+    const stats = data.stats || {};
+
+    if (history.length === 0) {
+        el.innerHTML = `<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">No records yet</div><div class="empty-sub">Your attendance history will appear once your teacher ends a session</div></div>`;
         return;
     }
-    el.innerHTML = classes.map(cls => {
-        const statusMap = { present: { badge: 'green', label: '✓ Present' }, pending: { badge: 'yellow', label: '⏳ Pending' }, null: { badge: 'red', label: '✗ Absent' }, undefined: { badge: 'red', label: '✗ Absent' } };
-        const s = statusMap[cls.attendance_status] || { badge: 'red', label: '✗ Absent' };
-        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:12px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);margin-bottom:8px;">
+
+    // Attendance percentage colour
+    const pct = stats.percentage || 0;
+    const pctColor = pct >= 75 ? 'var(--green)' : pct >= 60 ? 'var(--yellow)' : 'var(--red)';
+    const pctLabel = pct >= 75 ? '✅ Good Standing' : pct >= 60 ? '⚠️ At Risk' : '❌ Low Attendance';
+
+    const statsHtml = stats.ended_sessions > 0 ? `
+        <div style="margin-bottom:16px;padding:16px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                <div>
+                    <div style="font-size:13px;font-weight:700;">Overall Attendance</div>
+                    <div style="font-size:11px;color:var(--text2);margin-top:2px;">${stats.present_count} of ${stats.ended_sessions} completed sessions</div>
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-size:26px;font-weight:900;color:${pctColor};">${pct}%</div>
+                    <div style="font-size:10px;color:${pctColor};font-weight:700;">${pctLabel}</div>
+                </div>
+            </div>
+            <div style="height:8px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden;">
+                <div style="height:100%;width:${pct}%;background:${pctColor};border-radius:4px;transition:width 0.6s ease;"></div>
+            </div>
+            ${pct < 75 ? `<div style="font-size:11px;color:var(--yellow);margin-top:8px;">⚠️ Minimum 75% attendance required. You need ${Math.max(0, Math.ceil(stats.ended_sessions * 0.75) - stats.present_count)} more sessions.</div>` : ''}
+        </div>` : '';
+
+    el.innerHTML = statsHtml + history.map(item => {
+        const isActive = item.active === 1;
+        const statusMap = {
+            'present': { badge: 'green', label: '✓ Present' },
+            'pending': { badge: 'yellow', label: '⏳ Pending' }
+        };
+        const s = item.attendance_status ? (statusMap[item.attendance_status] || { badge: 'red', label: '✗ Absent' }) : { badge: 'red', label: '✗ Absent' };
+        const timeStr = item.marked_at ? new Date(item.marked_at + (item.marked_at.includes('Z') ? '' : 'Z')).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '';
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);margin-bottom:8px;transition:border-color 0.2s;" onmouseover="this.style.borderColor='rgba(108,99,255,0.3)'" onmouseout="this.style.borderColor='var(--border)'">
             <div>
-                <div style="font-size:14px;font-weight:600;">${cls.name}</div>
-                <div style="font-size:11px;color:var(--text2);">Active Session</div>
+                <div style="font-size:13px;font-weight:600;">${item.class_name}</div>
+                <div style="font-size:11px;color:var(--text2);margin-top:2px;">${isActive ? '🟢 Ongoing' : (timeStr ? `Marked at ${timeStr}` : 'Session ended')}</div>
             </div>
             <span class="badge ${s.badge}">${s.label}</span>
         </div>`;
     }).join('');
 }
+
 
 // ── Attend Modal ───────────────────────────────────────────────────────────
 let modalClassLat = null, modalClassLng = null, modalClassRadius = null, modalClassName = '';

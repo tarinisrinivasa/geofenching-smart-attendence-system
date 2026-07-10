@@ -881,7 +881,7 @@ function switchTab(tab) {
 
 // ── Session Check ──────────────────────────────────────────────────────────
 async function checkActiveSession() {
-    const data = await api(`/api/classes/${currentUser.id}`);
+    const data = await api(`/api/classes/${currentUser.id}?with_counts=true`);
     const classes = data.classes || [];
     const active = classes.find(c => c.active === 1);
     if (active) {
@@ -920,21 +920,28 @@ function displayPastSessions(sessions) {
     const el = document.getElementById('pastSessionsList');
     const past = sessions.filter(s => s.active === 0);
     if (past.length === 0) {
-        el.innerHTML = `<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">No past sessions</div></div>`;
+        el.innerHTML = `<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">No past sessions yet</div><div class="empty-sub">Start your first class session above</div></div>`;
         return;
     }
-    el.innerHTML = past.slice(0, 5).map(s => `
+    el.innerHTML = past.slice(0, 8).map(s => {
+        const count = s.present_count || 0;
+        const countColor = count > 0 ? 'var(--green)' : 'var(--text3)';
+        return `
         <div class="student-row">
             <div class="student-row-left">
                 <div class="student-mini-avatar">📋</div>
                 <div>
                     <div class="student-name">${s.name}</div>
-                    <div class="student-meta">ID: ${s.id} | Radius: ${s.radius}m</div>
+                    <div class="student-meta">Class ID: ${s.id} | Geofence: ${s.radius > 0 ? s.radius + 'm' : 'Off'}</div>
                 </div>
             </div>
-            <span class="badge" style="background:rgba(100,116,139,0.15);color:var(--text3);">Ended</span>
+            <div style="text-align:right;">
+                <div style="font-size:16px;font-weight:800;color:${countColor};">${count}</div>
+                <div style="font-size:10px;color:var(--text3);font-weight:600;">PRESENT</div>
+            </div>
         </div>
-    `).join('');
+    `;
+    }).join('');
 }
 
 // ── Create Session ─────────────────────────────────────────────────────────
