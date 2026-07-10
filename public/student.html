@@ -6,10 +6,14 @@
     <title>Student Portal | Smart Attendance</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap">
+    <!-- Motion.dev animation library -->
+    <script src="https://cdn.jsdelivr.net/npm/motion@10.18.0/dist/motion.js"></script>
     <!-- QR Scanner -->
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <!-- Barcode Generator -->
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+    <!-- Smart Attendance Animations -->
+    <script src="animations.js"></script>
     <style>
         :root {
             --bg: #0a0b0f;
@@ -1203,9 +1207,16 @@ async function markByGPS() {
     });
     btn.classList.remove('loading'); btn.disabled = false;
     if (data.success) {
-        showToast(data.message || 'Attendance marked!', 'success');
-        closeAttendModal();
-        loadClasses();
+        if (window.AG && window.AG.showSuccess) {
+            window.AG.showSuccess("Attendance Marked!", data.message || "Your classroom attendance has been successfully verified via GPS.", () => {
+                closeAttendModal();
+                loadClasses();
+            });
+        } else {
+            showToast(data.message || 'Attendance marked!', 'success');
+            closeAttendModal();
+            loadClasses();
+        }
     } else if (data.attendance_locked) {
         showToast('⚠️ Your account is locked. Visit your HOD.', 'error', 5000);
         closeAttendModal();
@@ -1257,8 +1268,15 @@ async function doQRSubmit(token, resEl) {
     });
     if (data.success) {
         resEl.innerHTML = `<div class="badge green" style="font-size:14px;padding:10px 16px;">✅ Attendance Marked!</div>`;
-        showToast('Attendance marked via QR!', 'success');
-        setTimeout(() => { closeAttendModal(); loadClasses(); }, 1500);
+        if (window.AG && window.AG.showSuccess) {
+            window.AG.showSuccess("Verified via QR", "Dynamic QR Code attendance verified successfully.", () => {
+                closeAttendModal();
+                loadClasses();
+            });
+        } else {
+            showToast('Attendance marked via QR!', 'success');
+            setTimeout(() => { closeAttendModal(); loadClasses(); }, 1500);
+        }
     } else {
         resEl.innerHTML = `<div class="badge red" style="font-size:13px;padding:8px 14px;">❌ ${data.message}</div>`;
         // Restart scanner
@@ -1277,8 +1295,16 @@ async function markByOTP() {
     });
     btn.classList.remove('loading'); btn.disabled = false;
     if (data.success) {
-        showToast('Attendance marked via OTP!', 'success');
-        closeAttendModal(); loadClasses();
+        if (window.AG && window.AG.showSuccess) {
+            window.AG.showSuccess("OTP Verified", "Classroom OTP matching successful. Attendance logged.", () => {
+                closeAttendModal();
+                loadClasses();
+            });
+        } else {
+            showToast('Attendance marked via OTP!', 'success');
+            closeAttendModal();
+            loadClasses();
+        }
     } else {
         showToast(data.message || 'OTP invalid', 'error');
     }
@@ -1311,8 +1337,16 @@ async function sendManualRequest() {
     });
     btn.classList.remove('loading'); btn.disabled = false;
     if (data.success) {
-        showToast('Request sent! Waiting for teacher approval.', 'success');
-        closeAttendModal(); loadClasses();
+        if (window.AG && window.AG.showSuccess) {
+            window.AG.showSuccess("Request Sent!", "Your manual attendance request has been dispatched to the teacher.", () => {
+                closeAttendModal();
+                loadClasses();
+            });
+        } else {
+            showToast('Request sent! Waiting for teacher approval.', 'success');
+            closeAttendModal();
+            loadClasses();
+        }
     } else {
         showToast(data.message || 'Request failed', 'error');
     }

@@ -6,6 +6,10 @@
     <title>Smart Attendance — Login</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap">
+    <!-- Motion.dev animation library -->
+    <script src="https://cdn.jsdelivr.net/npm/motion@10.18.0/dist/motion.js"></script>
+    <!-- Smart Attendance Animations -->
+    <script src="animations.js"></script>
     <style>
         :root {
             --bg: #07080f;
@@ -463,8 +467,13 @@ function arrayBufferToBase64url(buf) {
 
 // ── Step Manager ───────────────────────────────────────────────────────────
 function showStep(id) {
+    const isBack = id === 'step-login';
     document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
-    document.getElementById(id).classList.add('active');
+    const target = document.getElementById(id);
+    target.classList.add('active');
+    if (window.AG && window.AG.animateLoginStep) {
+        window.AG.animateLoginStep(isBack ? 'backward' : 'forward');
+    }
 }
 
 // ── Ripple ─────────────────────────────────────────────────────────────────

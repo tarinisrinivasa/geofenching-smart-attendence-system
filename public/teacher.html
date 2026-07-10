@@ -6,6 +6,8 @@
     <title>Teacher Console | Smart Attendance</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap">
+    <!-- Motion.dev animation library -->
+    <script src="https://cdn.jsdelivr.net/npm/motion@10.18.0/dist/motion.js"></script>
     <!-- QR Code Generator -->
     <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
     <!-- Barcode Scanner -->
@@ -15,6 +17,8 @@
     <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
     <!-- Excel Export -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- Smart Attendance Animations -->
+    <script src="animations.js"></script>
     <style>
         :root {
             --bg: #080a10;
@@ -863,10 +867,17 @@ function showToast(msg, type = 'info', dur = 3500) {
 
 // ── Tabs ───────────────────────────────────────────────────────────────────
 function switchTab(tab) {
+    // Remove active from all nav tabs
     document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.getElementById(`tab-${tab}`).classList.add('active');
-    document.getElementById(`page-${tab}`).classList.add('active');
+    // Hide all pages — clear both class AND any inline display style that may be overriding CSS
+    document.querySelectorAll('.page').forEach(p => {
+        p.classList.remove('active');
+        p.style.display = '';  // clear any inline override from showActiveSessionUI
+    });
+    const tabEl = document.getElementById(`tab-${tab}`);
+    const pageEl = document.getElementById(`page-${tab}`);
+    if (tabEl) tabEl.classList.add('active');
+    if (pageEl) pageEl.classList.add('active');
 
     if (tab === 'qr') startQRRefresh();
     else stopQR();
@@ -896,15 +907,13 @@ async function checkActiveSession() {
 function showActiveSessionUI() {
     document.getElementById('noSessionView').style.display = 'none';
     document.getElementById('mainNav').style.display = 'flex';
-    document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
-    document.getElementById('page-session').style.display = 'block';
-    document.getElementById('tab-session').classList.add('active');
 
     document.getElementById('sessionClassName').textContent = activeSession.name;
     document.getElementById('sessionInfo').textContent = `Radius: ${activeSession.radius > 0 ? activeSession.radius + 'm' : 'Disabled'} | Class ID: ${activeSession.id}`;
-    document.getElementById('countTotal').textContent = studentList.length || '—';
 
-    loadRosterSummary();
+    // Use switchTab to properly activate the session tab — this also clears any stale inline styles
+    switchTab('session');
+
     requestInterval = setInterval(loadRequestCount, 15000);
     loadRequestCount();
 }
@@ -992,6 +1001,7 @@ async function createSession() {
         showToast('Class session started!', 'success');
         activeSession = { id: data.class_id, name, latitude: lat, longitude: lng, radius };
         showActiveSessionUI();
+        if (window.AG && window.AG.onSessionStarted) window.AG.onSessionStarted();
     } else {
         showToast(data.message || 'Failed to create session', 'error');
     }
@@ -1015,6 +1025,7 @@ async function refreshQR() {
         const canvas = document.getElementById('qrCanvas');
         try {
             await QRCode.toCanvas(canvas, data.token, { width: 220, margin: 1, color: { dark: '#000', light: '#fff' } });
+            if (window.AG && window.AG.onQRRefresh) window.AG.onQRRefresh();
         } catch (e) {}
     }
     countdownValue = 15;
@@ -1112,42 +1123,61 @@ async function loadRequests() {
         container.innerHTML = `<div class="empty-state"><div class="empty-icon">✅</div><div class="empty-title">No pending requests</div><div class="empty-sub">All students are accounted for</div></div>`;
         return;
     }
-    container.innerHTML = requests.map(r => `
-        <div class="request-card">
+    container.innerHTML = requests.map(r => {
+        const inZone = activeSession.radius <= 0 || r.distance <= activeSession.radius;
+        const distLabel = activeSession.radius <= 0 ? 'Geofence disabled' : `${r.distance}m from class (limit: ${activeSession.radius}m)`;
+        const zoneColor = inZone ? 'green' : 'yellow';
+        const zoneText = inZone ? '✅ In Zone' : '⚠️ Out of Zone';
+        const timeStr = r.timestamp ? new Date(r.timestamp + 'Z').toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '';
+        return `
+        <div class="request-card" style="border-color:${inZone ? 'rgba(16,185,129,0.25)' : 'rgba(245,158,11,0.25)'}">
             <div class="request-header">
                 <div>
-                    <div style="font-size:14px;font-weight:700;">${r.username}</div>
-                    <div style="font-size:11px;color:var(--text2);">Distance: ${r.distance}m from classroom | ${r.timestamp ? new Date(r.timestamp + 'Z').toLocaleTimeString() : ''}</div>
+                    <div style="font-size:15px;font-weight:700;">👤 ${r.username}</div>
+                    <div style="font-size:11px;color:var(--text2);margin-top:3px;">Requested at ${timeStr}</div>
+                    <div style="font-size:11px;color:var(--text2);margin-top:2px;">📍 ${distLabel}</div>
                 </div>
-                <span class="badge ${r.distance <= activeSession.radius ? 'green' : 'yellow'}">${r.distance <= activeSession.radius ? 'In Zone' : 'Out of Zone'}</span>
+                <span class="badge ${zoneColor}">${zoneText}</span>
             </div>
-            <div class="request-actions">
-                <button class="btn btn-green btn-sm btn-approve" data-student-id="${r.student_id}" data-username="${r.username}">
-                    <span class="btn-text">✓ Approve</span><div class="spinner-sm"></div>
+            <div class="request-actions" style="gap:10px;">
+                <button class="btn btn-green btn-sm btn-approve" data-student-id="${r.student_id}" data-username="${r.username}" style="flex:1;padding:10px;">
+                    <span class="btn-text">✔ Approve</span><div class="spinner-sm"></div>
                 </button>
-                <button class="btn btn-red btn-sm btn-decline" data-student-id="${r.student_id}" data-username="${r.username}">
+                <button class="btn btn-red btn-sm btn-decline" data-student-id="${r.student_id}" data-username="${r.username}" style="flex:1;padding:10px;">
                     <span class="btn-text">✕ Decline</span><div class="spinner-sm"></div>
                 </button>
             </div>
         </div>
-    `).join('');
+    `;
+    }).join('');
+    if (window.AG && window.AG.onRequestsLoaded) window.AG.onRequestsLoaded();
 }
 
 async function approveRequest(studentId, name, btn) {
     btn.classList.add('loading'); btn.disabled = true;
     const data = await api('/api/approve-request', 'POST', { class_id: activeSession.id, student_id: studentId });
     if (data.success) {
-        showToast(`${name} approved!`, 'success');
-        loadRequests(); loadRosterSummary();
+        showToast(`✅ ${name} marked Present!`, 'success');
+        if (window.AG && window.AG.onAttendanceMarked) window.AG.onAttendanceMarked(btn);
+        loadRequests();
+        loadRosterSummary();
     } else {
-        showToast(data.message || 'Failed', 'error');
+        showToast(data.message || 'Failed to approve', 'error');
         btn.classList.remove('loading'); btn.disabled = false;
     }
 }
 
-async function declineRequest(studentId, name) {
-    showToast(`${name}'s request declined.`, 'info');
-    loadRequests();
+async function declineRequest(studentId, name, btn) {
+    if (btn) { btn.classList.add('loading'); btn.disabled = true; }
+    const data = await api('/api/decline-request', 'POST', { class_id: activeSession.id, student_id: studentId });
+    if (data.success) {
+        showToast(`❌ ${name}'s request declined.`, 'info');
+        loadRequests();
+        loadRosterSummary();
+    } else {
+        showToast(data.message || 'Failed to decline', 'error');
+        if (btn) { btn.classList.remove('loading'); btn.disabled = false; }
+    }
 }
 
 // ── OTP ────────────────────────────────────────────────────────────────────
