@@ -356,13 +356,13 @@
 
     <!-- ── Nav Tabs ── -->
     <nav class="nav-tabs">
-        <div class="nav-tab active" onclick="switchTab('attend')" id="tab-attend">
+        <div class="nav-tab active" id="tab-attend">
             <span class="tab-icon">📍</span> Attendance
         </div>
-        <div class="nav-tab" onclick="switchTab('profile')" id="tab-profile">
+        <div class="nav-tab" id="tab-profile">
             <span class="tab-icon">🪪</span> My Card
         </div>
-        <div class="nav-tab" onclick="switchTab('history')" id="tab-history">
+        <div class="nav-tab" id="tab-history">
             <span class="tab-icon">📋</span> History
         </div>
     </nav>
@@ -403,6 +403,27 @@
                 <div class="empty-state">
                     <div class="empty-icon">⏳</div>
                     <div class="empty-title">Loading sessions...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Student rotating OTP for old phones/no biometrics -->
+        <div class="card" style="border-color:rgba(108,99,255,0.25);">
+            <div class="card-title" style="color:var(--accent2);display:flex;justify-content:space-between;align-items:center;">
+                <span>⏱️ My Attendance OTP</span>
+                <span class="badge purple">Auto-Refreshes</span>
+            </div>
+            <p style="font-size:12px;color:var(--text2);margin-bottom:14px;">If biometrics or location is not working, tell this rotating OTP code to your teacher:</p>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:12px;background:rgba(108,99,255,0.05);border:1px dashed rgba(108,99,255,0.3);border-radius:var(--radius-sm);padding:20px;">
+                <div style="font-size:38px;font-weight:900;letter-spacing:10px;font-family:monospace;color:var(--accent2);text-shadow:0 0 10px rgba(108,99,255,0.3);" id="studentOtpCode">——</div>
+                <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);">
+                    <div style="width:20px;height:20px;position:relative;">
+                        <svg width="20" height="20" viewBox="0 0 20 20" style="transform:rotate(-90deg);transform-origin:50% 50%;">
+                            <circle cx="10" cy="10" r="8" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="2"/>
+                            <circle cx="10" cy="10" r="8" fill="none" id="studentOtpRing" stroke="var(--accent)" stroke-width="2" stroke-dasharray="50" stroke-dashoffset="0" style="transition:stroke-dashoffset 0.1s linear;"/>
+                        </svg>
+                    </div>
+                    <span id="studentOtpLabel">Refreshes in 20s</span>
                 </div>
             </div>
         </div>
@@ -631,10 +652,20 @@ window.addEventListener('DOMContentLoaded', async () => {
             });
         }
 
+        // Bind tabs programmatically (Fixes tab navigation click failures)
+        document.querySelectorAll('.nav-tabs .nav-tab').forEach(tabEl => {
+            tabEl.addEventListener('click', (e) => {
+                e.preventDefault();
+                const tabName = tabEl.id.replace('tab-', '');
+                switchTab(tabName);
+            });
+        });
+
         await loadClasses();
         loadProfile();
         startHeartbeat();
         startClassRefresh();
+        startStudentOtpRefresh();
     } catch (e) {
         console.error('[Init error]', e);
     } finally {
@@ -1147,6 +1178,39 @@ async function sendManualRequest() {
 document.getElementById('attendModal').addEventListener('click', function(e) {
     if (e.target === this) closeAttendModal();
 });
+
+// ── Student Rotating OTP Generator (Refreshes every 20s) ───────────────────
+let studentOtpInterval = null;
+function startStudentOtpRefresh() {
+    if (!currentUser || currentUser.role !== 'student') return;
+    
+    const codeEl = document.getElementById('studentOtpCode');
+    const labelEl = document.getElementById('studentOtpLabel');
+    const ringEl = document.getElementById('studentOtpRing');
+    const circumference = 50; // 2 * pi * r = 2 * 3.14159 * 8 ≈ 50
+
+    function update() {
+        const now = Date.now();
+        const timeIndex = Math.floor(now / 20000);
+        const remSecs = 20 - Math.floor((now % 20000) / 1000);
+
+        // Generate deterministic time-hash OTP using student ID
+        const raw = (parseInt(currentUser.id, 10) * 7919) + (timeIndex * 104729);
+        const code = (Math.abs(raw) % 9000 + 1000).toString();
+
+        if (codeEl) codeEl.textContent = code;
+        if (labelEl) labelEl.textContent = `Refreshes in ${remSecs}s`;
+        
+        // Update circular countdown ring
+        if (ringEl) {
+            const offset = circumference - (circumference * remSecs / 20);
+            ringEl.style.strokeDashoffset = offset;
+        }
+    }
+    
+    update();
+    studentOtpInterval = setInterval(update, 1000);
+}
 </script>
 </body>
 </html>
