@@ -317,7 +317,7 @@
         </div>
         <div class="header-right">
             <div class="avatar" id="userAvatar">T</div>
-            <button class="btn-logout" onclick="logout()" id="logoutBtn">Sign Out</button>
+            <button class="btn-logout" id="logoutBtn">Sign Out</button>
         </div>
     </header>
 
@@ -585,6 +585,18 @@
 </div>
 
 <script>
+// ── PWA Service Worker & Cache Buster (Force unregister inside portals too) ─
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(regs => {
+        for (let r of regs) { r.unregister(); }
+    });
+    if ('caches' in window) {
+        caches.keys().then(names => {
+            for (let name of names) { caches.delete(name); }
+        });
+    }
+}
+
 // ── State ──────────────────────────────────────────────────────────────────
 const safeStorage = {
     getItem(k) { try { return localStorage.getItem(k); } catch { try { return sessionStorage.getItem(k); } catch { return null; } } },
@@ -623,6 +635,15 @@ window.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('headerTitle').textContent = `${currentUser.username}`;
         document.getElementById('headerSub').textContent = 'Teacher Console';
 
+        // Bind logout button programmatically
+        const logoutBtn = document.getElementById('logoutBtn');
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                triggerSignOut();
+            });
+        }
+
         await checkActiveSession();
         loadStudentLists();
     } catch (e) {
@@ -649,7 +670,7 @@ function api(endpoint, method = 'GET', body = null) {
     });
 }
 
-async function logout(silent = false) {
+async function triggerSignOut(silent = false) {
     stopAllIntervals();
     
     try {

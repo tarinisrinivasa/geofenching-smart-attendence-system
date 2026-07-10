@@ -350,7 +350,7 @@
         </div>
         <div class="header-right">
             <div class="avatar" id="userAvatar">S</div>
-            <button class="btn-logout" onclick="logout()" id="logoutBtn">Sign Out</button>
+            <button class="btn-logout" id="logoutBtn">Sign Out</button>
         </div>
     </header>
 
@@ -569,6 +569,18 @@
 </div>
 
 <script>
+// ── PWA Service Worker & Cache Buster (Force unregister inside portals too) ─
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(regs => {
+        for (let r of regs) { r.unregister(); }
+    });
+    if ('caches' in window) {
+        caches.keys().then(names => {
+            for (let name of names) { caches.delete(name); }
+        });
+    }
+}
+
 // ── State ──────────────────────────────────────────────────────────────────
 const safeStorage = {
     getItem(k) { try { return localStorage.getItem(k); } catch { try { return sessionStorage.getItem(k); } catch { return null; } } },
@@ -610,6 +622,15 @@ window.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('profileName').textContent = currentUser.username;
         document.getElementById('profileId').textContent = `User ID: ${currentUser.id}`;
 
+        // Bind logout button programmatically
+        const logoutBtn = document.getElementById('logoutBtn');
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                triggerSignOut();
+            });
+        }
+
         await loadClasses();
         loadProfile();
         startHeartbeat();
@@ -641,7 +662,7 @@ function api(endpoint, method = 'GET', body = null) {
     });
 }
 
-// ── Session expiry — redirect directly, do NOT call logout() to avoid recursion
+// ── Session expiry — redirect directly, do NOT call triggerSignOut() to avoid recursion
 function handleSessionExpiry() {
     try { showToast('Session expired. Please login again.', 'error'); } catch {}
     safeStorage.removeItem('token');
@@ -649,7 +670,7 @@ function handleSessionExpiry() {
     setTimeout(() => { window.location.href = 'index.html'; }, 1500);
 }
 
-async function logout(silent = false) {
+async function triggerSignOut(silent = false) {
     // Stop intervals & scanner BEFORE any network call
     clearInterval(heartbeatInterval);
     clearInterval(classRefreshInterval);
