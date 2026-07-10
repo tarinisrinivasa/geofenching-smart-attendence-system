@@ -75,7 +75,7 @@ app.use('/api/coordinator/verify-keypad-otp', authLimiter);
 
 // Custom Request Sanitizer (SQL Injection & XSS Guard)
 function securityFirewall(req, res, next) {
-    const sqlInjectionPattern = /(\bUNION\b|\bSELECT\b|\bDROP\b|\bDELETE\b|\bINSERT\b|\bUPDATE\b|' OR '|" OR "|OR 1=1|OR TRUE|--|#)/i;
+    const sqlInjectionPattern = /(' OR '|" OR "|OR 1=1|OR TRUE|--|#)/i;
     const xssPattern = /(<script\b[^>]*>|javascript:|onerror\s*=|onload\s*=|onclick\s*=)/i;
 
     const checkValue = (val) => {
@@ -1439,3 +1439,18 @@ if (isRender || !useHttps) {
         console.log(`To access from other devices on WiFi, open: https://<your_laptop_ip>:${PORT}`);
     });
 }
+
+// Clean database shutdown on process exit signals
+const cleanup = () => {
+    db.close((err) => {
+        if (err) {
+            console.error("Error closing SQLite database during cleanup:", err.message);
+        } else {
+            console.log("SQLite database connection closed cleanly.");
+        }
+        process.exit(0);
+    });
+};
+
+process.on('SIGINT', cleanup);
+process.on('SIGTERM', cleanup);
