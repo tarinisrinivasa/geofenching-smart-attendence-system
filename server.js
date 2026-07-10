@@ -225,13 +225,29 @@ app.post('/api/classes', authenticateToken, (req, res) => {
     );
 });
 
-// Teacher API: Get classes for teacher
+// Teacher API: Get classes for teacher (with optional attendance counts)
 app.get('/api/classes/:teacher_id', authenticateToken, (req, res) => {
-    db.all("SELECT * FROM classes WHERE teacher_id = ? ORDER BY id DESC", [req.params.teacher_id], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ classes: rows });
-    });
+    const withCounts = req.query.with_counts === 'true';
+    if (withCounts) {
+        const query = `
+            SELECT c.*, 
+                   COALESCE((SELECT COUNT(*) FROM attendance a WHERE a.class_id = c.id AND a.status = 'present'), 0) as present_count
+            FROM classes c
+            WHERE c.teacher_id = ?
+            ORDER BY c.id DESC
+        `;
+        db.all(query, [req.params.teacher_id], (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ classes: rows });
+        });
+    } else {
+        db.all("SELECT * FROM classes WHERE teacher_id = ? ORDER BY id DESC", [req.params.teacher_id], (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ classes: rows });
+        });
+    }
 });
+
 
 // Teacher API: End a class session & Run AI Bunking Analysis
 app.post('/api/classes/:class_id/end', authenticateToken, (req, res) => {
@@ -1208,7 +1224,49 @@ app.post('/api/student/heartbeat', authenticateToken, (req, res) => {
     });
 });
 
+// Student API: Full attendance history across ALL sessions (active + ended)
+app.get('/api/student/history', authenticateToken, (req, res) => {
+    if (req.user.role !== 'student') {
+        return res.status(403).json({ success: false, message: "Unauthorized." });
+    }
+
+    const student_id = req.user.id;
+
+    const query = `
+        SELECT 
+            c.id as class_id,
+            c.name as class_name,
+            c.active,
+            a.status as attendance_status,
+            a.timestamp as marked_at
+        FROM classes c
+        LEFT JOIN attendance a 
+            ON a.class_id = c.id AND a.student_id = ?
+        ORDER BY c.id DESC
+        LIMIT 100
+    `;
+
+    db.all(query, [student_id], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+
+        const endedSessions = rows.filter(r => r.active === 0);
+        const presentInEnded = endedSessions.filter(r => r.attendance_status === 'present').length;
+
+        res.json({
+            success: true,
+            history: rows,
+            stats: {
+                total_sessions: rows.length,
+                ended_sessions: endedSessions.length,
+                present_count: presentInEnded,
+                percentage: endedSessions.length > 0 ? Math.round((presentInEnded / endedSessions.length) * 100) : 0
+            }
+        });
+    });
+});
+
 // HOD API: Fetch all students' real-time geofence tracking statuses
+
 app.get('/api/hod/students-tracking', authenticateToken, (req, res) => {
     if (req.user.role !== 'hod') {
         return res.status(403).json({ success: false, message: "Unauthorized." });
