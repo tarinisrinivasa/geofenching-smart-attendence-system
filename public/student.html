@@ -776,13 +776,19 @@ function api(endpoint, method = 'GET', body = null) {
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` }
     };
     if (body) opts.body = JSON.stringify(body);
-    return fetch(endpoint, opts).then(async r => {
-        const data = await r.json();
-        if (r.status === 401 || r.status === 403) {
-            if (data.message && data.message.includes('expired')) { handleSessionExpiry(); }
-        }
-        return { status: r.status, ...data };
-    });
+    return fetch(endpoint, opts)
+        .then(async r => {
+            let data = {};
+            try { data = await r.json(); } catch {}
+            if (r.status === 401 || r.status === 403) {
+                if (data.message && data.message.includes('expired')) { handleSessionExpiry(); }
+            }
+            return { status: r.status, success: r.ok && data.success !== false, ...data };
+        })
+        .catch(err => {
+            console.error('[API Network Error]', err);
+            return { status: 500, success: false, message: 'Server connection error. Please try again.' };
+        });
 }
 
 // ── Session expiry — redirect directly, do NOT call triggerSignOut() to avoid recursion

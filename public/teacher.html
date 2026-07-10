@@ -809,16 +809,22 @@ window.addEventListener('DOMContentLoaded', async () => {
 function api(endpoint, method = 'GET', body = null) {
     const opts = { method, headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` } };
     if (body) opts.body = JSON.stringify(body);
-    return fetch(endpoint, opts).then(async r => {
-        const data = await r.json();
-        if (r.status === 401) {
-            try { showToast('Session expired. Please login again.', 'error'); } catch {}
-            safeStorage.removeItem('token');
-            safeStorage.removeItem('user');
-            setTimeout(() => { window.location.href = 'index.html'; }, 1500);
-        }
-        return { status: r.status, ...data };
-    });
+    return fetch(endpoint, opts)
+        .then(async r => {
+            let data = {};
+            try { data = await r.json(); } catch {}
+            if (r.status === 401) {
+                try { showToast('Session expired. Please login again.', 'error'); } catch {}
+                safeStorage.removeItem('token');
+                safeStorage.removeItem('user');
+                setTimeout(() => { window.location.href = 'index.html'; }, 1500);
+            }
+            return { status: r.status, success: r.ok && data.success !== false, ...data };
+        })
+        .catch(err => {
+            console.error('[API Network Error]', err);
+            return { status: 500, success: false, message: 'Server connection error. Please try again.' };
+        });
 }
 
 async function triggerSignOut(silent = false) {
@@ -1316,11 +1322,15 @@ async function endSession() {
 
     if (data.success) {
         document.getElementById('endConfirmOverlay').style.display = 'none';
-        showToast('Session ended! Generating report...', 'success');
         stopAllIntervals();
 
-        // Generate the report
-        await generateReport(activeSession.name, presentStudents, allStudents);
+        // Dynamically check present student count. Only generate/download if at least one is present.
+        if (presentStudents.length > 0) {
+            showToast('Session ended! Generating report...', 'success');
+            await generateReport(activeSession.name, presentStudents, allStudents);
+        } else {
+            showToast('Session ended. No students marked present, skipping report download.', 'info');
+        }
 
         setTimeout(() => {
             showNoSessionUI();
