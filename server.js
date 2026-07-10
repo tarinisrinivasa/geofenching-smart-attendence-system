@@ -428,9 +428,9 @@ app.post('/api/alerts/:alert_id/read', authenticateToken, (req, res) => {
     }
 
     const alertId = req.params.alert_id;
-    db.run("UPDATE alerts SET status = 1 WHERE id = ?", [alertId], function(err) {
+    db.run("UPDATE alerts SET status = 2 WHERE id = ?", [alertId], function(err) {
         if (err) return res.status(500).json({ error: err.message });
-        res.json({ success: true, message: "Alert marked as read." });
+        res.json({ success: true, message: "Alert marked as resolved." });
     });
 });
 
