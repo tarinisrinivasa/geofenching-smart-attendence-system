@@ -1409,13 +1409,31 @@ app.post('/api/coordinator/update-student-phone', authenticateToken, (req, res) 
     });
 });
 
-if (isRender) {
-    // Render handles SSL certificates automatically at the proxy level. Start a standard HTTP server.
+// Coordinator & HOD API: Reset student device hardware lock
+app.post('/api/coordinator/reset-device', authenticateToken, (req, res) => {
+    if (req.user.role !== 'coordinator' && req.user.role !== 'hod') {
+        return res.status(403).json({ success: false, message: "Unauthorized." });
+    }
+    const { student_id } = req.body;
+    if (!student_id) {
+        return res.status(400).json({ success: false, message: "Missing student_id." });
+    }
+
+    db.run("UPDATE users SET device_id = NULL WHERE id = ? AND role = 'student'", [student_id], (err) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true, message: "Student device hardware lock reset successfully!" });
+    });
+});
+
+const useHttps = process.env.USE_HTTPS === 'true';
+
+if (isRender || !useHttps) {
+    // Start standard HTTP server (default for local development and cloud hosting)
     app.listen(PORT, '0.0.0.0', () => {
-        console.log(`HTTP Server running on port ${PORT}`);
+        console.log(`HTTP Server running on http://localhost:${PORT}`);
     });
 } else {
-    // Local environment: Start HTTPS server for secure mobile phone connections over local WiFi
+    // Start secure HTTPS server for local network phone access (run with USE_HTTPS=true node server.js)
     https.createServer(httpsOptions, app).listen(PORT, '0.0.0.0', () => {
         console.log(`Secure HTTPS Server running on https://localhost:${PORT}`);
         console.log(`To access from other devices on WiFi, open: https://<your_laptop_ip>:${PORT}`);
