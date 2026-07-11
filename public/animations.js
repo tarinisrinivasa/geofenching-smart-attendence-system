@@ -1,481 +1,699 @@
 /**
  * animations.js — Smart Attendance System
  * ═══════════════════════════════════════════════════════════════════
- * Premium animation layer powered by Motion.dev (window.Motion)
- * All DOM work deferred to DOMContentLoaded/load to be safe.
+ * Ultra-Premium Animation Engine
+ *   • GSAP (GreenSock)  — master timeline & scroll triggers
+ *   • Three.js          — WebGL particle nebula background
+ *   • Motion.dev (web)  — micro-interaction morphs
+ *   • Vanilla JS        — ripple, magnetic, counter-up helpers
  * ═══════════════════════════════════════════════════════════════════
  */
 
 (function () {
     'use strict';
 
-    // Expose AG namespace immediately so portals can reference it before init
     window.AG = window.AG || {};
 
-    // ── Colour palette for floating dots ──────────────────────────────────────
-    const COLORS = ['#6c63ff','#a78bfa','#10b981','#f59e0b','#3b82f6','#ec4899','#ffffff'];
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // CSS — injected once DOM is ready
-    // ═══════════════════════════════════════════════════════════════════════
-    const CSS_TEXT = `
-        /* ── Success overlay ── */
-        #ag-success-overlay {
-            position:fixed;inset:0;z-index:9995;
-            display:flex;align-items:center;justify-content:center;
-            background:rgba(0,0,0,0.7);backdrop-filter:blur(14px);
-            opacity:0;pointer-events:none;
-            transition:opacity 0.3s ease;
-        }
-        #ag-success-overlay.ag-active { opacity:1;pointer-events:all; }
-        .ag-success-card {
-            background:linear-gradient(135deg,rgba(16,185,129,0.15),rgba(16,185,129,0.05));
-            border:1px solid rgba(16,185,129,0.4);
-            border-radius:24px;padding:36px 32px;
-            text-align:center;max-width:320px;width:90%;
-            transform:scale(0.82) translateY(28px);
-            transition:transform 0.45s cubic-bezier(0.34,1.56,0.64,1);
-        }
-        #ag-success-overlay.ag-active .ag-success-card {
-            transform:scale(1) translateY(0);
-        }
-        .ag-success-icon {
-            font-size:64px;margin-bottom:14px;display:block;
-            animation:ag-bounce-in 0.5s cubic-bezier(0.34,1.56,0.64,1) both;
-        }
-        @keyframes ag-bounce-in {
-            from{transform:scale(0);opacity:0}
-            to{transform:scale(1);opacity:1}
-        }
-        .ag-success-title {
-            font-size:20px;font-weight:800;color:#10b981;margin-bottom:8px;
-            font-family:'Inter',sans-serif;
-        }
-        .ag-success-msg {
-            font-size:13px;color:rgba(255,255,255,0.65);line-height:1.5;
-            font-family:'Inter',sans-serif;
-        }
-        .ag-success-btn {
-            margin-top:22px;padding:11px 32px;border-radius:10px;
-            background:linear-gradient(135deg,#10b981,#059669);
-            color:white;font-size:14px;font-weight:700;
-            border:none;cursor:pointer;font-family:'Inter',sans-serif;
-            transition:transform 0.15s,box-shadow 0.15s;
-        }
-        .ag-success-btn:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(16,185,129,0.4);}
-
-        /* ── Ripple on click ── */
-        .ag-ripple {
-            position:absolute;border-radius:50%;
-            background:rgba(255,255,255,0.22);
-            transform:scale(0);pointer-events:none;
-            animation:ag-ripple-out 0.55s ease forwards;
-        }
-        @keyframes ag-ripple-out{to{transform:scale(4.5);opacity:0}}
-
-        /* ── GPS pulse rings ── */
-        .ag-gps-ring {
-            position:absolute;border-radius:50%;
-            border:2px solid rgba(16,185,129,0.55);
-            animation:ag-gps-expand 2s ease-out infinite;
-            pointer-events:none;
-        }
-        @keyframes ag-gps-expand{
-            from{transform:scale(0.4);opacity:0.9}
-            to{transform:scale(3.8);opacity:0}
-        }
-
-        /* ── Number pop ── */
-        @keyframes ag-num-pop{
-            0%{transform:scale(1)}
-            45%{transform:scale(1.4)}
-            100%{transform:scale(1)}
-        }
-        .ag-num-pop{animation:ag-num-pop 0.4s cubic-bezier(0.34,1.56,0.64,1)}
-
-        /* ── QR flip ── */
-        .ag-qr-flip{animation:ag-flip 0.42s ease both}
-        @keyframes ag-flip{
-            0%{transform:perspective(400px) rotateY(0deg);opacity:1}
-            50%{transform:perspective(400px) rotateY(90deg);opacity:0.3}
-            100%{transform:perspective(400px) rotateY(0deg);opacity:1}
-        }
-
-        /* ── Tab page entrance ── */
-        .ag-page-enter{animation:ag-page-in 0.33s cubic-bezier(0.16,1,0.3,1) both}
-        @keyframes ag-page-in{
-            from{opacity:0;transform:translateY(16px)}
-            to{opacity:1;transform:translateY(0)}
-        }
-
-        /* ── Card reveal ── */
-        .ag-card-reveal{animation:ag-card-in 0.4s cubic-bezier(0.16,1,0.3,1) both}
-        @keyframes ag-card-in{
-            from{opacity:0;transform:translateY(18px) scale(0.97)}
-            to{opacity:1;transform:translateY(0) scale(1)}
-        }
-
-        /* ── Request card slide ── */
-        .ag-req-in{animation:ag-req-slide 0.35s cubic-bezier(0.16,1,0.3,1) both}
-        @keyframes ag-req-slide{
-            from{opacity:0;transform:translateX(-18px)}
-            to{opacity:1;transform:translateX(0)}
-        }
-
-        /* ── Session start pop ── */
-        .ag-session-pop{animation:ag-ses-pop 0.55s cubic-bezier(0.34,1.56,0.64,1) both}
-        @keyframes ag-ses-pop{
-            from{transform:scale(0.88) translateY(10px);opacity:0}
-            to{transform:scale(1) translateY(0);opacity:1}
-        }
-
-        /* ── Magnetic button base ── */
-        .ag-mag{transition:transform 0.2s cubic-bezier(0.34,1.56,0.64,1),box-shadow 0.2s ease}
-
-        /* ── Toast slide ── */
-        @keyframes ag-toast-in{
-            from{transform:translateX(110px);opacity:0}
-            to{transform:translateX(0);opacity:1}
-        }
-        .ag-toast-animate{animation:ag-toast-in 0.35s cubic-bezier(0.16,1,0.3,1)}
-
-        /* ── Floating dot ── */
-        .ag-float-dot{
-            position:fixed;width:8px;height:8px;border-radius:50%;
-            pointer-events:none;z-index:9999;
-            animation:ag-float-up 1s ease forwards;
-        }
-        @keyframes ag-float-up{
-            0%{transform:translateY(0) scale(1);opacity:1}
-            100%{transform:translateY(-110px) scale(0);opacity:0}
-        }
-    `;
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // SUCCESS OVERLAY
-    // ═══════════════════════════════════════════════════════════════════════
-    function showSuccess(title, msg, onClose) {
-        let overlay = document.getElementById('ag-success-overlay');
-        if (!overlay) {
-            overlay = document.createElement('div');
-            overlay.id = 'ag-success-overlay';
-            overlay.innerHTML = `
-                <div class="ag-success-card">
-                    <span class="ag-success-icon">✅</span>
-                    <div class="ag-success-title" id="ag-suc-title"></div>
-                    <div class="ag-success-msg"   id="ag-suc-msg"></div>
-                    <button class="ag-success-btn" id="ag-suc-ok">Got it 👍</button>
-                </div>`;
-            document.body.appendChild(overlay);
-            overlay.querySelector('#ag-suc-ok').addEventListener('click', () => _closeSuccess(onClose));
-            overlay.addEventListener('click', e => { if (e.target === overlay) _closeSuccess(onClose); });
-        }
-        overlay.querySelector('#ag-suc-title').textContent = title;
-        overlay.querySelector('#ag-suc-msg').textContent   = msg;
-        overlay.classList.add('ag-active');
-        if (overlay._t) clearTimeout(overlay._t);
-        overlay._t = setTimeout(() => _closeSuccess(onClose), 6000);
+    /* ─── CDN SCRIPT LOADER ─────────────────────────────────────── */
+    function loadScript(src, id, cb) {
+        if (document.getElementById(id)) { if (cb) cb(); return; }
+        const s = document.createElement('script');
+        s.src = src; s.id = id; s.defer = true;
+        s.onload = cb || null;
+        document.head.appendChild(s);
     }
 
-    function _closeSuccess(cb) {
-        const overlay = document.getElementById('ag-success-overlay');
-        if (!overlay) return;
-        overlay.classList.remove('ag-active');
-        setTimeout(() => { if (cb) cb(); }, 320);
-    }
-    function hideSuccess(cb) { _closeSuccess(cb); }
+    /* ─── COLORS ────────────────────────────────────────────────── */
+    const PALETTE = {
+        cyan:    '#06b6d4',
+        blue:    '#3b82f6',
+        violet:  '#8b5cf6',
+        pink:    '#ec4899',
+        emerald: '#10b981',
+        amber:   '#f59e0b',
+        white:   '#ffffff',
+    };
+    const COLORS = Object.values(PALETTE);
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // MAGNETIC BUTTONS — spring hover + ripple
-    // ═══════════════════════════════════════════════════════════════════════
-    function wireMagnetic(root) {
-        const sel = '.btn,.btn-login,.btn-logout,.btn-sm,.method-btn,.nav-tab';
-        (root || document).querySelectorAll(sel).forEach(el => {
-            if (el._agMag) return;
-            el._agMag = true;
-            el.classList.add('ag-mag');
-            el.style.position = el.style.position || 'relative';
-            el.style.overflow = 'hidden';
-
-            el.addEventListener('mouseenter', () => { el.style.transform = 'translateY(-2px) scale(1.03)'; });
-            el.addEventListener('mouseleave', () => { el.style.transform = ''; });
-            el.addEventListener('mousedown',  () => { el.style.transform = 'translateY(1px) scale(0.97)'; });
-            el.addEventListener('mouseup',    () => {
-                el.style.transform = 'translateY(-1px) scale(1.01)';
-                setTimeout(() => { el.style.transform = ''; }, 160);
+    /* ═══════════════════════════════════════════════════════════════
+       PHASE 1 — INJECT AURORA BLOBS + THREE.JS CANVAS on DOM ready
+    ═══════════════════════════════════════════════════════════════ */
+    function injectBackgroundElements() {
+        /* Aurora blobs */
+        if (!document.querySelector('.aurora-blob')) {
+            [1,2,3,4].forEach(n => {
+                const d = document.createElement('div');
+                d.className = `aurora-blob aurora-blob-${n}`;
+                document.body.appendChild(d);
             });
-            el.addEventListener('click', e => {
-                const rect = el.getBoundingClientRect();
-                const size = Math.max(rect.width, rect.height) * 1.5;
-                const r = document.createElement('span');
-                r.className = 'ag-ripple';
-                r.style.cssText = `width:${size}px;height:${size}px;left:${e.clientX - rect.left - size/2}px;top:${e.clientY - rect.top - size/2}px;`;
-                el.appendChild(r);
-                setTimeout(() => r.remove(), 600);
+        }
+        /* Tech grid overlay */
+        if (!document.querySelector('.grid-overlay')) {
+            const g = document.createElement('div');
+            g.className = 'grid-overlay';
+            document.body.appendChild(g);
+        }
+        /* Cursor glow */
+        if (!document.querySelector('.cursor-glow')) {
+            const c = document.createElement('div');
+            c.className = 'cursor-glow';
+            document.body.appendChild(c);
+        }
+        /* Three.js canvas */
+        if (!document.getElementById('three-canvas')) {
+            const cv = document.createElement('canvas');
+            cv.id = 'three-canvas';
+            document.body.insertBefore(cv, document.body.firstChild);
+        }
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       PHASE 2 — THREE.JS NEBULA PARTICLE FIELD
+    ═══════════════════════════════════════════════════════════════ */
+    function initThreeParticles() {
+        const canvas = document.getElementById('three-canvas');
+        if (!canvas || !window.THREE) return;
+
+        const THREE = window.THREE;
+        const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: false });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setClearColor(0x000000, 0);
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 5;
+
+        /* ── Star field (2000 tiny dots) ── */
+        const starGeo = new THREE.BufferGeometry();
+        const starCount = window.innerWidth < 600 ? 800 : 2000;
+        const starPos = new Float32Array(starCount * 3);
+        const starColors = new Float32Array(starCount * 3);
+        const colorList = [
+            new THREE.Color('#06b6d4'),
+            new THREE.Color('#3b82f6'),
+            new THREE.Color('#8b5cf6'),
+            new THREE.Color('#ec4899'),
+            new THREE.Color('#ffffff'),
+            new THREE.Color('#10b981'),
+        ];
+        for (let i = 0; i < starCount; i++) {
+            starPos[i*3]   = (Math.random() - 0.5) * 30;
+            starPos[i*3+1] = (Math.random() - 0.5) * 30;
+            starPos[i*3+2] = (Math.random() - 0.5) * 20;
+            const c = colorList[Math.floor(Math.random() * colorList.length)];
+            starColors[i*3]   = c.r;
+            starColors[i*3+1] = c.g;
+            starColors[i*3+2] = c.b;
+        }
+        starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+        starGeo.setAttribute('color',    new THREE.BufferAttribute(starColors, 3));
+
+        const starMat = new THREE.PointsMaterial({
+            size: 0.055,
+            vertexColors: true,
+            transparent: true,
+            opacity: 0.75,
+            sizeAttenuation: true,
+        });
+        const stars = new THREE.Points(starGeo, starMat);
+        scene.add(stars);
+
+        /* ── Nebula dust cloud (larger diffuse points) ── */
+        const dustGeo = new THREE.BufferGeometry();
+        const dustCount = window.innerWidth < 600 ? 120 : 280;
+        const dustPos = new Float32Array(dustCount * 3);
+        const dustCol = new Float32Array(dustCount * 3);
+        for (let i = 0; i < dustCount; i++) {
+            dustPos[i*3]   = (Math.random() - 0.5) * 18;
+            dustPos[i*3+1] = (Math.random() - 0.5) * 18;
+            dustPos[i*3+2] = (Math.random() - 0.5) * 10;
+            const c = colorList[Math.floor(Math.random() * 4)]; // only blue spectrum
+            dustCol[i*3]   = c.r;
+            dustCol[i*3+1] = c.g;
+            dustCol[i*3+2] = c.b;
+        }
+        dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
+        dustGeo.setAttribute('color',    new THREE.BufferAttribute(dustCol, 3));
+        const dustMat = new THREE.PointsMaterial({
+            size: 0.35,
+            vertexColors: true,
+            transparent: true,
+            opacity: 0.12,
+            sizeAttenuation: true,
+        });
+        const dust = new THREE.Points(dustGeo, dustMat);
+        scene.add(dust);
+
+        /* ── Floating wireframe icosahedrons ── */
+        const orbs = [];
+        const orbColors = [0x06b6d4, 0x8b5cf6, 0x3b82f6, 0xec4899];
+        for (let i = 0; i < 4; i++) {
+            const geo = new THREE.IcosahedronGeometry(0.08 + Math.random() * 0.08, 0);
+            const mat = new THREE.MeshBasicMaterial({
+                color: orbColors[i],
+                wireframe: true,
+                transparent: true,
+                opacity: 0.4,
+            });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(
+                (Math.random() - 0.5) * 8,
+                (Math.random() - 0.5) * 6,
+                (Math.random() - 0.5) * 4
+            );
+            mesh.userData = {
+                vx: (Math.random() - 0.5) * 0.004,
+                vy: (Math.random() - 0.5) * 0.004,
+                rx: Math.random() * 0.012,
+                ry: Math.random() * 0.012,
+            };
+            scene.add(mesh);
+            orbs.push(mesh);
+        }
+
+        /* ── Mouse parallax ── */
+        let mx = 0, my = 0;
+        document.addEventListener('mousemove', e => {
+            mx = (e.clientX / window.innerWidth  - 0.5) * 0.6;
+            my = (e.clientY / window.innerHeight - 0.5) * 0.4;
+        }, { passive: true });
+
+        /* ── Resize ── */
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        /* ── Render loop ── */
+        let frame = 0;
+        function animate() {
+            requestAnimationFrame(animate);
+            frame += 0.005;
+
+            stars.rotation.y += 0.00015;
+            stars.rotation.x += 0.00008;
+
+            dust.rotation.y -= 0.00012;
+            dust.rotation.x -= 0.00006;
+
+            /* Mouse parallax tilt */
+            camera.position.x += (mx - camera.position.x) * 0.04;
+            camera.position.y += (-my - camera.position.y) * 0.04;
+            camera.lookAt(scene.position);
+
+            /* Animate orbs */
+            orbs.forEach(orb => {
+                orb.position.x += orb.userData.vx;
+                orb.position.y += orb.userData.vy;
+                orb.rotation.x += orb.userData.rx;
+                orb.rotation.y += orb.userData.ry;
+                /* Bounce bounds */
+                if (Math.abs(orb.position.x) > 6) orb.userData.vx *= -1;
+                if (Math.abs(orb.position.y) > 5) orb.userData.vy *= -1;
+            });
+
+            /* Pulsate star opacity */
+            starMat.opacity = 0.65 + Math.sin(frame * 1.5) * 0.1;
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        AG.threeScene = scene;
+        AG.threeRenderer = renderer;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       PHASE 3 — GSAP ENTRANCE ANIMATIONS
+    ═══════════════════════════════════════════════════════════════ */
+    function initGSAPAnimations() {
+        if (!window.gsap) return;
+        const gsap = window.gsap;
+
+        /* Container entrance */
+        const container = document.querySelector('.container');
+        if (container) {
+            gsap.from(container, {
+                duration: 1.0,
+                y: 60,
+                scale: 0.88,
+                opacity: 0,
+                ease: 'elastic.out(1, 0.7)',
+                clearProps: 'all',
+            });
+        }
+
+        /* Stagger cards */
+        const cards = document.querySelectorAll('.card');
+        if (cards.length) {
+            gsap.from(cards, {
+                duration: 0.7,
+                y: 30,
+                opacity: 0,
+                scale: 0.96,
+                stagger: 0.08,
+                ease: 'power3.out',
+                delay: 0.3,
+                clearProps: 'all',
+            });
+        }
+
+        /* Header */
+        const h2 = document.querySelector('h2');
+        if (h2) {
+            gsap.from(h2, {
+                duration: 0.9,
+                y: -20,
+                opacity: 0,
+                ease: 'power3.out',
+                delay: 0.1,
+            });
+        }
+
+        /* Buttons magnetic hover */
+        document.querySelectorAll('.btn').forEach(btn => {
+            btn.addEventListener('mousemove', e => {
+                const rect = btn.getBoundingClientRect();
+                const dx = e.clientX - (rect.left + rect.width  / 2);
+                const dy = e.clientY - (rect.top  + rect.height / 2);
+                gsap.to(btn, {
+                    x: dx * 0.18,
+                    y: dy * 0.18,
+                    duration: 0.3,
+                    ease: 'power2.out',
+                });
+            });
+            btn.addEventListener('mouseleave', () => {
+                gsap.to(btn, { x: 0, y: 0, duration: 0.5, ease: 'elastic.out(1, 0.5)' });
+            });
+        });
+
+        /* Card tilt on mouse */
+        document.querySelectorAll('.card').forEach(card => {
+            card.addEventListener('mousemove', e => {
+                const rect = card.getBoundingClientRect();
+                const cx = rect.left + rect.width  / 2;
+                const cy = rect.top  + rect.height / 2;
+                const rx = -(e.clientY - cy) / (rect.height / 2) * 5;
+                const ry =  (e.clientX - cx) / (rect.width  / 2) * 5;
+                gsap.to(card, {
+                    rotationX: rx,
+                    rotationY: ry,
+                    duration: 0.3,
+                    ease: 'power2.out',
+                    transformPerspective: 800,
+                    transformOrigin: 'center center',
+                });
+            });
+            card.addEventListener('mouseleave', () => {
+                gsap.to(card, {
+                    rotationX: 0, rotationY: 0,
+                    duration: 0.6, ease: 'elastic.out(1, 0.6)',
+                    transformPerspective: 800,
+                });
             });
         });
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // ANIMATED COUNTER
-    // ═══════════════════════════════════════════════════════════════════════
-    function animateNumber(el, from, to, dur) {
-        if (!el) return;
-        dur = dur || 600;
-        const start = performance.now();
-        (function tick(now) {
-            const p = Math.min((now - start) / dur, 1);
-            const eased = 1 - Math.pow(1 - p, 3);
-            el.textContent = Math.round(from + (to - from) * eased);
-            if (p < 1) requestAnimationFrame(tick);
-            else {
-                el.textContent = to;
-                el.classList.add('ag-num-pop');
-                setTimeout(() => el.classList.remove('ag-num-pop'), 450);
+    /* ═══════════════════════════════════════════════════════════════
+       PHASE 4 — MAGNETIC CURSOR GLOW
+    ═══════════════════════════════════════════════════════════════ */
+    function initCursorGlow() {
+        const glow = document.querySelector('.cursor-glow');
+        if (!glow) return;
+
+        let raf;
+        let tx = 0, ty = 0, cx = 0, cy = 0;
+
+        document.addEventListener('mousemove', e => {
+            tx = e.clientX; ty = e.clientY;
+        }, { passive: true });
+
+        function animCursor() {
+            cx += (tx - cx) * 0.1;
+            cy += (ty - cy) * 0.1;
+            glow.style.left = cx + 'px';
+            glow.style.top  = cy + 'px';
+            raf = requestAnimationFrame(animCursor);
+        }
+        animCursor();
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
+       PHASE 5 — COUNTER-UP ANIMATION (for stat numbers)
+    ═══════════════════════════════════════════════════════════════ */
+    function initCounterUp() {
+        document.querySelectorAll('[data-counter]').forEach(el => {
+            const target = parseFloat(el.dataset.counter);
+            const duration = 1400;
+            const startTime = performance.now();
+            function update(now) {
+                const elapsed = now - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const ease = 1 - Math.pow(1 - progress, 3);
+                el.textContent = Math.floor(ease * target);
+                if (progress < 1) requestAnimationFrame(update);
+                else el.textContent = target;
             }
-        })(start);
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // CARD STAGGER REVEAL
-    // ═══════════════════════════════════════════════════════════════════════
-    function revealCards(container, startDelay) {
-        startDelay = startDelay || 0;
-        (container || document).querySelectorAll('.card').forEach((card, i) => {
-            card.style.opacity = '0';
-            card.style.transform = 'translateY(20px) scale(0.97)';
-            setTimeout(() => {
-                card.style.transition = 'opacity 0.42s cubic-bezier(0.16,1,0.3,1), transform 0.42s cubic-bezier(0.16,1,0.3,1)';
-                card.style.opacity = '1';
-                card.style.transform = '';
-            }, startDelay + i * 70);
+            requestAnimationFrame(update);
         });
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // TAB ANIMATION
-    // ═══════════════════════════════════════════════════════════════════════
-    function animateTab(pageEl) {
-        if (!pageEl) return;
-        pageEl.classList.remove('ag-page-enter');
-        void pageEl.offsetWidth; // reflow
-        pageEl.classList.add('ag-page-enter');
-        revealCards(pageEl, 60);
-        wireMagnetic(pageEl);
+    /* ═══════════════════════════════════════════════════════════════
+       PHASE 6 — BUTTON RIPPLE ON CLICK
+    ═══════════════════════════════════════════════════════════════ */
+    function initRipple() {
+        document.addEventListener('click', e => {
+            const btn = e.target.closest('.btn');
+            if (!btn || btn.disabled) return;
+
+            const rect = btn.getBoundingClientRect();
+            const ripple = document.createElement('span');
+            ripple.className = 'ag-ripple';
+            const size = Math.max(rect.width, rect.height);
+            ripple.style.cssText = `
+                width: ${size}px; height: ${size}px;
+                left: ${e.clientX - rect.left - size/2}px;
+                top:  ${e.clientY - rect.top  - size/2}px;
+            `;
+            btn.style.position = 'relative';
+            btn.appendChild(ripple);
+            setTimeout(() => ripple.remove(), 650);
+        });
     }
 
-    // Patch switchTab if it exists now or later
-    function patchSwitchTab() {
-        if (!window.switchTab || window.switchTab._agPatched) return;
-        const orig = window.switchTab;
-        window.switchTab = function(tab) {
-            orig(tab);
-            requestAnimationFrame(() => animateTab(document.getElementById('page-' + tab)));
-        };
-        window.switchTab._agPatched = true;
+    /* ═══════════════════════════════════════════════════════════════
+       PHASE 7 — SUCCESS OVERLAY (AG.showSuccess)
+    ═══════════════════════════════════════════════════════════════ */
+    function buildSuccessOverlay() {
+        if (document.getElementById('ag-success-overlay')) return;
+        const el = document.createElement('div');
+        el.id = 'ag-success-overlay';
+        el.innerHTML = `
+            <div class="ag-success-card">
+                <span class="ag-success-icon" id="ag-success-icon">✅</span>
+                <div class="ag-success-title" id="ag-success-title">Success!</div>
+                <div class="ag-success-msg"   id="ag-success-msg"></div>
+                <button class="ag-success-btn" onclick="AG.hideSuccess()">Continue →</button>
+            </div>
+        `;
+        document.body.appendChild(el);
+
+        /* inject minimal extra CSS for overlay */
+        const style = document.createElement('style');
+        style.textContent = `
+            #ag-success-overlay{position:fixed;inset:0;z-index:99995;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.72);backdrop-filter:blur(16px);opacity:0;pointer-events:none;transition:opacity 0.35s ease;}
+            #ag-success-overlay.ag-active{opacity:1;pointer-events:all;}
+            .ag-success-card{background:linear-gradient(135deg,rgba(16,185,129,0.14),rgba(10,18,42,0.92));border:1px solid rgba(16,185,129,0.35);border-radius:28px;padding:40px 36px;text-align:center;max-width:340px;width:92%;transform:scale(0.82) translateY(30px);transition:transform 0.45s cubic-bezier(0.34,1.56,0.64,1);box-shadow:0 30px 70px rgba(0,0,0,0.7),0 0 60px rgba(16,185,129,0.08);}
+            #ag-success-overlay.ag-active .ag-success-card{transform:scale(1) translateY(0);}
+            .ag-success-icon{font-size:72px;margin-bottom:16px;display:block;animation:ag-bounce-in 0.5s cubic-bezier(0.34,1.56,0.64,1) both;}
+            @keyframes ag-bounce-in{from{transform:scale(0) rotate(-20deg);opacity:0}to{transform:scale(1) rotate(0deg);opacity:1}}
+            .ag-success-title{font-size:22px;font-weight:800;color:#10b981;margin-bottom:10px;font-family:'Outfit',sans-serif;letter-spacing:-0.02em;}
+            .ag-success-msg{font-size:14px;color:rgba(255,255,255,0.6);line-height:1.6;font-family:'Outfit',sans-serif;}
+            .ag-success-btn{margin-top:24px;padding:12px 36px;border-radius:14px;background:linear-gradient(135deg,#10b981,#059669);color:white;font-size:15px;font-weight:700;border:none;cursor:pointer;font-family:'Outfit',sans-serif;transition:transform 0.2s,box-shadow 0.2s;letter-spacing:0.02em;}
+            .ag-success-btn:hover{transform:translateY(-3px);box-shadow:0 10px 28px rgba(16,185,129,0.45);}
+        `;
+        document.head.appendChild(style);
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // QR CODE FLIP
-    // ═══════════════════════════════════════════════════════════════════════
-    function flipQR() {
-        const c = document.getElementById('qrCanvas');
-        if (!c) return;
-        c.classList.remove('ag-qr-flip');
-        void c.offsetWidth;
-        c.classList.add('ag-qr-flip');
-        setTimeout(() => c.classList.remove('ag-qr-flip'), 500);
-    }
+    AG.showSuccess = function(title, msg, icon) {
+        buildSuccessOverlay();
+        document.getElementById('ag-success-title').textContent = title || 'Success!';
+        document.getElementById('ag-success-msg').textContent   = msg   || '';
+        document.getElementById('ag-success-icon').textContent  = icon  || '✅';
+        document.getElementById('ag-success-overlay').classList.add('ag-active');
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // GPS PULSE RINGS
-    // ═══════════════════════════════════════════════════════════════════════
-    function showGpsPulse(el) {
-        if (!el) return;
-        el.style.position = 'relative';
-        el.querySelectorAll('.ag-gps-ring').forEach(r => r.remove());
-        for (let i = 0; i < 3; i++) {
+        /* GSAP bounce if available */
+        if (window.gsap) {
+            gsap.from('.ag-success-icon', { scale:0, rotation:-30, duration:0.5, ease:'elastic.out(1,0.5)' });
+        }
+    };
+
+    AG.hideSuccess = function() {
+        const el = document.getElementById('ag-success-overlay');
+        if (el) el.classList.remove('ag-active');
+    };
+
+    /* ═══════════════════════════════════════════════════════════════
+       PHASE 8 — GPS PULSE RINGS
+    ═══════════════════════════════════════════════════════════════ */
+    AG.spawnGPSRings = function(parentEl, count) {
+        if (!parentEl) return;
+        parentEl.style.position = 'relative';
+        for (let i = 0; i < (count || 3); i++) {
             const ring = document.createElement('div');
             ring.className = 'ag-gps-ring';
-            const sz = 56;
-            ring.style.cssText = `width:${sz}px;height:${sz}px;top:50%;left:50%;margin:-${sz/2}px 0 0 -${sz/2}px;animation-delay:${i*0.6}s;`;
-            el.appendChild(ring);
+            const size = 60 + i * 40;
+            ring.style.cssText = `
+                width:${size}px; height:${size}px;
+                top:50%; left:50%;
+                transform:translate(-50%,-50%);
+                animation-delay:${i * 0.55}s;
+            `;
+            parentEl.appendChild(ring);
         }
-        setTimeout(() => el.querySelectorAll('.ag-gps-ring').forEach(r => r.remove()), 5500);
-    }
+    };
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // HEADER DROP-IN
-    // ═══════════════════════════════════════════════════════════════════════
-    function animateHeader() {
-        const h = document.querySelector('.header');
-        if (!h) return;
-        h.style.cssText += ';transform:translateY(-100%);opacity:0;transition:transform 0.5s cubic-bezier(0.16,1,0.3,1),opacity 0.4s ease;';
-        setTimeout(() => { h.style.transform = ''; h.style.opacity = '1'; }, 50);
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // SESSION START CELEBRATION
-    // ═══════════════════════════════════════════════════════════════════════
-    function onSessionStarted() {
-        const banner = document.querySelector('.session-banner');
-        if (banner) {
-            banner.classList.remove('ag-session-pop');
-            void banner.offsetWidth;
-            banner.classList.add('ag-session-pop');
-        }
-        const nav = document.getElementById('mainNav');
-        if (nav) {
-            nav.style.opacity = '0';
-            nav.style.transform = 'translateY(-12px)';
-            nav.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
-            setTimeout(() => { nav.style.opacity = '1'; nav.style.transform = ''; }, 80);
-        }
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // REQUEST CARDS STAGGER
-    // ═══════════════════════════════════════════════════════════════════════
-    function animateRequestCards() {
-        document.querySelectorAll('.request-card').forEach((card, i) => {
-            card.style.opacity = '0';
-            card.style.transform = 'translateX(-16px)';
+    /* ═══════════════════════════════════════════════════════════════
+       PHASE 9 — FLOATING PARTICLE RAIN
+    ═══════════════════════════════════════════════════════════════ */
+    function spawnParticleRain() {
+        const count = window.innerWidth < 600 ? 10 : 22;
+        for (let i = 0; i < count; i++) {
             setTimeout(() => {
-                card.style.transition = 'opacity 0.32s ease, transform 0.32s ease';
-                card.style.opacity = '1';
-                card.style.transform = '';
-            }, i * 80);
-        });
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // FLOATING DOTS (attendance button)
-    // ═══════════════════════════════════════════════════════════════════════
-    function floatDots(btn) {
-        if (!btn) return;
-        const r = btn.getBoundingClientRect();
-        const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-        for (let i = 0; i < 9; i++) {
-            const d = document.createElement('div');
-            d.className = 'ag-float-dot';
-            d.style.cssText = `left:${cx + (Math.random()-0.5)*70}px;top:${cy}px;background:${COLORS[i % COLORS.length]};animation-delay:${i*0.06}s;`;
-            document.body.appendChild(d);
-            setTimeout(() => d.remove(), 1300);
+                const p = document.createElement('div');
+                p.className = 'ag-particle';
+                const size = 2 + Math.random() * 5;
+                const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+                p.style.cssText = `
+                    width:${size}px; height:${size}px;
+                    background:${color};
+                    box-shadow: 0 0 ${size*2}px ${color};
+                    left:${Math.random()*100}vw;
+                    bottom:-20px;
+                    animation-duration:${8 + Math.random()*10}s;
+                    animation-delay:${Math.random()*4}s;
+                    opacity:0;
+                `;
+                document.body.appendChild(p);
+                /* Remove after animation */
+                setTimeout(() => p.remove(), 22000);
+            }, i * 400);
         }
+        /* Respawn continuously */
+        setInterval(spawnParticleRain, 25000);
     }
 
-    function onAttendanceMarked(btn) {
-        floatDots(btn);
-    }
+    /* ═══════════════════════════════════════════════════════════════
+       PHASE 10 — HONEYCOMB BURST TRANSITION
+    ═══════════════════════════════════════════════════════════════ */
+    AG.burstHoneycomb = function (onComplete) {
+        let overlay = document.getElementById('honeycomb-overlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'honeycomb-overlay';
+            document.body.appendChild(overlay);
+        }
+        overlay.innerHTML = '';
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // TOAST SLIDE ANIMATION
-    // ═══════════════════════════════════════════════════════════════════════
-    function patchToast() {
-        if (!window.showToast || window.showToast._agPatched) return;
-        const orig = window.showToast;
-        window.showToast = function(msg, type, dur) {
-            orig(msg, type, dur);
-            requestAnimationFrame(() => {
-                const c = document.getElementById('toastContainer');
-                const last = c && c.lastElementChild;
-                if (!last) return;
-                last.classList.add('ag-toast-animate');
+        const cols = ['color-a','color-b','color-c','color-d'];
+        const count = Math.min(30, Math.floor((window.innerWidth * window.innerHeight) / 26000));
+
+        for (let i = 0; i < count; i++) {
+            const hex = document.createElement('div');
+            hex.className = `hex-tile ${cols[i % 4]}`;
+            hex.style.left = Math.random() * 100 + 'vw';
+            hex.style.top  = Math.random() * 100 + 'vh';
+            hex.style.animationDelay = (Math.random() * 0.4) + 's';
+            overlay.appendChild(hex);
+        }
+
+        setTimeout(() => {
+            overlay.innerHTML = '';
+            if (onComplete) onComplete();
+        }, 1200);
+    };
+
+    /* ═══════════════════════════════════════════════════════════════
+       PHASE 11 — VORTEX CANVAS SWIRL
+    ═══════════════════════════════════════════════════════════════ */
+    AG.startVortex = function (duration) {
+        let cv = document.getElementById('vortex-canvas');
+        if (!cv) {
+            cv = document.createElement('canvas');
+            cv.id = 'vortex-canvas';
+            document.body.appendChild(cv);
+        }
+        cv.width  = window.innerWidth;
+        cv.height = window.innerHeight;
+        cv.classList.add('active');
+
+        const ctx = cv.getContext('2d');
+        const cx  = cv.width / 2, cy = cv.height / 2;
+        let   angle = 0, frame = 0, fading = false, alphaOut = 0;
+
+        function draw() {
+            ctx.clearRect(0, 0, cv.width, cv.height);
+            for (let i = 0; i < 120; i++) {
+                const a = angle + (i / 120) * Math.PI * 8;
+                const r = 4 + (i / 120) * Math.min(cv.width, cv.height) * 0.45;
+                const x = cx + Math.cos(a) * r;
+                const y = cy + Math.sin(a) * r;
+                const hue = (frame * 2 + i * 3) % 360;
+                ctx.beginPath();
+                ctx.arc(x, y, 1.5 + (i/120)*2.5, 0, Math.PI*2);
+                ctx.fillStyle = `hsla(${hue},85%,65%,${(1 - i/120) * (fading ? 1-alphaOut : 1)})`;
+                ctx.fill();
+            }
+            angle += 0.06;
+            frame++;
+            if (fading) {
+                alphaOut += 0.04;
+                if (alphaOut >= 1) { cv.classList.remove('active'); return; }
+            }
+            requestAnimationFrame(draw);
+        }
+        draw();
+
+        setTimeout(() => { fading = true; }, duration || 1600);
+    };
+
+    /* ═══════════════════════════════════════════════════════════════
+       PHASE 12 — NUMBER TICKER (for alert counts, attendance %)
+    ═══════════════════════════════════════════════════════════════ */
+    AG.animateNumber = function(el, from, to, durationMs) {
+        if (!el) return;
+        const start = performance.now();
+        const diff  = to - from;
+        const dur   = durationMs || 900;
+        function tick(now) {
+            const t = Math.min((now - start) / dur, 1);
+            const eased = 1 - Math.pow(1 - t, 4);
+            el.textContent = Math.round(from + eased * diff);
+            if (t < 1) requestAnimationFrame(tick);
+            else el.textContent = to;
+        }
+        requestAnimationFrame(tick);
+    };
+
+    /* ═══════════════════════════════════════════════════════════════
+       PHASE 13 — NOTIFICATION SHAKE (for alerts)
+    ═══════════════════════════════════════════════════════════════ */
+    AG.shake = function(el) {
+        if (!el) return;
+        if (window.gsap) {
+            gsap.fromTo(el,
+                { x: -8 },
+                { x: 0, duration: 0.5, ease: 'elastic.out(1, 0.3)' }
+            );
+        } else {
+            el.style.animation = 'none';
+            el.style.animation = 'ag-shake 0.4s ease';
+        }
+    };
+
+    /* ═══════════════════════════════════════════════════════════════
+       PHASE 14 — STAGGER REVEAL for list items
+    ═══════════════════════════════════════════════════════════════ */
+    AG.revealList = function(containerEl) {
+        if (!containerEl) return;
+        const items = containerEl.querySelectorAll('.list-item, tr, .data-row');
+        if (window.gsap) {
+            gsap.from(items, {
+                y: 16, opacity: 0, stagger: 0.06,
+                duration: 0.5, ease: 'power3.out',
+                clearProps: 'all',
             });
-        };
-        window.showToast._agPatched = true;
-    }
+        } else {
+            items.forEach((item, i) => {
+                item.style.opacity = 0;
+                item.style.transform = 'translateY(14px)';
+                setTimeout(() => {
+                    item.style.transition = 'all 0.4s ease';
+                    item.style.opacity = 1;
+                    item.style.transform = 'none';
+                }, i * 60);
+            });
+        }
+    };
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // LOGIN PAGE STEP ANIMATION
-    // ═══════════════════════════════════════════════════════════════════════
-    function animateLoginStep(direction) {
-        const active = document.querySelector('.step.active');
-        if (!active) return;
-        const kf = direction === 'backward'
-            ? [{opacity:0, transform:'translateY(-12px)'},{opacity:1, transform:'translateY(0)'}]
-            : [{opacity:0, transform:'translateY(14px)'},{opacity:1, transform:'translateY(0)'}];
-        active.style.animation = 'none';
-        void active.offsetWidth;
-        active.style.animation = '';
-        // Use Web Animations API directly — always available
-        active.animate(kf, { duration: 380, easing: 'cubic-bezier(0.16,1,0.3,1)', fill: 'both' });
-    }
+    /* ═══════════════════════════════════════════════════════════════
+       PHASE 15 — PAGE TRANSITION (route changes)
+    ═══════════════════════════════════════════════════════════════ */
+    AG.transition = function(href) {
+        AG.burstHoneycomb(() => {
+            AG.startVortex(600);
+            setTimeout(() => { window.location.href = href; }, 700);
+        });
+    };
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // MUTATION OBSERVER — wire new dynamic elements
-    // ═══════════════════════════════════════════════════════════════════════
-    const obs = new MutationObserver(muts => {
-        muts.forEach(m => m.addedNodes.forEach(n => {
-            if (n.nodeType !== 1) return;
-            wireMagnetic(n);
-            if (n.classList.contains('request-card')) {
-                n.style.opacity = '0'; n.style.transform = 'translateX(-14px)';
-                setTimeout(() => { n.style.transition = 'opacity 0.3s ease,transform 0.3s ease'; n.style.opacity = '1'; n.style.transform = ''; }, 40);
+    /* ═══════════════════════════════════════════════════════════════
+       INIT SEQUENCE
+    ═══════════════════════════════════════════════════════════════ */
+    function boot() {
+        injectBackgroundElements();
+        initCursorGlow();
+        initRipple();
+        spawnParticleRain();
+        initCounterUp();
+
+        /* Load Three.js from CDN then init particles */
+        loadScript(
+            'https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js',
+            'three-js-cdn',
+            function () {
+                /* Delay slightly so DOM is fully painted */
+                setTimeout(initThreeParticles, 100);
             }
-            if (n.classList.contains('student-row')) {
-                n.style.opacity = '0'; n.style.transform = 'translateX(10px)';
-                setTimeout(() => { n.style.transition = 'opacity 0.28s ease,transform 0.28s ease'; n.style.opacity = '1'; n.style.transform = ''; }, 30);
+        );
+
+        /* Load GSAP then run entrance animations */
+        loadScript(
+            'https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js',
+            'gsap-cdn',
+            function () {
+                requestAnimationFrame(initGSAPAnimations);
             }
-        }));
-    });
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // INIT — deferred to DOM ready
-    // ═══════════════════════════════════════════════════════════════════════
-    function init() {
-        // Inject CSS
-        const style = document.createElement('style');
-        style.id = 'ag-styles';
-        style.textContent = CSS_TEXT;
-        document.head.appendChild(style);
-
-        // Wire existing buttons
-        wireMagnetic(document);
-
-        // Header drop-in
-        animateHeader();
-
-        // Reveal cards after portal JS has had time to render
-        setTimeout(() => revealCards(document, 0), 450);
-
-        // Start DOM watcher
-        obs.observe(document.body, { childList: true, subtree: true });
-
-        // Patch switchTab & showToast (they may not be defined yet — retry)
-        patchSwitchTab();
-        patchToast();
-        setTimeout(() => { patchSwitchTab(); patchToast(); }, 500);
-        setTimeout(() => { patchSwitchTab(); patchToast(); }, 1500);
+        );
     }
 
+    /* ═══════════════════════════════════════════════════════════════
+       MINIMAL EXTRA CSS (injected once)
+    ═══════════════════════════════════════════════════════════════ */
+    (function injectExtraCSS() {
+        const id = 'ag-anim-extra-css';
+        if (document.getElementById(id)) return;
+        const s = document.createElement('style');
+        s.id = id;
+        s.textContent = `
+            @keyframes ag-shake {
+                0%,100%{transform:translateX(0)}
+                20%{transform:translateX(-8px)}
+                40%{transform:translateX(8px)}
+                60%{transform:translateX(-5px)}
+                80%{transform:translateX(5px)}
+            }
+            .ag-fade-up {
+                animation: ag-fade-up-kf 0.55s cubic-bezier(0.16,1,0.3,1) both;
+            }
+            @keyframes ag-fade-up-kf {
+                from { opacity:0; transform:translateY(20px); }
+                to   { opacity:1; transform:none; }
+            }
+        `;
+        document.head.appendChild(s);
+    })();
+
+    /* Boot when DOM is ready */
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
+        document.addEventListener('DOMContentLoaded', boot);
     } else {
-        // DOM already ready (e.g. script deferred or placed before </body>)
-        init();
+        boot();
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // PUBLIC API
-    // ═══════════════════════════════════════════════════════════════════════
-    Object.assign(window.AG, {
-        showSuccess,
-        hideSuccess,
-        animateTab,
-        revealCards,
-        wireMagnetic,
-        flipQR,
-        showGpsPulse,
-        animateNumber,
-        animateRequestCards,
-        floatDots,
-        onAttendanceMarked,
-        onSessionStarted,
-        onQRRefresh: flipQR,
-        onRequestsLoaded: animateRequestCards,
-        animateLoginStep,
-    });
+    /* Export public surface */
+    window.AG = AG;
 
-    console.log('[AG Animations] ✅ Initialized successfully');
 })();
