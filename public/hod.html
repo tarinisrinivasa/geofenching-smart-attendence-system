@@ -419,7 +419,10 @@
             <div class="card">
                 <div class="card-header">
                     <div class="card-title">🚨 Bunking Anomalies & Alerts</div>
-                    <button class="btn btn-secondary btn-sm" id="btnRefreshAnomalies">🔄 Refresh</button>
+                    <div style="display:flex; gap:8px;">
+                        <button class="btn btn-secondary btn-sm" id="btnRefreshAnomalies">🔄 Refresh</button>
+                        <button class="btn btn-danger btn-sm" id="btnDismissAllAnomalies">🧹 Dismiss All</button>
+                    </div>
                 </div>
                 <div id="anomaliesList">
                     <!-- Geofence breaches + AI bunking alerts list -->
@@ -460,6 +463,7 @@
             document.getElementById('outpassForm').addEventListener('submit', grantOutpass);
             document.getElementById('btnRefreshTracking').addEventListener('click', loadTracking);
             document.getElementById('btnRefreshAnomalies').addEventListener('click', loadAnomalies);
+            document.getElementById('btnDismissAllAnomalies').addEventListener('click', dismissAllAlerts);
             document.getElementById('logoutBtn').addEventListener('click', () => {
                 safeStorage.removeItem('token');
                 safeStorage.removeItem('user');
@@ -727,6 +731,17 @@
                 loadAnomalies();
             } else {
                 showToast(res.message || 'Failed to dismiss alert.', 'error');
+            }
+        }
+
+        async function dismissAllAlerts() {
+            if (!confirm('Are you sure you want to dismiss all pending alerts?')) return;
+            const res = await api('/api/alerts/dismiss-all', 'POST');
+            if (res.success) {
+                showToast('All alerts dismissed successfully.', 'success');
+                loadAnomalies();
+            } else {
+                showToast(res.message || 'Failed to dismiss all alerts.', 'error');
             }
         }
 

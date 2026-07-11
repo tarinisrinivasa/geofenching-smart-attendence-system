@@ -477,7 +477,10 @@
             <div class="card">
                 <div class="card-header">
                     <div class="card-title">🚨 Geofence Breach alerts</div>
-                    <button class="btn btn-secondary btn-sm" id="btnRefreshAlerts">🔄 Refresh</button>
+                    <div style="display:flex; gap:8px;">
+                        <button class="btn btn-secondary btn-sm" id="btnRefreshAlerts">🔄 Refresh</button>
+                        <button class="btn btn-danger btn-sm" id="btnDismissAllAlerts">🧹 Dismiss All</button>
+                    </div>
                 </div>
                 <div id="alertsList">
                     <!-- Geofence anomalies and coordinate breaches -->
@@ -537,6 +540,7 @@
             document.getElementById('classroomForm').addEventListener('submit', createClassroom);
             document.getElementById('btnRefreshRoster').addEventListener('click', loadRoster);
             document.getElementById('btnRefreshAlerts').addEventListener('click', loadAlerts);
+            document.getElementById('btnDismissAllAlerts').addEventListener('click', dismissAllAlerts);
             document.getElementById('logoutBtn').addEventListener('click', () => {
                 safeStorage.removeItem('token');
                 safeStorage.removeItem('user');
@@ -852,6 +856,17 @@
                 loadAlerts();
             } else {
                 showToast(res.message || 'Failed to dismiss alert.', 'error');
+            }
+        }
+
+        async function dismissAllAlerts() {
+            if (!confirm('Are you sure you want to dismiss all pending alerts?')) return;
+            const res = await api('/api/alerts/dismiss-all', 'POST');
+            if (res.success) {
+                showToast('All alerts dismissed successfully.', 'success');
+                loadAlerts();
+            } else {
+                showToast(res.message || 'Failed to dismiss all alerts.', 'error');
             }
         }
 
