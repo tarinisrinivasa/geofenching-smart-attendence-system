@@ -12,25 +12,8 @@
     // Expose AG namespace immediately so portals can reference it before init
     window.AG = window.AG || {};
 
-    // ── Colour palette for particles ───────────────────────────────────────
+    // ── Colour palette for floating dots ──────────────────────────────────────
     const COLORS = ['#6c63ff','#a78bfa','#10b981','#f59e0b','#3b82f6','#ec4899','#ffffff'];
-
-    // ── Shared particle canvas ─────────────────────────────────────────────
-    let _canvas = null;
-    function getCanvas() {
-        if (_canvas) return _canvas;
-        _canvas = document.createElement('canvas');
-        _canvas.id = 'ag-particle-canvas';
-        _canvas.style.cssText = 'position:fixed;inset:0;z-index:9990;pointer-events:none;';
-        _canvas.width = window.innerWidth;
-        _canvas.height = window.innerHeight;
-        document.body.appendChild(_canvas);
-        window.addEventListener('resize', () => {
-            _canvas.width = window.innerWidth;
-            _canvas.height = window.innerHeight;
-        });
-        return _canvas;
-    }
 
     // ═══════════════════════════════════════════════════════════════════════
     // CSS — injected once DOM is ready
@@ -169,54 +152,6 @@
     `;
 
     // ═══════════════════════════════════════════════════════════════════════
-    // CONFETTI ENGINE
-    // ═══════════════════════════════════════════════════════════════════════
-    function burst(x, y, count) {
-        count = count || 32;
-        const canvas = getCanvas();
-        const ctx = canvas.getContext('2d');
-        const particles = [];
-        for (let i = 0; i < count; i++) {
-            const angle = (Math.PI * 2 / count) * i + Math.random() * 0.4;
-            const speed = 4 + Math.random() * 7;
-            particles.push({
-                x, y,
-                vx: Math.cos(angle) * speed,
-                vy: Math.sin(angle) * speed - 5,
-                gravity: 0.28,
-                alpha: 1,
-                size: 4 + Math.random() * 5,
-                color: COLORS[Math.floor(Math.random() * COLORS.length)],
-                rot: Math.random() * Math.PI * 2,
-                rotSpeed: (Math.random() - 0.5) * 0.18
-            });
-        }
-        let raf;
-        (function draw() {
-            let alive = false;
-            particles.forEach(p => {
-                if (p.alpha <= 0) return;
-                alive = true;
-                p.x += p.vx; p.y += p.vy;
-                p.vy += p.gravity;
-                p.alpha -= 0.02;
-                p.rot += p.rotSpeed;
-                ctx.save();
-                ctx.globalAlpha = Math.max(0, p.alpha);
-                ctx.translate(p.x, p.y);
-                ctx.rotate(p.rot);
-                ctx.fillStyle = p.color;
-                ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.5);
-                ctx.restore();
-            });
-            if (alive) raf = requestAnimationFrame(draw);
-        })();
-        setTimeout(() => cancelAnimationFrame(raf), 2500);
-    }
-
-    function centerBurst(n) { burst(window.innerWidth / 2, window.innerHeight * 0.4, n || 42); }
-
-    // ═══════════════════════════════════════════════════════════════════════
     // SUCCESS OVERLAY
     // ═══════════════════════════════════════════════════════════════════════
     function showSuccess(title, msg, onClose) {
@@ -238,9 +173,6 @@
         overlay.querySelector('#ag-suc-title').textContent = title;
         overlay.querySelector('#ag-suc-msg').textContent   = msg;
         overlay.classList.add('ag-active');
-        // Burst after a tiny delay so the card is visible
-        setTimeout(() => { centerBurst(48); }, 120);
-        setTimeout(() => { centerBurst(28); }, 450);
         if (overlay._t) clearTimeout(overlay._t);
         overlay._t = setTimeout(() => _closeSuccess(onClose), 6000);
     }
@@ -399,8 +331,6 @@
             nav.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
             setTimeout(() => { nav.style.opacity = '1'; nav.style.transform = ''; }, 80);
         }
-        burst(window.innerWidth / 2, 90, 40);
-        setTimeout(() => centerBurst(30), 280);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -436,8 +366,6 @@
 
     function onAttendanceMarked(btn) {
         floatDots(btn);
-        setTimeout(() => centerBurst(50), 180);
-        setTimeout(() => centerBurst(30), 420);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -534,8 +462,6 @@
     Object.assign(window.AG, {
         showSuccess,
         hideSuccess,
-        burst,
-        centerBurst,
         animateTab,
         revealCards,
         wireMagnetic,
