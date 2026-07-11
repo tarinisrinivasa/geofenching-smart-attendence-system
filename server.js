@@ -525,6 +525,18 @@ app.post('/api/alerts/:alert_id/read', authenticateToken, (req, res) => {
     });
 });
 
+// HOD & Coordinator API: Dismiss ALL pending alerts
+app.post('/api/alerts/dismiss-all', authenticateToken, (req, res) => {
+    if (req.user.role !== 'hod' && req.user.role !== 'coordinator') {
+        return res.status(403).json({ success: false, message: "Unauthorized access." });
+    }
+
+    db.run("UPDATE alerts SET status = 2 WHERE status < 2", [], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true, message: `Successfully dismissed all alerts.` });
+    });
+});
+
 // Teacher API: Get attendance for a specific class (only present students)
 app.get('/api/attendance/:class_id', authenticateToken, (req, res) => {
     const query = `
@@ -1017,7 +1029,7 @@ app.post('/api/alerts/submit-reason', authenticateToken, (req, res) => {
 
 // Teacher API: Get list of all students (so they can select one to generate OTP)
 app.get('/api/students', authenticateToken, (req, res) => {
-    if (req.user.role !== 'teacher' && req.user.role !== 'hod') {
+    if (req.user.role !== 'teacher' && req.user.role !== 'hod' && req.user.role !== 'coordinator') {
         return res.status(403).json({ success: false, message: "Unauthorized." });
     }
 
