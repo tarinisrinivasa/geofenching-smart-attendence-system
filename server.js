@@ -469,34 +469,45 @@ app.post('/api/alerts/:alert_id/reverse-attendance', authenticateToken, (req, re
                     console.error(`[REVERSE ATTENDANCE ERROR] Class verification query failed:`, err);
                     return res.status(500).json({ error: err.message });
                 }
-                if (!cls) {
-                    console.log(`[REVERSE ATTENDANCE FAIL] Referenced class ID ${resolvedClassId} does not exist in classes table.`);
-                    return res.status(400).json({ success: false, message: "The class session associated with this alert no longer exists." });
-                }
 
-                console.log(`[REVERSE ATTENDANCE INFO] Class verified: "${cls.name}"`);
-
-                // Insert or replace present attendance status for that student and class
-                const insertAttendance = `
-                    INSERT OR REPLACE INTO attendance (class_id, student_id, status, timestamp) 
-                    VALUES (?, ?, 'present', datetime('now', 'localtime'))
-                `;
-                db.run(insertAttendance, [resolvedClassId, student_id], function(err) {
-                    if (err) {
-                        console.error(`[REVERSE ATTENDANCE ERROR] Failed to update attendance:`, err);
-                        return res.status(500).json({ error: err.message });
-                    }
-
-                    // Mark the alert as resolved (status = 2)
-                    db.run("UPDATE alerts SET status = 2 WHERE id = ?", [alertId], function(err) {
+                const performInsert = (finalClassId) => {
+                    // Insert or replace present attendance status for that student and class
+                    const insertAttendance = `
+                        INSERT OR REPLACE INTO attendance (class_id, student_id, status, timestamp) 
+                        VALUES (?, ?, 'present', datetime('now', 'localtime'))
+                    `;
+                    db.run(insertAttendance, [finalClassId, student_id], function(err) {
                         if (err) {
-                            console.error(`[REVERSE ATTENDANCE ERROR] Failed to update alert status to 2:`, err);
+                            console.error(`[REVERSE ATTENDANCE ERROR] Failed to update attendance:`, err);
                             return res.status(500).json({ error: err.message });
                         }
-                        console.log(`[REVERSE ATTENDANCE SUCCESS] Successfully marked student ${student_id} present in class ${resolvedClassId}`);
-                        res.json({ success: true, message: "Attendance successfully reversed from Absent to Present!" });
+
+                        // Mark the alert as resolved (status = 2)
+                        db.run("UPDATE alerts SET status = 2 WHERE id = ?", [alertId], function(err) {
+                            if (err) {
+                                console.error(`[REVERSE ATTENDANCE ERROR] Failed to update alert status to 2:`, err);
+                                return res.status(500).json({ error: err.message });
+                            }
+                            console.log(`[REVERSE ATTENDANCE SUCCESS] Successfully marked student ${student_id} present in class ${finalClassId}`);
+                            res.json({ success: true, message: "Attendance successfully reversed from Absent to Present!" });
+                        });
                     });
-                });
+                };
+
+                if (!cls) {
+                    console.log(`[REVERSE ATTENDANCE WARN] Referenced class ID ${resolvedClassId} does not exist. Finding active class...`);
+                    db.get("SELECT id FROM classes WHERE active = 1 ORDER BY id DESC LIMIT 1", [], (err, activeClass) => {
+                        if (err || !activeClass) {
+                            console.log(`[REVERSE ATTENDANCE INFO] No active class found, proceeding with original resolvedClassId.`);
+                            performInsert(resolvedClassId);
+                        } else {
+                            console.log(`[REVERSE ATTENDANCE INFO] Fallback to active class ID ${activeClass.id}.`);
+                            performInsert(activeClass.id);
+                        }
+                    });
+                } else {
+                    performInsert(resolvedClassId);
+                }
             });
         };
 
