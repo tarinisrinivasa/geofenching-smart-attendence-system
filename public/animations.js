@@ -38,7 +38,7 @@
     /* ═══════════════════════════════════════════════════════════════
        PHASE 1 — INJECT AURORA BLOBS + THREE.JS CANVAS on DOM ready
     ═══════════════════════════════════════════════════════════════ */
-    function injectBackgroundElements() {
+    function injectBackgroundElements(isLoginPage) {
         /* Aurora blobs */
         if (!document.querySelector('.aurora-blob')) {
             [1,2,3,4].forEach(n => {
@@ -59,8 +59,8 @@
             c.className = 'cursor-glow';
             document.body.appendChild(c);
         }
-        /* Three.js canvas */
-        if (!document.getElementById('three-canvas')) {
+        /* Three.js canvas — only inject on dashboard pages */
+        if (!isLoginPage && !document.getElementById('three-canvas')) {
             const cv = document.createElement('canvas');
             cv.id = 'three-canvas';
             document.body.insertBefore(cv, document.body.firstChild);
@@ -633,11 +633,34 @@
        INIT SEQUENCE
     ═══════════════════════════════════════════════════════════════ */
     function boot() {
-        injectBackgroundElements();
+        const isLoginPage = !!document.getElementById('loginBtn') || 
+                            window.location.pathname.endsWith('index.html') || 
+                            window.location.pathname === '/' || 
+                            document.title.toLowerCase().includes('login');
+
+        injectBackgroundElements(isLoginPage);
         initCursorGlow();
         initRipple();
-        spawnParticleRain();
         initCounterUp();
+
+        if (isLoginPage) {
+            // Disable heavy effects on login page to prevent lagging
+            const threeCanvas = document.getElementById('three-canvas');
+            if (threeCanvas) threeCanvas.remove();
+            
+            // Just load GSAP for the simple entrance animation of the login container
+            loadScript(
+                'https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js',
+                'gsap-cdn',
+                function () {
+                    requestAnimationFrame(initGSAPAnimations);
+                }
+            );
+            return;
+        }
+
+        // Dashboard pages load the full immersive experience
+        spawnParticleRain();
 
         /* Load Three.js from CDN then init particles */
         loadScript(
