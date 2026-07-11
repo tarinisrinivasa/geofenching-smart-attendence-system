@@ -477,7 +477,7 @@ app.post('/api/alerts/:alert_id/read', authenticateToken, (req, res) => {
 // Teacher API: Get attendance for a specific class (only present students)
 app.get('/api/attendance/:class_id', authenticateToken, (req, res) => {
     const query = `
-        SELECT u.username, a.timestamp 
+        SELECT u.id as student_id, u.username, a.timestamp, a.request_lat, a.request_lon 
         FROM attendance a
         JOIN users u ON a.student_id = u.id
         WHERE a.class_id = ? AND a.status = 'present'
@@ -664,7 +664,9 @@ app.get('/api/pending-requests/:class_id', authenticateToken, (req, res) => {
                     student_id: r.student_id,
                     username: r.username,
                     distance: Math.round(dist),
-                    timestamp: r.timestamp
+                    timestamp: r.timestamp,
+                    latitude: r.request_lat,
+                    longitude: r.request_lon
                 };
             });
             res.json({ requests });
@@ -684,10 +686,32 @@ app.post('/api/approve-request', authenticateToken, (req, res) => {
         [class_id, student_id],
         function(err) {
             if (err) return res.status(500).json({ error: err.message });
+            if (this.changes === 0) {
+                return res.status(404).json({ success: false, message: "No pending request found for this student." });
+            }
             res.json({ success: true, message: "Student approved successfully!" });
         }
     );
 });
+
+// Teacher API: Decline a student request (deletes the pending record)
+app.post('/api/decline-request', authenticateToken, (req, res) => {
+    if (req.user.role !== 'teacher') {
+        return res.status(403).json({ success: false, message: "Unauthorized." });
+    }
+
+    const { class_id, student_id } = req.body;
+    db.run(
+        "DELETE FROM attendance WHERE class_id = ? AND student_id = ? AND status = 'pending'",
+        [class_id, student_id],
+        function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ success: true, message: "Request declined successfully." });
+        }
+    );
+});
+
+
 
 // Student API: Mark Attendance (Standard GPS + dynamic QR if qr_token provided + Teacher OTP if otp_code provided)
 app.post('/api/mark-attendance', authenticateToken, (req, res) => {
@@ -762,11 +786,11 @@ app.post('/api/mark-attendance', authenticateToken, (req, res) => {
         
         // Skip distance validation check if radius is 0 or less (Geofence disabled) or if distance falls within accuracy tolerance
         if (cls.radius <= 0 || distance <= allowedDistance) {
-            db.run("INSERT INTO attendance (class_id, student_id, status) VALUES (?, ?, 'present')", [class_id, student_id], function(err) {
+            db.run("INSERT INTO attendance (class_id, student_id, status, request_lat, request_lon) VALUES (?, ?, 'present', ?, ?)", [class_id, student_id, latitude, longitude], function(err) {
                 if (err) {
                     if (err.message.includes("UNIQUE")) {
                         // If it was pending, promote it to present
-                        db.run("UPDATE attendance SET status = 'present' WHERE class_id = ? AND student_id = ? AND status = 'pending'", [class_id, student_id], function(updateErr) {
+                        db.run("UPDATE attendance SET status = 'present', request_lat = ?, request_lon = ? WHERE class_id = ? AND student_id = ? AND status = 'pending'", [latitude, longitude, class_id, student_id], function(updateErr) {
                             if (updateErr) return res.status(500).json({ error: updateErr.message });
                             if (this.changes > 0) {
                                 return res.json({ success: true, message: "Attendance verified and marked present!", distance: Math.round(distance) });
