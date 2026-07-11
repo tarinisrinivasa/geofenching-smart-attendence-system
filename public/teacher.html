@@ -6,8 +6,6 @@
     <title>Teacher Console | Smart Attendance</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap">
-    <!-- Motion.dev animation library -->
-    <script src="https://cdn.jsdelivr.net/npm/motion@10.18.0/dist/motion.js"></script>
     <!-- QR Code Generator -->
     <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
     <!-- Barcode Scanner -->
@@ -17,8 +15,6 @@
     <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
     <!-- Excel Export -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <!-- Smart Attendance Animations -->
-    <script src="animations.js"></script>
     <style>
         :root {
             --bg: #080a10;
@@ -1478,5 +1474,7 @@ async function generateReport(className, presentStudents, allStudents) {
     }
 }
 </script>
+<!-- Animations — loaded last so DOM is fully ready -->
+<script src="animations.js"></script>
 </body>
 </html>

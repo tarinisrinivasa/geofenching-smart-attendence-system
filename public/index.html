@@ -6,10 +6,6 @@
     <title>Smart Attendance — Login</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap">
-    <!-- Motion.dev animation library -->
-    <script src="https://cdn.jsdelivr.net/npm/motion@10.18.0/dist/motion.js"></script>
-    <!-- Smart Attendance Animations -->
-    <script src="animations.js"></script>
     <style>
         :root {
             --bg: #07080f;
@@ -803,5 +799,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 </script>
+<!-- Animations — loaded last so DOM is fully ready -->
+<script src="animations.js"></script>
 </body>
 </html>

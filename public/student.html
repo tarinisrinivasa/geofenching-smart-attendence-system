@@ -6,14 +6,10 @@
     <title>Student Portal | Smart Attendance</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap">
-    <!-- Motion.dev animation library -->
-    <script src="https://cdn.jsdelivr.net/npm/motion@10.18.0/dist/motion.js"></script>
     <!-- QR Scanner -->
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <!-- Barcode Generator -->
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
-    <!-- Smart Attendance Animations -->
-    <script src="animations.js"></script>
     <style>
         :root {
             --bg: #0a0b0f;
@@ -1390,5 +1386,7 @@ function startStudentOtpRefresh() {
     studentOtpInterval = setInterval(update, 1000);
 }
 </script>
+<!-- Animations — loaded last so DOM is fully ready -->
+<script src="animations.js"></script>
 </body>
 </html>
