@@ -756,13 +756,35 @@
         async function notifyParent(alertId) {
             const res = await api(`/api/alerts/${alertId}/notify-parent`, 'POST');
             if (res.success) {
-                alert(`[SMS SIMULATOR]\nParent Phone: ${res.parent_phone}\nMessage Body: ${res.sms_body}`);
+                document.getElementById('smsModalPhone').textContent = res.parent_phone;
+                document.getElementById('smsModalBody').textContent = res.sms_body;
+                document.getElementById('smsModal').style.display = 'flex';
                 showToast('Parent SMS notification dispatched.', 'success');
                 loadAnomalies();
             } else {
                 showToast(res.message || 'Failed to send SMS to parent.', 'error');
             }
         }
+
+        // Close SMS Simulator Modal
+        document.getElementById('btnCloseSmsModal').addEventListener('click', () => {
+            document.getElementById('smsModal').style.display = 'none';
+        });
     </script>
+
+    <!-- SMS Simulator Modal -->
+    <div id="smsModal" class="modal-overlay" style="display: none;">
+        <div class="card" style="max-width: 400px; width: 90%; text-align: center; border-top: 4px solid var(--accent); background: var(--surface-elevated); padding: 24px; border-radius: var(--radius-lg);">
+            <div style="font-size: 40px; margin-bottom: 12px;">📱</div>
+            <div style="font-weight: 800; font-size: 16px; margin-bottom: 14px; color: var(--primary);">[SMS SIMULATOR]</div>
+            <div style="text-align: left; background: rgba(5, 8, 20, 0.85); padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border); margin-bottom: 18px;">
+                <div style="font-size: 10px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">To Parent Phone:</div>
+                <div id="smsModalPhone" style="font-size: 14px; font-weight: 700; color: var(--text-main); margin-top: 2px; margin-bottom: 10px;"></div>
+                <div style="font-size: 10px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Message Content:</div>
+                <div id="smsModalBody" style="font-size: 13px; color: var(--text-muted); margin-top: 4px; line-height: 1.5;"></div>
+            </div>
+            <button class="btn btn-primary" id="btnCloseSmsModal" style="width: 100%; max-width: 100%;">Close Simulator</button>
+        </div>
+    </div>
 </body>
 </html>
