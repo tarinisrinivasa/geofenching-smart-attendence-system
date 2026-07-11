@@ -43,7 +43,9 @@ const db = new sqlite3.Database(dbPath, (err) => {
             is_keypad INTEGER DEFAULT 0,
             coordinator_class_id INTEGER,
             attendance_locked INTEGER DEFAULT 0,
-            student_phone TEXT
+            student_phone TEXT,
+            last_lat REAL,
+            last_lon REAL
         )`, (err) => { if (err) console.error('[DB] Error creating users table:', err.message); });
 
         db.run(`CREATE TABLE IF NOT EXISTS classes (
@@ -133,6 +135,8 @@ const db = new sqlite3.Database(dbPath, (err) => {
         safeAlter("ALTER TABLE users ADD COLUMN coordinator_class_id INTEGER");
         safeAlter("ALTER TABLE users ADD COLUMN attendance_locked INTEGER DEFAULT 0");
         safeAlter("ALTER TABLE users ADD COLUMN student_phone TEXT");
+        safeAlter("ALTER TABLE users ADD COLUMN last_lat REAL");
+        safeAlter("ALTER TABLE users ADD COLUMN last_lon REAL");
         safeAlter("ALTER TABLE alerts ADD COLUMN class_id INTEGER");
         safeAlter("ALTER TABLE alerts ADD COLUMN student_reason TEXT");
         safeAlter("ALTER TABLE alerts ADD COLUMN latitude REAL");
@@ -174,8 +178,8 @@ const db = new sqlite3.Database(dbPath, (err) => {
                     db.run("DELETE FROM student_passes");
                     db.run("DELETE FROM otp_codes");
 
-                    // 1. Seed HODs (6)
-                    for (let i = 1; i <= 6; i++) {
+                    // 1. Seed HODs (5)
+                    for (let i = 1; i <= 5; i++) {
                         const hash = bcrypt.hashSync('hod123', 10);
                         db.run(
                             'INSERT INTO users (username, password, role) VALUES (?,?,?)',
@@ -184,8 +188,8 @@ const db = new sqlite3.Database(dbPath, (err) => {
                         );
                     }
 
-                    // 2. Seed Teachers (5)
-                    for (let i = 1; i <= 5; i++) {
+                    // 2. Seed Teachers (10)
+                    for (let i = 1; i <= 10; i++) {
                         const hash = bcrypt.hashSync('teacher123', 10);
                         db.run(
                             'INSERT INTO users (username, password, role) VALUES (?,?,?)',
@@ -194,8 +198,8 @@ const db = new sqlite3.Database(dbPath, (err) => {
                         );
                     }
 
-                    // 3. Seed Coordinators (3) — assigned to class IDs 1, 2, 3
-                    for (let i = 1; i <= 3; i++) {
+                    // 3. Seed Coordinators (6)
+                    for (let i = 1; i <= 6; i++) {
                         const hash = bcrypt.hashSync('coordinator123', 10);
                         db.run(
                             'INSERT INTO users (username, password, role, coordinator_class_id) VALUES (?,?,?,?)',
@@ -204,24 +208,24 @@ const db = new sqlite3.Database(dbPath, (err) => {
                         );
                     }
 
-                    // 4. Seed Students (6)
-                    for (let i = 1; i <= 6; i++) {
+                    // 4. Seed Students (20)
+                    for (let i = 1; i <= 20; i++) {
                         const hash = bcrypt.hashSync('student123', 10);
-                        const isKeypad = (i === 6) ? 1 : 0;
+                        const isKeypad = (i === 20) ? 1 : 0;
                         db.run(
                             'INSERT INTO users (username, password, role, barcode, parent_phone, student_phone, is_keypad) VALUES (?,?,?,?,?,?,?)',
                             [
                                 `student${i}`, hash, 'student',
-                                `STU10${i}`,
-                                `+91 90123 4560${i}`,
-                                `+91 99887 7665${i}`,
+                                `STU1${i < 10 ? '0' + i : i}`,
+                                `+91 90123 456${i < 10 ? '0' + i : i}`,
+                                `+91 99887 766${i < 10 ? '0' + i : i}`,
                                 isKeypad
                             ],
                             (e) => { if (e) console.error(`[DB] Failed to seed student${i}:`, e.message); }
                         );
                     }
 
-                    // 5. Seed 3 Demo Classes
+                    // 5. Seed Demo Classes
                     db.run("INSERT INTO classes (id, name, teacher_id, latitude, longitude, radius, token_secret, accuracy) VALUES (1, 'CSE-A (Section Alpha)', 1, 17.3850, 78.4867, 50, 'sec1', 10)",
                         (e) => { if (e) console.error('[DB] Failed to seed class 1:', e.message); });
                     db.run("INSERT INTO classes (id, name, teacher_id, latitude, longitude, radius, token_secret, accuracy) VALUES (2, 'CSE-B (Section Beta)', 1, 17.3850, 78.4867, 50, 'sec2', 10)",
@@ -240,19 +244,19 @@ const db = new sqlite3.Database(dbPath, (err) => {
         let credentialsLog = "=========================================\n";
         credentialsLog += "AUTO-GENERATED SECURED LOGIN CREDENTIALS\n";
         credentialsLog += "=========================================\n\n";
-        credentialsLog += "HOD ACCOUNTS (6 Total)\n";
+        credentialsLog += "HOD ACCOUNTS (5 Total)\n";
         credentialsLog += "---------------------\n";
-        for (let i = 1; i <= 6; i++) credentialsLog += `Username: hod${i} | Password: hod123\n`;
-        credentialsLog += "\nTEACHER ACCOUNTS (5 Total)\n";
+        for (let i = 1; i <= 5; i++) credentialsLog += `Username: hod${i} | Password: hod123\n`;
+        credentialsLog += "\nTEACHER ACCOUNTS (10 Total)\n";
         credentialsLog += "---------------------------\n";
-        for (let i = 1; i <= 5; i++) credentialsLog += `Username: teacher${i} | Password: teacher123\n`;
-        credentialsLog += "\nCOORDINATOR ACCOUNTS (3 Total)\n";
+        for (let i = 1; i <= 10; i++) credentialsLog += `Username: teacher${i} | Password: teacher123\n`;
+        credentialsLog += "\nCOORDINATOR ACCOUNTS (6 Total)\n";
         credentialsLog += "-------------------------------\n";
-        for (let i = 1; i <= 3; i++) credentialsLog += `Username: coordinator${i} | Password: coordinator123 | Coordinator Class ID: ${i}\n`;
-        credentialsLog += "\nSTUDENT ACCOUNTS (6 Total)\n";
+        for (let i = 1; i <= 6; i++) credentialsLog += `Username: coordinator${i} | Password: coordinator123 | Coordinator Class ID: ${i}\n`;
+        credentialsLog += "\nSTUDENT ACCOUNTS (20 Total)\n";
         credentialsLog += "---------------------------\n";
-        for (let i = 1; i <= 6; i++) {
-            credentialsLog += `Username: student${i} | Password: student123 | Barcode: STU10${i}${i === 6 ? ' (Keypad/No-Phone Exempted)' : ''}\n`;
+        for (let i = 1; i <= 20; i++) {
+            credentialsLog += `Username: student${i} | Password: student123 | Barcode: STU1${i < 10 ? '0' + i : i}${i === 20 ? ' (Keypad/No-Phone Exempted)' : ''}\n`;
         }
 
         const logPath = path.resolve(__dirname, 'generated_credentials.txt');

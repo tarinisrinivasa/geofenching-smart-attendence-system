@@ -1115,6 +1115,36 @@ app.post('/api/teacher/verify-student-otp', authenticateToken, (req, res) => {
     );
 });
 
+// Student API: Heartbeat telemetry and location reporting
+app.post('/api/student/heartbeat', authenticateToken, (req, res) => {
+    if (req.user.role !== 'student') {
+        return res.status(403).json({ success: false, message: "Unauthorized." });
+    }
+
+    const student_id = req.user.id;
+    const { latitude, longitude } = req.body;
+
+    if (latitude !== undefined && longitude !== undefined) {
+        db.run(
+            "UPDATE users SET last_seen = datetime('now', 'localtime'), last_lat = ?, last_lon = ? WHERE id = ?",
+            [latitude, longitude, student_id],
+            function(err) {
+                if (err) return res.status(500).json({ error: err.message });
+                res.json({ success: true, message: "Heartbeat & location telemetry logged." });
+            }
+        );
+    } else {
+        db.run(
+            "UPDATE users SET last_seen = datetime('now', 'localtime') WHERE id = ?",
+            [student_id],
+            function(err) {
+                if (err) return res.status(500).json({ error: err.message });
+                res.json({ success: true, message: "Heartbeat logged." });
+            }
+        );
+    }
+});
+
 // Student API: Check if they have an active out-pass
 app.get('/api/student/active-pass', authenticateToken, (req, res) => {
     if (req.user.role !== 'student') {
@@ -1360,7 +1390,7 @@ app.get('/api/hod/students-tracking', authenticateToken, (req, res) => {
     }
 
     const query = `
-        SELECT u.id, u.username, u.last_seen, u.attendance_locked, a.status as attendance_status,
+        SELECT u.id, u.username, u.last_seen, u.attendance_locked, u.last_lat, u.last_lon, a.status as attendance_status,
                (SELECT message FROM alerts WHERE student_id = u.id ORDER BY id DESC LIMIT 1) as last_alert
         FROM users u
         LEFT JOIN attendance a ON a.student_id = u.id AND date(a.timestamp, 'localtime') = date('now', 'localtime')
@@ -1400,7 +1430,9 @@ app.get('/api/hod/students-tracking', authenticateToken, (req, res) => {
                 last_seen: r.last_seen,
                 status,
                 tracking_alert,
-                attendance_locked: r.attendance_locked
+                attendance_locked: r.attendance_locked,
+                last_lat: r.last_lat,
+                last_lon: r.last_lon
             };
         });
         
@@ -1427,7 +1459,7 @@ app.get('/api/coordinator/roster', authenticateToken, (req, res) => {
     }
 
     const query = `
-        SELECT u.id, u.username, u.barcode, u.is_keypad, u.last_seen, u.attendance_locked, u.student_phone, a.status as attendance_status,
+        SELECT u.id, u.username, u.barcode, u.is_keypad, u.last_seen, u.attendance_locked, u.student_phone, u.last_lat, u.last_lon, a.status as attendance_status,
                (SELECT message FROM alerts WHERE student_id = u.id ORDER BY id DESC LIMIT 1) as last_alert
         FROM users u
         LEFT JOIN attendance a ON a.student_id = u.id AND date(a.timestamp, 'localtime') = date('now', 'localtime')
@@ -1468,7 +1500,9 @@ app.get('/api/coordinator/roster', authenticateToken, (req, res) => {
                 status,
                 tracking_alert,
                 attendance_locked: r.attendance_locked,
-                student_phone: r.student_phone
+                student_phone: r.student_phone,
+                last_lat: r.last_lat,
+                last_lon: r.last_lon
             };
         });
         res.json({ success: true, roster });
