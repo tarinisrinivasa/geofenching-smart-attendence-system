@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Coordinator Dashboard | Smart Geofence</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap">
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        :root {
+            --bg: #030712;
+            --surface: rgba(17, 24, 39, 0.7);
+            --surface2: rgba(31, 41, 55, 0.6);
+            --border: rgba(255, 255, 255, 0.08);
+            --border2: rgba(255, 255, 255, 0.15);
+            --accent: #3b82f6;
+            --accent-glow: rgba(59, 130, 246, 0.25);
+            --green: #10b981;
+            --red: #f43f5e;
+            --yellow: #f59e0b;
+            --purple: #8b5cf6;
+            --text: #f9fafb;
+            --text2: #9ca3af;
+            --text3: #6b7280;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        .header {
+            background: rgba(3, 7, 18, 0.85);
+            backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--border);
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-logo-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .header-logo {
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, var(--accent), var(--purple));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            box-shadow: 0 0 15px var(--accent-glow);
+        }
+
+        .header-title-text {
+            font-weight: 700;
+            font-size: 17px;
+            letter-spacing: -0.02em;
+        }
+
+        .header-sub-text {
+            font-size: 11px;
+            color: var(--text2);
+        }
+
+        .nav-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border);
+            background: rgba(255, 255, 255, 0.02);
+            overflow-x: auto;
+        }
+
+        .nav-tab {
+            flex: 1;
+            text-align: center;
+            padding: 14px 10px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text3);
+            border-bottom: 2px solid transparent;
+            transition: all 0.25s ease;
+            white-space: nowrap;
+        }
+
+        .nav-tab:hover {
+            color: var(--text2);
+            background: rgba(255, 255, 255, 0.01);
+        }
+
+        .nav-tab.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+            background: rgba(59, 130, 246, 0.05);
+        }
+
+        .page {
+            display: none;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 24px 16px 80px 16px;
+        }
+
+        .page.active {
+            display: block;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 22px;
+            margin-bottom: 16px;
+            backdrop-filter: blur(12px);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .card-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .student-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            margin-bottom: 10px;
+            transition: all 0.2s;
+        }
+
+        .student-row:hover {
+            border-color: rgba(255,255,255,0.15);
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .student-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .student-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: rgba(59, 130, 246, 0.15);
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+        }
+
+        .student-details {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .student-name {
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .student-meta {
+            font-size: 11px;
+            color: var(--text2);
+            margin-top: 2px;
+        }
+
+        .student-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .badge {
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .badge-green { background: rgba(16, 185, 129, 0.15); color: var(--green); border: 1px solid rgba(16, 185, 129, 0.3); }
+        .badge-red { background: rgba(244, 63, 94, 0.15); color: var(--red); border: 1px solid rgba(244, 63, 94, 0.3); }
+        .badge-yellow { background: rgba(245, 158, 11, 0.15); color: var(--yellow); border: 1px solid rgba(245, 158, 11, 0.3); }
+
+        .search-box {
+            position: relative;
+            margin-bottom: 16px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 12px 16px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            color: var(--text);
+            font-size: 13px;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .switch-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Glass Form Elements */
+        .form-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text2);
+            margin-bottom: 6px;
+            display: block;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 11px 14px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: var(--text);
+            font-family: inherit;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--accent);
+            background: rgba(255,255,255,0.05);
+        }
+
+        .btn {
+            padding: 10px 16px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent), var(--purple));
+            color: white;
+        }
+
+        .btn-primary:hover {
+            opacity: 0.9;
+        }
+
+        .btn-secondary {
+            background: var(--surface2);
+            color: var(--text);
+            border: 1px solid var(--border2);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .btn-danger {
+            background: rgba(244, 63, 94, 0.15);
+            color: var(--red);
+            border: 1px solid rgba(244, 63, 94, 0.3);
+        }
+
+        .btn-danger:hover {
+            background: rgba(244, 63, 94, 0.25);
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 11px;
+            border-radius: 8px;
+        }
+
+        /* Toggle switch */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 38px;
+            height: 20px;
+        }
+
+        .switch input { 
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: var(--surface2);
+            transition: .3s;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 14px;
+            width: 14px;
+            left: 2px;
+            bottom: 2px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: var(--green);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(18px);
+        }
+
+        /* Toast notifications */
+        #toastContainer {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+
+        .toast {
+            background: rgba(17, 24, 39, 0.95);
+            border-left: 4px solid var(--accent);
+            border-radius: 8px;
+            padding: 12px 18px;
+            margin-top: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            min-width: 250px;
+        }
+
+        .toast.success { border-left-color: var(--green); }
+        .toast.error { border-left-color: var(--red); }
+    </style>
+</head>
+<body>
+
+    <div id="app">
+        <!-- ═══ HEADER ═══ -->
+        <header class="header">
+            <div class="header-logo-group">
+                <div class="header-logo">🛡️</div>
+                <div>
+                    <div class="header-title-text" id="headerTitle">Coordinator Panel</div>
+                    <div class="header-sub-text">Smart Attendance & Geofence Guard</div>
+                </div>
+            </div>
+            <button class="btn btn-secondary btn-sm" id="logoutBtn">Logout</button>
+        </header>
+
+        <!-- ═══ NAVIGATION TABS ═══ -->
+        <div class="nav-tabs">
+            <div class="nav-tab active" id="tab-classrooms">🏫 Classrooms</div>
+            <div class="nav-tab" id="tab-students">👤 Student Control</div>
+            <div class="nav-tab" id="tab-roster">📊 Live Roster</div>
+            <div class="nav-tab" id="tab-alerts">🚨 Breach Alerts</div>
+        </div>
+
+        <!-- ═══ CLASSROOMS PAGE ═══ -->
+        <div class="page active" id="page-classrooms">
+            <div class="card">
+                <div class="card-title">🆕 Configure New Classroom</div>
+                <form id="classroomForm" style="margin-top: 14px;">
+                    <div class="form-group">
+                        <label class="form-label">Classroom / Location Name</label>
+                        <input type="text" class="form-control" id="roomName" placeholder="e.g. CSE Lab 1 (Ground Floor)" required>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                        <div>
+                            <label class="form-label">📍 Latitude</label>
+                            <input type="number" step="any" class="form-control" id="roomLat" value="17.385000" required>
+                        </div>
+                        <div>
+                            <label class="form-label">📍 Longitude</label>
+                            <input type="number" step="any" class="form-control" id="roomLng" value="78.486700" required>
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+                        <div>
+                            <label class="form-label">📏 Radius Limit (meters)</label>
+                            <input type="number" class="form-control" id="roomRadius" value="50" min="5" required>
+                        </div>
+                        <div>
+                            <label class="form-label">🎯 GPS Accuracy Allowed (m)</label>
+                            <input type="number" class="form-control" id="roomAccuracy" value="15" min="5" required>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" type="submit" style="width: 100%;">Create Classroom Coordinates</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <div class="card-title">🏫 Active Locations Registry</div>
+                <div id="classroomsList" style="margin-top: 14px;">
+                    <!-- Prepopulated locations will appear here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ STUDENT CONTROL PAGE ═══ -->
+        <div class="page" id="page-students">
+            <div class="search-box">
+                <input type="text" class="search-input" id="studentSearch" placeholder="Search students by username or ID...">
+            </div>
+
+            <div class="card">
+                <div class="card-title">👤 Registered Students & Exemptions</div>
+                <div id="studentsList" style="margin-top: 14px;">
+                    <!-- Student list with options: reset device, keypad toggling -->
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ LIVE ROSTER PAGE ═══ -->
+        <div class="page" id="page-roster">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">📊 Roster & Telemetry Feed</div>
+                    <button class="btn btn-secondary btn-sm" id="btnRefreshRoster">🔄 Refresh</button>
+                </div>
+                <div id="rosterList">
+                    <!-- Live tracking of current classes checkins -->
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ BREACH ALERTS PAGE ═══ -->
+        <div class="page" id="page-alerts">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">🚨 Geofence Breach alerts</div>
+                    <button class="btn btn-secondary btn-sm" id="btnRefreshAlerts">🔄 Refresh</button>
+                </div>
+                <div id="alertsList">
+                    <!-- Geofence anomalies and coordinate breaches -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- OTP verification modal -->
+    <div id="otpModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); backdrop-filter:blur(5px); z-index:1000; align-items:center; justify-content:center;">
+        <div class="card" style="width:340px; margin:0 auto;">
+            <div class="card-title">🔑 Verify Student Keypad OTP</div>
+            <div style="font-size:12px; color:var(--text2); margin-bottom:14px; text-align:center;">
+                Student ID: <span id="otpStudentId" style="font-family:monospace; font-weight:700;"></span>
+            </div>
+            <div style="font-size:32px; font-weight:800; text-align:center; color:var(--yellow); padding:16px; background:rgba(245,158,11,0.08); border-radius:12px; margin-bottom:18px;" id="otpSimulatedDisplay">
+                0000
+            </div>
+            <div class="form-group">
+                <label class="form-label">Enter OTP Code</label>
+                <input type="text" class="form-control" id="otpEntry" placeholder="Enter student's 4-digit code" maxlength="4" style="text-align:center; font-size:18px; letter-spacing:8px;">
+            </div>
+            <div style="display:flex; gap:10px; margin-top:20px;">
+                <button class="btn btn-secondary" style="flex:1;" id="btnCancelOtp">Cancel</button>
+                <button class="btn btn-primary" style="flex:1;" id="btnVerifyOtp">Verify & Mark</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toastContainer"></div>
+
+    <script>
+        const safeStorage = {
+            getItem(k) { try { return localStorage.getItem(k); } catch { return null; } },
+            setItem(k, v) { try { localStorage.setItem(k, v); } catch {} },
+            removeItem(k) { try { localStorage.removeItem(k); } catch {} }
+        };
+
+        const authToken = safeStorage.getItem('token');
+        let currentUser = null;
+        try { currentUser = JSON.parse(safeStorage.getItem('user')); } catch {}
+
+        if (!authToken || !currentUser || (currentUser.role !== 'coordinator' && currentUser.role !== 'hod')) {
+            window.location.href = 'index.html';
+        }
+
+        document.getElementById('headerTitle').textContent = `${currentUser.username.toUpperCase()}`;
+
+        window.addEventListener('DOMContentLoaded', () => {
+            initNavigation();
+            loadClassrooms();
+            loadStudents();
+            loadRoster();
+            loadAlerts();
+
+            // Bind Form Submit
+            document.getElementById('classroomForm').addEventListener('submit', createClassroom);
+            document.getElementById('btnRefreshRoster').addEventListener('click', loadRoster);
+            document.getElementById('btnRefreshAlerts').addEventListener('click', loadAlerts);
+            document.getElementById('logoutBtn').addEventListener('click', () => {
+                safeStorage.removeItem('token');
+                safeStorage.removeItem('user');
+                window.location.href = 'index.html';
+            });
+        });
+
+        function showToast(msg, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const el = document.createElement('div');
+            el.className = `toast ${type}`;
+            el.innerHTML = `<span>${type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️'}</span><span>${msg}</span>`;
+            container.appendChild(el);
+            setTimeout(() => {
+                el.style.opacity = '0';
+                setTimeout(() => el.remove(), 300);
+            }, 3500);
+        }
+
+        async function api(endpoint, method = 'GET', body = null) {
+            const opts = {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${authToken}`
+                }
+            };
+            if (body) opts.body = JSON.stringify(body);
+            try {
+                const res = await fetch(endpoint, opts);
+                const data = await res.json();
+                if (res.status === 401) {
+                    safeStorage.removeItem('token');
+                    safeStorage.removeItem('user');
+                    window.location.href = 'index.html';
+                }
+                return { status: res.status, success: res.ok && data.success !== false, ...data };
+            } catch (e) {
+                return { success: false, message: 'Network connection lost.' };
+            }
+        }
+
+        function initNavigation() {
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+                    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+
+                    tab.classList.add('active');
+                    const pageId = tab.id.replace('tab-', 'page-');
+                    document.getElementById(pageId).classList.add('active');
+
+                    if (pageId === 'page-roster') loadRoster();
+                    if (pageId === 'page-alerts') loadAlerts();
+                });
+            });
+        }
+
+        // ── Classrooms ──
+        async function loadClassrooms() {
+            const data = await api('/api/classrooms');
+            const container = document.getElementById('classroomsList');
+            if (data.success && data.classrooms) {
+                if (data.classrooms.length === 0) {
+                    container.innerHTML = `<div style="text-align:center; color:var(--text3); font-size:13px; padding:20px;">No classrooms configured.</div>`;
+                    return;
+                }
+                container.innerHTML = data.classrooms.map(c => `
+                    <div class="student-row">
+                        <div class="student-info">
+                            <div class="student-avatar" style="background:rgba(139, 92, 246, 0.15); color:var(--purple);">🏫</div>
+                            <div class="student-details">
+                                <div class="student-name">${c.name}</div>
+                                <div class="student-meta">Lat: ${c.latitude.toFixed(6)}, Lng: ${c.longitude.toFixed(6)} | Radius: ${c.radius}m | Accuracy: ${c.accuracy}m</div>
+                            </div>
+                        </div>
+                        <button class="btn btn-danger btn-sm" onclick="deleteClassroom(${c.id})">Delete</button>
+                    </div>
+                `).join('');
+            }
+        }
+
+        async function createClassroom(e) {
+            e.preventDefault();
+            const name = document.getElementById('roomName').value.trim();
+            const latitude = parseFloat(document.getElementById('roomLat').value);
+            const longitude = parseFloat(document.getElementById('roomLng').value);
+            const radius = parseFloat(document.getElementById('roomRadius').value);
+            const accuracy = parseFloat(document.getElementById('roomAccuracy').value);
+
+            const res = await api('/api/classrooms', 'POST', { name, latitude, longitude, radius, accuracy });
+            if (res.success) {
+                showToast('Classroom coordinates registered successfully!', 'success');
+                document.getElementById('roomName').value = '';
+                loadClassrooms();
+            } else {
+                showToast(res.message || 'Failed to save classroom settings.', 'error');
+            }
+        }
+
+        async function deleteClassroom(id) {
+            if (!confirm('Are you sure you want to delete this classroom location?')) return;
+            const res = await api(`/api/classrooms/${id}`, 'DELETE');
+            if (res.success) {
+                showToast('Classroom configuration removed.', 'success');
+                loadClassrooms();
+            } else {
+                showToast(res.message || 'Failed to delete classroom.', 'error');
+            }
+        }
+
+        // ── Students ──
+        let allStudents = [];
+        async function loadStudents() {
+            const res = await api('/api/students');
+            const container = document.getElementById('studentsList');
+            if (res.success && res.students) {
+                allStudents = res.students;
+                renderStudents(allStudents);
+            }
+        }
+
+        function renderStudents(students) {
+            const container = document.getElementById('studentsList');
+            if (students.length === 0) {
+                container.innerHTML = `<div style="text-align:center; color:var(--text3); font-size:13px; padding:20px;">No students matching search.</div>`;
+                return;
+            }
+            container.innerHTML = students.map(s => `
+                <div class="student-row">
+                    <div class="student-info">
+                        <div class="student-avatar">${s.username.charAt(0).toUpperCase()}</div>
+                        <div class="student-details">
+                            <div class="student-name">${s.username}</div>
+                            <div class="student-meta">Student ID: ${s.id} | Phone: ${s.student_phone || 'None'}</div>
+                        </div>
+                    </div>
+                    <div class="student-actions">
+                        <div class="switch-container">
+                            <span style="font-size:11px; color:var(--text2); font-weight:600;">Keypad:</span>
+                            <label class="switch">
+                                <input type="checkbox" ${s.is_keypad ? 'checked' : ''} onchange="toggleKeypad(${s.id}, this.checked)">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        ${s.is_keypad ? `<button class="btn btn-primary btn-sm" onclick="sendOtpModal(${s.id})">🔑 OTP</button>` : ''}
+                        <button class="btn btn-secondary btn-sm" onclick="resetDevice(${s.id})">Reset Device</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        document.getElementById('studentSearch').addEventListener('input', (e) => {
+            const q = e.target.value.toLowerCase();
+            const filtered = allStudents.filter(s => s.username.toLowerCase().includes(q) || s.id.toString().includes(q));
+            renderStudents(filtered);
+        });
+
+        async function toggleKeypad(studentId, isKeypad) {
+            const res = await api('/api/coordinator/toggle-keypad', 'POST', { student_id: studentId, is_keypad: isKeypad });
+            if (res.success) {
+                showToast(res.message, 'success');
+                loadStudents();
+            } else {
+                showToast(res.message || 'Failed to update keypad status', 'error');
+            }
+        }
+
+        async function resetDevice(studentId) {
+            if (!confirm("Are you sure you want to clear this student's device hardware binding? This will allow them to login on a new phone.")) return;
+            const res = await api('/api/coordinator/reset-device', 'POST', { student_id: studentId });
+            if (res.success) {
+                showToast(res.message, 'success');
+            } else {
+                showToast(res.message || 'Failed to reset device hardware lock', 'error');
+            }
+        }
+
+        // ── OTP Override Modal ──
+        let activeOtpStudent = null;
+        async function sendOtpModal(studentId) {
+            activeOtpStudent = studentId;
+            document.getElementById('otpStudentId').textContent = studentId;
+            document.getElementById('otpSimulatedDisplay').textContent = "🔄 ...";
+            document.getElementById('otpEntry').value = '';
+            document.getElementById('otpModal').style.display = 'flex';
+
+            const res = await api('/api/coordinator/send-keypad-otp', 'POST', { student_id: studentId });
+            if (res.success && res.otp) {
+                document.getElementById('otpSimulatedDisplay').textContent = res.otp;
+                showToast('OTP transmitted via simulated gateway.', 'success');
+            } else {
+                showToast(res.message || 'Failed to send OTP. Ensure a class session is active.', 'error');
+                document.getElementById('otpModal').style.display = 'none';
+            }
+        }
+
+        document.getElementById('btnCancelOtp').addEventListener('click', () => {
+            document.getElementById('otpModal').style.display = 'none';
+        });
+
+        document.getElementById('btnVerifyOtp').addEventListener('click', async () => {
+            const code = document.getElementById('otpEntry').value.trim();
+            if (code.length < 4) {
+                showToast('Please enter the 4-digit code', 'error');
+                return;
+            }
+
+            const res = await api('/api/coordinator/verify-keypad-otp', 'POST', { student_id: activeOtpStudent, otp_code: code });
+            if (res.success) {
+                showToast('OTP verified! Student marked present.', 'success');
+                document.getElementById('otpModal').style.display = 'none';
+                loadRoster();
+            } else {
+                showToast(res.message || 'Incorrect OTP code entered.', 'error');
+            }
+        });
+
+        // ── Live Roster ──
+        async function loadRoster() {
+            const res = await api('/api/coordinator/roster');
+            const container = document.getElementById('rosterList');
+            if (res.success && res.roster) {
+                if (res.roster.length === 0) {
+                    container.innerHTML = `<div style="text-align:center; color:var(--text3); font-size:13px; padding:20px;">No students tracked.</div>`;
+                    return;
+                }
+                container.innerHTML = res.roster.map(r => {
+                    let badgeClass = 'badge-yellow';
+                    if (r.status.includes('Checked In') || r.status.includes('Active')) badgeClass = 'badge-green';
+                    if (r.status.includes('Breach') || r.status.includes('Offline')) badgeClass = 'badge-red';
+
+                    return `
+                        <div class="student-row">
+                            <div class="student-info">
+                                <div class="student-avatar" style="${r.attendance_locked ? 'border: 2px solid var(--red)' : ''}">${r.username.charAt(0).toUpperCase()}</div>
+                                <div class="student-details">
+                                    <div class="student-name">${r.username} ${r.is_keypad ? '📟' : ''}</div>
+                                    <div class="student-meta">Status: <span class="badge ${badgeClass}">${r.status}</span></div>
+                                </div>
+                            </div>
+                            <div class="student-actions">
+                                ${r.attendance_locked ? `
+                                    <button class="btn btn-danger btn-sm" onclick="unlockStudent(${r.id})">🔓 Unlock privileges</button>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+
+        async function unlockStudent(studentId) {
+            const res = await api('/api/coordinator/unlock-student', 'POST', { student_id: studentId });
+            if (res.success) {
+                showToast('Student check-in privileges unlocked.', 'success');
+                loadRoster();
+            } else {
+                showToast(res.message || 'Failed to unlock student privileges.', 'error');
+            }
+        }
+
+        // ── Breach Alerts ──
+        async function loadAlerts() {
+            const res = await api('/api/coordinator/class-feed');
+            const container = document.getElementById('alertsList');
+            if (res.success && res.alerts) {
+                const unresolved = res.alerts.filter(a => a.status < 2);
+                if (unresolved.length === 0) {
+                    container.innerHTML = `<div style="text-align:center; color:var(--text3); font-size:13px; padding:20px;">All clear. No pending breach alerts.</div>`;
+                    return;
+                }
+                container.innerHTML = unresolved.map(a => `
+                    <div class="card" style="border-left: 4px solid var(--red); background: rgba(244, 63, 94, 0.02);">
+                        <div style="display:flex; justify-content:between; align-items:center; margin-bottom:8px;">
+                            <div style="font-weight:700; font-size:13px; color:var(--red);">GEOFENCE BREACH</div>
+                            <div style="font-size:11px; color:var(--text3);">${new Date(a.timestamp).toLocaleTimeString()}</div>
+                        </div>
+                        <p style="font-size:13px; color:var(--text); margin-bottom:10px;">${a.message}</p>
+                        ${a.student_reason ? `
+                            <div style="padding:10px; background:rgba(255,255,255,0.03); border-radius:8px; border: 1px solid var(--border); margin-bottom:12px;">
+                                <div style="font-size:10px; font-weight:700; color:var(--yellow); text-transform:uppercase;">Student Explanation:</div>
+                                <div style="font-size:12px; color:var(--text2); margin-top:2px;">"${a.student_reason}"</div>
+                            </div>
+                        ` : `
+                            <div style="font-size:11px; color:var(--text3); margin-bottom:12px; font-style:italic;">No student explanation submitted yet.</div>
+                        `}
+                        <div style="display:flex; gap:8px;">
+                            <button class="btn btn-primary btn-sm" onclick="reverseAttendance(${a.id})">✅ Reverse to Present</button>
+                            <button class="btn btn-secondary btn-sm" onclick="dismissAlert(${a.id})">Dismiss Alert</button>
+                            <button class="btn btn-danger btn-sm" onclick="notifyParent(${a.id})">📞 Notify Parent</button>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        async function reverseAttendance(alertId) {
+            const res = await api(`/api/alerts/${alertId}/reverse-attendance`, 'POST');
+            if (res.success) {
+                showToast('Attendance successfully updated to present and alert resolved.', 'success');
+                loadAlerts();
+                loadRoster();
+            } else {
+                showToast(res.message || 'Failed to override attendance.', 'error');
+            }
+        }
+
+        async function dismissAlert(alertId) {
+            const res = await api(`/api/alerts/${alertId}/read`, 'POST');
+            if (res.success) {
+                showToast('Alert dismissed successfully.', 'success');
+                loadAlerts();
+            } else {
+                showToast(res.message || 'Failed to dismiss alert.', 'error');
+            }
+        }
+
+        async function notifyParent(alertId) {
+            const res = await api(`/api/alerts/${alertId}/notify-parent`, 'POST');
+            if (res.success) {
+                alert(`[SMS SIMULATOR]\nParent Phone: ${res.parent_phone}\nMessage Body: ${res.sms_body}`);
+                showToast('Parent SMS notification dispatched.', 'success');
+                loadAlerts();
+            } else {
+                showToast(res.message || 'Failed to send SMS to parent.', 'error');
+            }
+        }
+    </script>
+</body>
+</html>

@@ -491,32 +491,12 @@
                     <label class="form-label">Class Name</label>
                     <input type="text" class="form-input" id="className" placeholder="e.g. CSE-A Sem 3 - Data Structures">
                 </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="form-label">📍 Latitude</label>
-                        <input type="number" class="form-input" id="classLat" value="17.385000" step="any">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">📍 Longitude</label>
-                        <input type="number" class="form-input" id="classLng" value="78.486700" step="any">
-                    </div>
+                <div class="form-group">
+                    <label class="form-label">🏫 Classroom / Location</label>
+                    <select class="form-select" id="sessionClassroomSelect">
+                        <option value="">Loading locations...</option>
+                    </select>
                 </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="form-label">📏 Radius (meters)</label>
-                        <input type="number" class="form-input" id="classRadius" value="50" min="0" placeholder="50">
-                        <span style="font-size:10px;color:var(--text3);margin-top:4px;display:block;">💡 Enter 0 to disable geofencing (students can mark from anywhere)</span>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">🎯 GPS Accuracy (m)</label>
-                        <input type="number" class="form-input" id="classAccuracy" value="15" min="0" placeholder="15">
-                    </div>
-                </div>
-                <button class="btn btn-secondary" id="detectLocBtn" style="margin-bottom:10px;">
-                    <span class="btn-text">📡 Detect My Location</span>
-                    <div class="spinner-sm"></div>
-                </button>
-                <div id="locDetected" style="display:none; font-size:11px; color:var(--green); padding:8px; background:rgba(16,185,129,0.05); border-radius:8px; margin-bottom:10px; font-family:monospace;"></div>
                 <button class="btn btn-primary" id="createSessionBtn">
                     <span class="btn-text">🚀 Start Class Session</span>
                     <div class="spinner-sm"></div>
@@ -1086,10 +1066,29 @@ function showNoSessionUI() {
     document.getElementById('mainNav').style.display = 'none';
     activeSession = null;
     stopAllIntervals();
+    loadClassrooms();
+}
+
+async function loadClassrooms() {
+    const data = await api('/api/classrooms');
+    const select = document.getElementById('sessionClassroomSelect');
+    if (!select) return;
+    if (data.success && data.classrooms) {
+        if (data.classrooms.length === 0) {
+            select.innerHTML = `<option value="">No classrooms configured by Coordinator/HOD</option>`;
+        } else {
+            select.innerHTML = data.classrooms.map(c => 
+                `<option value="${c.id}">${c.name} (Radius: ${c.radius}m)</option>`
+            ).join('');
+        }
+    } else {
+        select.innerHTML = `<option value="">Failed to load locations</option>`;
+    }
 }
 
 function displayPastSessions(sessions) {
     const el = document.getElementById('pastSessionsList');
+    if (!el) return;
     const past = sessions.filter(s => s.active === 0);
     if (past.length === 0) {
         el.innerHTML = `<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">No past sessions yet</div><div class="empty-sub">Start your first class session above</div></div>`;
@@ -1116,54 +1115,22 @@ function displayPastSessions(sessions) {
     }).join('');
 }
 
-// ── Create Session ─────────────────────────────────────────────────────────
-function detectLocation() {
-    const btn = document.getElementById('detectLocBtn');
-    btn.classList.add('loading'); btn.disabled = true;
-    if (!navigator.geolocation) {
-        showToast('GPS not supported. Using campus default.', 'info');
-        document.getElementById('classLat').value = '17.385000';
-        document.getElementById('classLng').value = '78.486700';
-        btn.classList.remove('loading'); btn.disabled = false;
-        return;
-    }
-    navigator.geolocation.getCurrentPosition(pos => {
-        document.getElementById('classLat').value = pos.coords.latitude.toFixed(6);
-        document.getElementById('classLng').value = pos.coords.longitude.toFixed(6);
-        document.getElementById('locDetected').style.display = 'block';
-        document.getElementById('locDetected').textContent = `📍 Lat: ${pos.coords.latitude.toFixed(6)}, Lng: ${pos.coords.longitude.toFixed(6)} (±${Math.round(pos.coords.accuracy)}m accuracy)`;
-        showToast('Location detected!', 'success');
-        btn.classList.remove('loading'); btn.disabled = false;
-    }, () => {
-        showToast('Could not get GPS. Using campus default.', 'info');
-        document.getElementById('classLat').value = '17.385000';
-        document.getElementById('classLng').value = '78.486700';
-        document.getElementById('locDetected').style.display = 'block';
-        document.getElementById('locDetected').textContent = `📍 Using default campus coordinates: 17.3850, 78.4867`;
-        btn.classList.remove('loading'); btn.disabled = false;
-    }, { enableHighAccuracy: true, timeout: 10000 });
-}
-
 async function createSession() {
     const name = document.getElementById('className').value.trim();
-    const lat = parseFloat(document.getElementById('classLat').value);
-    const lng = parseFloat(document.getElementById('classLng').value);
-    const radius = parseFloat(document.getElementById('classRadius').value) || 50;
-    const accuracy = parseFloat(document.getElementById('classAccuracy').value) || 15;
+    const classroomId = document.getElementById('sessionClassroomSelect').value;
 
     if (!name) { showToast('Enter a class name', 'error'); return; }
-    if (isNaN(lat) || isNaN(lng)) { showToast('Detect or enter your location first', 'error'); return; }
+    if (!classroomId) { showToast('Select a classroom location', 'error'); return; }
 
     const btn = document.getElementById('createSessionBtn');
     btn.classList.add('loading'); btn.disabled = true;
 
-    const data = await api('/api/classes', 'POST', { name, latitude: lat, longitude: lng, radius, accuracy });
+    const data = await api('/api/classes', 'POST', { name, classroom_id: classroomId });
     btn.classList.remove('loading'); btn.disabled = false;
 
     if (data.success) {
         showToast('Class session started!', 'success');
-        activeSession = { id: data.class_id, name, latitude: lat, longitude: lng, radius };
-        showActiveSessionUI();
+        await checkActiveSession();
         if (window.AG && window.AG.onSessionStarted) window.AG.onSessionStarted();
     } else {
         showToast(data.message || 'Failed to create session', 'error');

@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>HOD Administration Console | Smart Geofence</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap">
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        :root {
+            --bg: #030712;
+            --surface: rgba(17, 24, 39, 0.7);
+            --surface2: rgba(31, 41, 55, 0.6);
+            --border: rgba(255, 255, 255, 0.08);
+            --border2: rgba(255, 255, 255, 0.15);
+            --accent: #3b82f6;
+            --accent-glow: rgba(59, 130, 246, 0.25);
+            --green: #10b981;
+            --red: #f43f5e;
+            --yellow: #f59e0b;
+            --purple: #8b5cf6;
+            --text: #f9fafb;
+            --text2: #9ca3af;
+            --text3: #6b7280;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        .header {
+            background: rgba(3, 7, 18, 0.85);
+            backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--border);
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-logo-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .header-logo {
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, var(--accent), var(--purple));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            box-shadow: 0 0 15px var(--accent-glow);
+        }
+
+        .header-title-text {
+            font-weight: 700;
+            font-size: 17px;
+            letter-spacing: -0.02em;
+        }
+
+        .header-sub-text {
+            font-size: 11px;
+            color: var(--text2);
+        }
+
+        .nav-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border);
+            background: rgba(255, 255, 255, 0.02);
+            overflow-x: auto;
+        }
+
+        .nav-tab {
+            flex: 1;
+            text-align: center;
+            padding: 14px 10px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text3);
+            border-bottom: 2px solid transparent;
+            transition: all 0.25s ease;
+            white-space: nowrap;
+        }
+
+        .nav-tab:hover {
+            color: var(--text2);
+            background: rgba(255, 255, 255, 0.01);
+        }
+
+        .nav-tab.active {
+            color: var(--purple);
+            border-bottom-color: var(--purple);
+            background: rgba(139, 92, 246, 0.05);
+        }
+
+        .page {
+            display: none;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 24px 16px 80px 16px;
+        }
+
+        .page.active {
+            display: block;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 22px;
+            margin-bottom: 16px;
+            backdrop-filter: blur(12px);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .card-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .student-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            margin-bottom: 10px;
+            transition: all 0.2s;
+        }
+
+        .student-row:hover {
+            border-color: rgba(255,255,255,0.15);
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .student-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .student-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: rgba(139, 92, 246, 0.15);
+            color: var(--purple);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+        }
+
+        .student-details {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .student-name {
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .student-meta {
+            font-size: 11px;
+            color: var(--text2);
+            margin-top: 2px;
+        }
+
+        .student-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .badge {
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .badge-green { background: rgba(16, 185, 129, 0.15); color: var(--green); border: 1px solid rgba(16, 185, 129, 0.3); }
+        .badge-red { background: rgba(244, 63, 94, 0.15); color: var(--red); border: 1px solid rgba(244, 63, 94, 0.3); }
+        .badge-yellow { background: rgba(245, 158, 11, 0.15); color: var(--yellow); border: 1px solid rgba(245, 158, 11, 0.3); }
+
+        /* Glass Form Elements */
+        .form-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text2);
+            margin-bottom: 6px;
+            display: block;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 11px 14px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: var(--text);
+            font-family: inherit;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--purple);
+            background: rgba(255,255,255,0.05);
+        }
+
+        .btn {
+            padding: 10px 16px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--purple), #7c3aed);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            opacity: 0.9;
+        }
+
+        .btn-secondary {
+            background: var(--surface2);
+            color: var(--text);
+            border: 1px solid var(--border2);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .btn-danger {
+            background: rgba(244, 63, 94, 0.15);
+            color: var(--red);
+            border: 1px solid rgba(244, 63, 94, 0.3);
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 11px;
+            border-radius: 8px;
+        }
+
+        /* Toast notifications */
+        #toastContainer {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+
+        .toast {
+            background: rgba(17, 24, 39, 0.95);
+            border-left: 4px solid var(--purple);
+            border-radius: 8px;
+            padding: 12px 18px;
+            margin-top: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            min-width: 250px;
+        }
+
+        .toast.success { border-left-color: var(--green); }
+        .toast.error { border-left-color: var(--red); }
+    </style>
+</head>
+<body>
+
+    <div id="app">
+        <!-- ═══ HEADER ═══ -->
+        <header class="header">
+            <div class="header-logo-group">
+                <div class="header-logo">🏛️</div>
+                <div>
+                    <div class="header-title-text" id="headerTitle">HOD Console</div>
+                    <div class="header-sub-text">College-wide Geofence & Security Override</div>
+                </div>
+            </div>
+            <button class="btn btn-secondary btn-sm" id="logoutBtn">Logout</button>
+        </header>
+
+        <!-- ═══ NAVIGATION TABS ═══ -->
+        <div class="nav-tabs">
+            <div class="nav-tab active" id="tab-campus">🏫 Campus Settings</div>
+            <div class="nav-tab" id="tab-outpass">🎟️ Out-Passes</div>
+            <div class="nav-tab" id="tab-tracking">📍 Live Tracking</div>
+            <div class="nav-tab" id="tab-anomalies">🚨 Anomalies & Alerts</div>
+        </div>
+
+        <!-- ═══ CAMPUS SETTINGS PAGE ═══ -->
+        <div class="page active" id="page-campus">
+            <div class="card">
+                <div class="card-title">🌐 College Geofence Coordinates</div>
+                <form id="campusForm" style="margin-top: 14px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                        <div>
+                            <label class="form-label">📍 Campus Latitude</label>
+                            <input type="number" step="any" class="form-control" id="campusLat" required>
+                        </div>
+                        <div>
+                            <label class="form-label">📍 Campus Longitude</label>
+                            <input type="number" step="any" class="form-control" id="campusLng" required>
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 16px;">
+                        <label class="form-label">📏 Campus Boundary Radius (meters)</label>
+                        <input type="number" class="form-control" id="campusRadius" required>
+                        <span style="font-size:11px; color:var(--text3); margin-top:4px; display:block;">💡 Students leaving this radius during college hours without an out-pass triggers a lock.</span>
+                    </div>
+                    
+                    <div class="card-title" style="margin-top: 24px; margin-bottom: 12px;">⏰ College Operating Hours</div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px;">
+                        <div>
+                            <label class="form-label">Start Time</label>
+                            <input type="time" class="form-control" id="startTime" required>
+                        </div>
+                        <div>
+                            <label class="form-label">End Time</label>
+                            <input type="time" class="form-control" id="endTime" required>
+                        </div>
+                    </div>
+
+                    <button class="btn btn-primary" type="submit" style="width: 100%;">Save Campus Boundary Rules</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- ═══ DIGITAL OUT-PASSES PAGE ═══ -->
+        <div class="page" id="page-outpass">
+            <div class="card">
+                <div class="card-title">🎟️ Grant Digital Out-pass</div>
+                <form id="outpassForm" style="margin-top: 14px;">
+                    <div class="form-group">
+                        <label class="form-label">Select Student</label>
+                        <select class="form-control" id="outpassStudent" required>
+                            <option value="">Loading students...</option>
+                        </select>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                        <div>
+                            <label class="form-label">Pass Duration (minutes)</label>
+                            <input type="number" class="form-control" id="outpassDuration" value="60" min="5" required>
+                        </div>
+                        <div>
+                            <label class="form-label">Reason for leaving campus</label>
+                            <input type="text" class="form-control" id="outpassReason" placeholder="e.g. Medical emergency" required>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" type="submit" style="width: 100%;">Grant Digital Pass</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <div class="card-title">🎟️ Granted Out-passes Registry</div>
+                <div id="passesList" style="margin-top: 14px;">
+                    <!-- Active/expired out-passes listed here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ LIVE TRACKING PAGE ═══ -->
+        <div class="page" id="page-tracking">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">📍 Live Campus Telemetry Guard</div>
+                    <button class="btn btn-secondary btn-sm" id="btnRefreshTracking">🔄 Refresh</button>
+                </div>
+                <div id="trackingList">
+                    <!-- Real-time campus exit monitoring -->
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ ANOMALIES & ALERTS PAGE ═══ -->
+        <div class="page" id="page-anomalies">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">🚨 Bunking Anomalies & Alerts</div>
+                    <button class="btn btn-secondary btn-sm" id="btnRefreshAnomalies">🔄 Refresh</button>
+                </div>
+                <div id="anomaliesList">
+                    <!-- Geofence breaches + AI bunking alerts list -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toastContainer"></div>
+
+    <script>
+        const safeStorage = {
+            getItem(k) { try { return localStorage.getItem(k); } catch { return null; } },
+            setItem(k, v) { try { localStorage.setItem(k, v); } catch {} },
+            removeItem(k) { try { localStorage.removeItem(k); } catch {} }
+        };
+
+        const authToken = safeStorage.getItem('token');
+        let currentUser = null;
+        try { currentUser = JSON.parse(safeStorage.getItem('user')); } catch {}
+
+        if (!authToken || !currentUser || currentUser.role !== 'hod') {
+            window.location.href = 'index.html';
+        }
+
+        document.getElementById('headerTitle').textContent = `${currentUser.username.toUpperCase()} (HOD)`;
+
+        window.addEventListener('DOMContentLoaded', () => {
+            initNavigation();
+            loadCampusSettings();
+            loadStudents();
+            loadOutpasses();
+            loadTracking();
+            loadAnomalies();
+
+            // Bind Event Listeners
+            document.getElementById('campusForm').addEventListener('submit', saveCampusSettings);
+            document.getElementById('outpassForm').addEventListener('submit', grantOutpass);
+            document.getElementById('btnRefreshTracking').addEventListener('click', loadTracking);
+            document.getElementById('btnRefreshAnomalies').addEventListener('click', loadAnomalies);
+            document.getElementById('logoutBtn').addEventListener('click', () => {
+                safeStorage.removeItem('token');
+                safeStorage.removeItem('user');
+                window.location.href = 'index.html';
+            });
+        });
+
+        function showToast(msg, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const el = document.createElement('div');
+            el.className = `toast ${type}`;
+            el.innerHTML = `<span>${type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️'}</span><span>${msg}</span>`;
+            container.appendChild(el);
+            setTimeout(() => {
+                el.style.opacity = '0';
+                setTimeout(() => el.remove(), 300);
+            }, 3500);
+        }
+
+        async function api(endpoint, method = 'GET', body = null) {
+            const opts = {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${authToken}`
+                }
+            };
+            if (body) opts.body = JSON.stringify(body);
+            try {
+                const res = await fetch(endpoint, opts);
+                const data = await res.json();
+                if (res.status === 401) {
+                    safeStorage.removeItem('token');
+                    safeStorage.removeItem('user');
+                    window.location.href = 'index.html';
+                }
+                return { status: res.status, success: res.ok && data.success !== false, ...data };
+            } catch (e) {
+                return { success: false, message: 'Network connection lost.' };
+            }
+        }
+
+        function initNavigation() {
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+                    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+
+                    tab.classList.add('active');
+                    const pageId = tab.id.replace('tab-', 'page-');
+                    document.getElementById(pageId).classList.add('active');
+
+                    if (pageId === 'page-tracking') loadTracking();
+                    if (pageId === 'page-anomalies') loadAnomalies();
+                    if (pageId === 'page-outpass') { loadOutpasses(); loadStudents(); }
+                });
+            });
+        }
+
+        // ── Campus Settings ──
+        async function loadCampusSettings() {
+            const res = await api('/api/campus-settings');
+            if (res.success && res.settings) {
+                document.getElementById('campusLat').value = res.settings.campus_latitude;
+                document.getElementById('campusLng').value = res.settings.campus_longitude;
+                document.getElementById('campusRadius').value = res.settings.campus_radius;
+                document.getElementById('startTime').value = res.settings.college_start_time || '09:00';
+                document.getElementById('endTime').value = res.settings.college_end_time || '16:00';
+            }
+        }
+
+        async function saveCampusSettings(e) {
+            e.preventDefault();
+            const lat = parseFloat(document.getElementById('campusLat').value);
+            const lng = parseFloat(document.getElementById('campusLng').value);
+            const radius = parseFloat(document.getElementById('campusRadius').value);
+            const start = document.getElementById('startTime').value;
+            const end = document.getElementById('endTime').value;
+
+            const res = await api('/api/campus-settings', 'POST', {
+                campus_latitude: lat,
+                campus_longitude: lng,
+                campus_radius: radius,
+                college_start_time: start,
+                college_end_time: end
+            });
+
+            if (res.success) {
+                showToast('Campus geofence boundaries updated!', 'success');
+            } else {
+                showToast(res.message || 'Failed to save campus settings', 'error');
+            }
+        }
+
+        // ── Students & Outpass ──
+        async function loadStudents() {
+            const res = await api('/api/students');
+            const select = document.getElementById('outpassStudent');
+            if (res.success && res.students) {
+                select.innerHTML = `<option value="">Select a student</option>` +
+                    res.students.map(s => `<option value="${s.id}">${s.username} (ID: ${s.id})</option>`).join('');
+            }
+        }
+
+        async function grantOutpass(e) {
+            e.preventDefault();
+            const studentId = parseInt(document.getElementById('outpassStudent').value);
+            const duration = parseInt(document.getElementById('outpassDuration').value);
+            const reason = document.getElementById('outpassReason').value.trim();
+
+            const res = await api('/api/hod/grant-pass', 'POST', {
+                student_id: studentId,
+                duration_mins: duration,
+                reason
+            });
+
+            if (res.success) {
+                showToast('Digital out-pass granted successfully!', 'success');
+                document.getElementById('outpassReason').value = '';
+                loadOutpasses();
+            } else {
+                showToast(res.message || 'Failed to grant pass', 'error');
+            }
+        }
+
+        async function loadOutpasses() {
+            const res = await api('/api/hod/active-passes');
+            const container = document.getElementById('passesList');
+            if (res.success && res.passes) {
+                if (res.passes.length === 0) {
+                    container.innerHTML = `<div style="text-align:center; color:var(--text3); font-size:13px; padding:20px;">No granted passes currently active.</div>`;
+                    return;
+                }
+                container.innerHTML = res.passes.map(p => `
+                    <div class="student-row">
+                        <div class="student-info">
+                            <div class="student-avatar" style="background:rgba(16, 185, 129, 0.15); color:var(--green);">🎟️</div>
+                            <div class="student-details">
+                                <div class="student-name">${p.username}</div>
+                                <div class="student-meta">Reason: "${p.reason}" | Duration: ${p.duration_mins} mins</div>
+                                <div class="student-meta" style="font-family:monospace; color:var(--text3);">Expiry UTC: ${p.expiry}</div>
+                            </div>
+                        </div>
+                        <div class="student-actions">
+                            <span class="badge ${p.is_active ? 'badge-green' : 'badge-red'}">${p.is_active ? 'Active' : 'Expired'}</span>
+                            <button class="btn btn-danger btn-sm" onclick="revokePass(${p.student_id})">Revoke</button>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        async function revokePass(studentId) {
+            if (!confirm('Are you sure you want to revoke this student out-pass?')) return;
+            const res = await api('/api/hod/cancel-pass', 'POST', { student_id: studentId });
+            if (res.success) {
+                showToast('Out-pass revoked.', 'success');
+                loadOutpasses();
+            } else {
+                showToast(res.message || 'Failed to revoke out-pass', 'error');
+            }
+        }
+
+        // ── Live tracking ──
+        async function loadTracking() {
+            const res = await api('/api/hod/students-tracking');
+            const container = document.getElementById('trackingList');
+            if (res.success && res.students) {
+                if (res.students.length === 0) {
+                    container.innerHTML = `<div style="text-align:center; color:var(--text3); font-size:13px; padding:20px;">No students active on campus.</div>`;
+                    return;
+                }
+                container.innerHTML = res.students.map(s => {
+                    let badgeClass = 'badge-yellow';
+                    if (s.status === 'Active & Guarded') badgeClass = 'badge-green';
+                    if (s.status === 'Geofence Breach' || s.status.includes('Offline')) badgeClass = 'badge-red';
+
+                    return `
+                        <div class="student-row">
+                            <div class="student-info">
+                                <div class="student-avatar" style="${s.attendance_locked ? 'border: 2px solid var(--red)' : ''}">${s.username.charAt(0).toUpperCase()}</div>
+                                <div class="student-details">
+                                    <div class="student-name">${s.username}</div>
+                                    <div class="student-meta">Campus status: <span class="badge ${badgeClass}">${s.status}</span></div>
+                                </div>
+                            </div>
+                            <div class="student-actions">
+                                ${s.attendance_locked ? `
+                                    <button class="btn btn-danger btn-sm" onclick="unlockStudent(${s.id})">🔓 Unlock privileges</button>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+
+        async function unlockStudent(studentId) {
+            const res = await api('/api/coordinator/unlock-student', 'POST', { student_id: studentId });
+            if (res.success) {
+                showToast('Student check-in privileges unlocked.', 'success');
+                loadTracking();
+            } else {
+                showToast(res.message || 'Failed to unlock student privileges', 'error');
+            }
+        }
+
+        // ── Anomalies & Alerts ──
+        async function loadAnomalies() {
+            const res = await api('/api/alerts');
+            const container = document.getElementById('anomaliesList');
+            if (res.success && res.alerts) {
+                const unresolved = res.alerts.filter(a => a.status < 2);
+                if (unresolved.length === 0) {
+                    container.innerHTML = `<div style="text-align:center; color:var(--text3); font-size:13px; padding:20px;">All clear. No pending bunking/breach anomalies.</div>`;
+                    return;
+                }
+                container.innerHTML = unresolved.map(a => {
+                    const isBunking = a.message.includes('skipping') || a.message.includes('Absence');
+                    const title = isBunking ? '⚠️ BUNKING ANOMALY DETECTED' : '🚨 GEOFENCE BREACH';
+                    const borderStyle = isBunking ? 'border-left: 4px solid var(--yellow); background: rgba(245,158,11,0.02);' : 'border-left: 4px solid var(--red); background: rgba(244,63,94,0.02);';
+                    const titleColor = isBunking ? 'var(--yellow)' : 'var(--red)';
+
+                    return `
+                        <div class="card" style="${borderStyle}">
+                            <div style="display:flex; justify-content:between; align-items:center; margin-bottom:8px;">
+                                <div style="font-weight:700; font-size:13px; color:${titleColor};">${title}</div>
+                                <div style="font-size:11px; color:var(--text3);">${new Date(a.timestamp).toLocaleTimeString()}</div>
+                            </div>
+                            <p style="font-size:13px; color:var(--text); margin-bottom:10px;">${a.message}</p>
+                            ${a.student_reason ? `
+                                <div style="padding:10px; background:rgba(255,255,255,0.03); border-radius:8px; border: 1px solid var(--border); margin-bottom:12px;">
+                                    <div style="font-size:10px; font-weight:700; color:var(--purple); text-transform:uppercase;">Student Explanation:</div>
+                                    <div style="font-size:12px; color:var(--text2); margin-top:2px;">"${a.student_reason}"</div>
+                                </div>
+                            ` : `
+                                <div style="font-size:11px; color:var(--text3); margin-bottom:12px; font-style:italic;">No student explanation submitted yet.</div>
+                            `}
+                            <div style="display:flex; gap:8px;">
+                                <button class="btn btn-primary btn-sm" onclick="reverseAttendance(${a.id})">✅ Reverse to Present</button>
+                                <button class="btn btn-secondary btn-sm" onclick="dismissAlert(${a.id})">Dismiss Alert</button>
+                                <button class="btn btn-danger btn-sm" onclick="notifyParent(${a.id})">📞 Notify Parent</button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+
+        async function reverseAttendance(alertId) {
+            const res = await api(`/api/alerts/${alertId}/reverse-attendance`, 'POST');
+            if (res.success) {
+                showToast('Attendance successfully updated to present and alert resolved.', 'success');
+                loadAnomalies();
+                loadTracking();
+            } else {
+                showToast(res.message || 'Failed to override attendance.', 'error');
+            }
+        }
+
+        async function dismissAlert(alertId) {
+            const res = await api(`/api/alerts/${alertId}/read`, 'POST');
+            if (res.success) {
+                showToast('Alert resolved & dismissed.', 'success');
+                loadAnomalies();
+            } else {
+                showToast(res.message || 'Failed to dismiss alert.', 'error');
+            }
+        }
+
+        async function notifyParent(alertId) {
+            const res = await api(`/api/alerts/${alertId}/notify-parent`, 'POST');
+            if (res.success) {
+                alert(`[SMS SIMULATOR]\nParent Phone: ${res.parent_phone}\nMessage Body: ${res.sms_body}`);
+                showToast('Parent SMS notification dispatched.', 'success');
+                loadAnomalies();
+            } else {
+                showToast(res.message || 'Failed to send SMS to parent.', 'error');
+            }
+        }
+    </script>
+</body>
+</html>
