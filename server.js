@@ -204,6 +204,47 @@ app.post('/api/login', (req, res) => {
     });
 });
 
+// HOD & Coordinator & Teacher API: Get list of classrooms
+app.get('/api/classrooms', authenticateToken, (req, res) => {
+    db.all("SELECT * FROM classrooms ORDER BY name ASC", [], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true, classrooms: rows });
+    });
+});
+
+// HOD & Coordinator API: Create/Update classroom
+app.post('/api/classrooms', authenticateToken, (req, res) => {
+    if (req.user.role !== 'hod' && req.user.role !== 'coordinator') {
+        return res.status(403).json({ success: false, message: "Unauthorized access." });
+    }
+
+    const { name, latitude, longitude, radius, accuracy } = req.body;
+    if (!name || latitude === undefined || longitude === undefined || radius === undefined || accuracy === undefined) {
+        return res.status(400).json({ success: false, message: "Missing required classroom details." });
+    }
+
+    db.run(
+        "INSERT OR REPLACE INTO classrooms (name, latitude, longitude, radius, accuracy) VALUES (?, ?, ?, ?, ?)",
+        [name.trim(), parseFloat(latitude), parseFloat(longitude), parseFloat(radius), parseFloat(accuracy)],
+        function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ success: true, message: "Classroom configured successfully!", classroom_id: this.lastID });
+        }
+    );
+});
+
+// HOD & Coordinator API: Delete classroom
+app.delete('/api/classrooms/:id', authenticateToken, (req, res) => {
+    if (req.user.role !== 'hod' && req.user.role !== 'coordinator') {
+        return res.status(403).json({ success: false, message: "Unauthorized access." });
+    }
+
+    db.run("DELETE FROM classrooms WHERE id = ?", [req.params.id], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true, message: "Classroom removed successfully." });
+    });
+});
+
 // Teacher API: Create a new class session
 app.post('/api/classes', authenticateToken, (req, res) => {
     // Only teachers are allowed to create sessions
@@ -211,18 +252,28 @@ app.post('/api/classes', authenticateToken, (req, res) => {
         return res.status(403).json({ success: false, message: "Unauthorized access." });
     }
 
-    const { name, latitude, longitude, radius, accuracy } = req.body;
+    const { name, classroom_id } = req.body;
     const teacher_id = req.user.id; // Extract teacher ID securely from verified token
     const token_secret = crypto.randomBytes(16).toString('hex');
     
-    db.run(
-        "INSERT INTO classes (teacher_id, name, latitude, longitude, radius, token_secret, accuracy) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        [teacher_id, name, latitude, longitude, radius, token_secret, accuracy],
-        function (err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ success: true, class_id: this.lastID });
+    if (!name || !classroom_id) {
+        return res.status(400).json({ success: false, message: "Class name and classroom location are required." });
+    }
+
+    db.get("SELECT latitude, longitude, radius, accuracy FROM classrooms WHERE id = ?", [classroom_id], (err, room) => {
+        if (err || !room) {
+            return res.status(404).json({ success: false, message: "Selected classroom location not found." });
         }
-    );
+
+        db.run(
+            "INSERT INTO classes (teacher_id, name, latitude, longitude, radius, token_secret, accuracy) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [teacher_id, name, room.latitude, room.longitude, room.radius, token_secret, room.accuracy],
+            function (err) {
+                if (err) return res.status(500).json({ error: err.message });
+                res.json({ success: true, class_id: this.lastID });
+            }
+        );
+    });
 });
 
 // Teacher API: Get classes for teacher (with optional attendance counts)

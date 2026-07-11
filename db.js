@@ -101,6 +101,28 @@ const db = new sqlite3.Database(dbPath, (err) => {
             notified_expired INTEGER DEFAULT 0
         )`, (err) => { if (err) console.error('[DB] Error creating student_passes table:', err.message); });
 
+        db.run(`CREATE TABLE IF NOT EXISTS classrooms (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE,
+            latitude REAL,
+            longitude REAL,
+            radius REAL,
+            accuracy REAL
+        )`, (err) => { 
+            if (err) console.error('[DB] Error creating classrooms table:', err.message); 
+            else {
+                // Seed default classrooms if empty
+                db.get("SELECT count(*) as count FROM classrooms", (err, row) => {
+                    if (!err && row && row.count === 0) {
+                        console.log("[DB] Seeding default classrooms...");
+                        db.run("INSERT INTO classrooms (name, latitude, longitude, radius, accuracy) VALUES ('Room 302 (Seminar Hall)', 17.385000, 78.486700, 50, 15)");
+                        db.run("INSERT INTO classrooms (name, latitude, longitude, radius, accuracy) VALUES ('CSE Lab 1 (Ground Floor)', 17.385200, 78.486900, 60, 15)");
+                        db.run("INSERT INTO classrooms (name, latitude, longitude, radius, accuracy) VALUES ('Physics Auditorium', 17.384800, 78.486500, 40, 15)");
+                    }
+                });
+            }
+        });
+
         // ── Safe Migrations (for older databases already deployed) ──
         // These will silently fail if column already exists — that's intentional
         const safeAlter = (sql) => db.run(sql, () => {}); // ignore duplicate-column errors
