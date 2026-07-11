@@ -747,6 +747,7 @@ let authToken = null;
 let activeClassId = null;
 let userLat = null;
 let userLng = null;
+let userAccuracy = null;
 let qrScanner = null;
 let heartbeatInterval = null;
 let classRefreshInterval = null;
@@ -1166,9 +1167,23 @@ async function registerBiometrics() {
 
 // ── Heartbeat ──────────────────────────────────────────────────────────────
 function startHeartbeat() {
-    const beat = () => api('/api/student/heartbeat', 'POST');
+    const beat = () => {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(pos => {
+                api('/api/student/heartbeat', 'POST', {
+                    latitude: pos.coords.latitude,
+                    longitude: pos.coords.longitude
+                });
+            }, () => {
+                // fallback or silent fail if GPS disabled
+                api('/api/student/heartbeat', 'POST');
+            }, { enableHighAccuracy: true, timeout: 10000 });
+        } else {
+            api('/api/student/heartbeat', 'POST');
+        }
+    };
     beat();
-    heartbeatInterval = setInterval(beat, 60000);
+    heartbeatInterval = setInterval(beat, 25000);
 }
 
 // ── History ────────────────────────────────────────────────────────────────
@@ -1292,6 +1307,7 @@ function initGPS() {
     navigator.geolocation.getCurrentPosition(pos => {
         userLat = pos.coords.latitude;
         userLng = pos.coords.longitude;
+        userAccuracy = pos.coords.accuracy;
         const acc = Math.round(pos.coords.accuracy);
         coordsEl.textContent = `Lat: ${userLat.toFixed(5)}, Lng: ${userLng.toFixed(5)} (±${acc}m)`;
         label.textContent = 'Location acquired!';
@@ -1341,6 +1357,7 @@ function initGPS() {
         // Fallback to class coordinates if GPS fails/denied, allowing verification in dev/local testing
         userLat = modalClassLat || 17.385000;
         userLng = modalClassLng || 78.486700;
+        userAccuracy = 15;
         coordsEl.textContent = `Using fallback: Lat: ${userLat.toFixed(5)}, Lng: ${userLng.toFixed(5)}`;
         label.textContent = 'GPS Unavailable. Using classroom coordinates fallback for testing.';
         label.style.color = 'var(--yellow)';
@@ -1366,7 +1383,7 @@ function initGPS() {
                 if (labelEl) labelEl.textContent = `👤 You (0m - Fallback)`;
             }
         }
-    }, { enableHighAccuracy: true, timeout: 10000 });
+    }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
 }
 
 function getDistance(lat1, lon1, lat2, lon2) {
@@ -1382,7 +1399,7 @@ async function markByGPS() {
     const btn = document.getElementById('gpsMarkBtn');
     btn.classList.add('loading'); btn.disabled = true;
     const data = await api('/api/mark-attendance', 'POST', {
-        class_id: activeClassId, latitude: userLat, longitude: userLng, accuracy: 20
+        class_id: activeClassId, latitude: userLat, longitude: userLng, accuracy: userAccuracy || 15
     });
     btn.classList.remove('loading'); btn.disabled = false;
     if (data.success) {
@@ -1433,9 +1450,13 @@ async function submitQR(token) {
     resEl.innerHTML = `<div class="badge yellow">🔄 Verifying QR...</div>`;
     if (!userLat) {
         navigator.geolocation.getCurrentPosition(async pos => {
-            userLat = pos.coords.latitude; userLng = pos.coords.longitude;
+            userLat = pos.coords.latitude; 
+            userLng = pos.coords.longitude;
+            userAccuracy = pos.coords.accuracy;
             await doQRSubmit(token, resEl);
-        }, async () => { await doQRSubmit(token, resEl); });
+        }, async () => { 
+            await doQRSubmit(token, resEl); 
+        }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
     } else {
         await doQRSubmit(token, resEl);
     }
@@ -1443,7 +1464,7 @@ async function submitQR(token) {
 
 async function doQRSubmit(token, resEl) {
     const data = await api('/api/mark-attendance', 'POST', {
-        class_id: activeClassId, latitude: userLat || 0, longitude: userLng || 0, qr_token: token, accuracy: 20
+        class_id: activeClassId, latitude: userLat || 0, longitude: userLng || 0, qr_token: token, accuracy: userAccuracy || 15
     });
     if (data.success) {
         resEl.innerHTML = `<div class="badge green" style="font-size:14px;padding:10px 16px;">✅ Attendance Marked!</div>`;
@@ -1497,7 +1518,9 @@ function initManualGPS() {
     labelEl.style.color = 'var(--yellow)';
     if (!navigator.geolocation) { labelEl.textContent = 'GPS unavailable'; return; }
     navigator.geolocation.getCurrentPosition(pos => {
-        userLat = pos.coords.latitude; userLng = pos.coords.longitude;
+        userLat = pos.coords.latitude; 
+        userLng = pos.coords.longitude;
+        userAccuracy = pos.coords.accuracy;
         labelEl.textContent = 'Location ready';
         labelEl.style.color = 'var(--green)';
         coordsEl.textContent = `Lat: ${userLat.toFixed(5)}, Lng: ${userLng.toFixed(5)}`;
@@ -1505,7 +1528,7 @@ function initManualGPS() {
         labelEl.textContent = 'Could not get location';
         labelEl.style.color = 'var(--text2)';
         coordsEl.textContent = 'Request will still be sent without GPS';
-    });
+    }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
 }
 
 async function sendManualRequest() {

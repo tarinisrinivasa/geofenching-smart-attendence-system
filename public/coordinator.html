@@ -779,7 +779,15 @@
                                 <div class="student-avatar" style="${r.attendance_locked ? 'border: 2px solid var(--red)' : ''}">${r.username.charAt(0).toUpperCase()}</div>
                                 <div class="student-details">
                                     <div class="student-name">${r.username} ${r.is_keypad ? '📟' : ''}</div>
-                                    <div class="student-meta">Status: <span class="badge ${badgeClass}">${r.status}</span></div>
+                                    <div class="student-meta">
+                                        Status: <span class="badge ${badgeClass}">${r.status}</span>
+                                        ${r.last_lat && r.last_lon ? `
+                                            <div style="font-size:11px; color:var(--text3); margin-top:4px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                                                <span>📍 Live: <strong>${r.last_lat.toFixed(5)}, ${r.last_lon.toFixed(5)}</strong></span>
+                                                <a href="https://www.google.com/maps?q=${r.last_lat},${r.last_lon}" target="_blank" style="color:var(--primary); text-decoration:none; font-weight:700; border-bottom:1px dashed var(--primary);">[View Map]</a>
+                                            </div>
+                                        ` : ''}
+                                    </div>
                                 </div>
                             </div>
                             <div class="student-actions">
@@ -788,6 +796,7 @@
                                 ` : ''}
                             </div>
                         </div>
+                    `;
                     `;
                 }).join('');
             }
