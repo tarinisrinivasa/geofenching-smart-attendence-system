@@ -111,6 +111,13 @@ function securityFirewall(req, res, next) {
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+
+app.post('/api/log-error', (req, res) => {
+    const { url, message, stack } = req.body;
+    console.error(`[CLIENT EXCEPTION] URL: ${url}\nMsg: ${message}\nStack: ${stack}\n`);
+    res.json({ success: true });
+});
+
 app.use(securityFirewall);
 
 // JWT authentication verification middleware
