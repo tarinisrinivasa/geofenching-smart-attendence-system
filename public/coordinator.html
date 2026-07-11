@@ -891,10 +891,9 @@
             }
         }
 
-        // Close SMS Simulator Modal
-        document.getElementById('btnCloseSmsModal').addEventListener('click', () => {
+        function closeSmsModal() {
             document.getElementById('smsModal').style.display = 'none';
-        });
+        }
     </script>
 
     <!-- SMS Simulator Modal -->
@@ -908,7 +907,7 @@
                 <div style="font-size: 10px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Message Content:</div>
                 <div id="smsModalBody" style="font-size: 13px; color: var(--text-muted); margin-top: 4px; line-height: 1.5;"></div>
             </div>
-            <button class="btn btn-primary" id="btnCloseSmsModal" style="width: 100%; max-width: 100%;">Close Simulator</button>
+            <button class="btn btn-primary" onclick="closeSmsModal()" style="width: 100%; max-width: 100%;">Close Simulator</button>
         </div>
     </div>
 </body>
