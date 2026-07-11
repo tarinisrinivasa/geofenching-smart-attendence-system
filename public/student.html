@@ -325,6 +325,121 @@
         .bio-lock-info { font-size: 11px; color: var(--text2); margin-top: 10px; line-height: 1.6;
             padding: 10px; background: rgba(255,255,255,0.03); border-radius: 8px; }
 
+        /* ── Radar visualizer styles ── */
+        .radar-viewport {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 8px 0;
+        }
+        .radar-scanner {
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(108,99,255,0.06) 0%, rgba(8,10,16,0.9) 70%),
+                        repeating-radial-gradient(circle, rgba(255,255,255,0.01) 0px, rgba(255,255,255,0.01) 20px, transparent 20px, transparent 40px);
+            border: 2px solid rgba(108,99,255,0.2);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 25px rgba(108,99,255,0.1), inset 0 0 15px rgba(108,99,255,0.15);
+        }
+        .radar-sweep {
+            position: absolute;
+            width: 50%;
+            height: 50%;
+            background: linear-gradient(45deg, rgba(108,99,255,0.4) 0%, transparent 100%);
+            transform-origin: bottom right;
+            bottom: 50%;
+            right: 50%;
+            border-radius: 100% 0 0 0;
+            animation: radar-spin 3.5s linear infinite;
+        }
+        @keyframes radar-spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .radar-ring {
+            position: absolute;
+            border: 1px dashed rgba(108,99,255,0.15);
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        .radar-ring.ring-1 { width: 33%; height: 33%; }
+        .radar-ring.ring-2 { width: 66%; height: 66%; }
+        .radar-ring.ring-3 { width: 100%; height: 100%; border-style: solid; border-color: rgba(108,99,255,0.3); }
+        .radar-crosshair-h {
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: rgba(108,99,255,0.12);
+        }
+        .radar-crosshair-v {
+            position: absolute;
+            left: 50%;
+            top: 0;
+            bottom: 0;
+            width: 1px;
+            background: rgba(108,99,255,0.12);
+        }
+        .radar-center-node {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 14px;
+            z-index: 10;
+            text-shadow: 0 0 10px rgba(108,99,255,0.8);
+            animation: pulse-node 2s infinite alternate;
+        }
+        @keyframes pulse-node {
+            0% { transform: translate(-50%, -50%) scale(0.95); opacity: 0.8; }
+            100% { transform: translate(-50%, -50%) scale(1.15); opacity: 1; }
+        }
+        .radar-point {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            z-index: 15;
+            transition: all 0.3s ease;
+        }
+        .radar-point::after {
+            content: '';
+            position: absolute;
+            inset: -4px;
+            border-radius: 50%;
+            border: 2px solid currentColor;
+            opacity: 0.4;
+            animation: blip-pulse 1.5s infinite;
+        }
+        @keyframes blip-pulse {
+            0% { transform: scale(0.8); opacity: 0.5; }
+            100% { transform: scale(2.2); opacity: 0; }
+        }
+        .radar-point-label {
+            position: absolute;
+            top: -18px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 8px;
+            font-weight: 700;
+            background: rgba(8,10,16,0.85);
+            padding: 2px 4px;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+            white-space: nowrap;
+            color: var(--text-main);
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }
+
         @media (max-width: 400px) {
             .method-grid { grid-template-columns: 1fr 1fr; }
             .page { padding: 14px; }
@@ -536,9 +651,27 @@
                     <div class="gps-coords" id="gpsCoords">Please allow location access</div>
                 </div>
             </div>
+            <!-- Student GPS Radar -->
+            <div class="radar-viewport" id="studentRadarContainer" style="display:none; margin: 12px 0;">
+                <div class="radar-scanner">
+                    <div class="radar-sweep"></div>
+                    <div class="radar-ring ring-1"></div>
+                    <div class="radar-ring ring-2"></div>
+                    <div class="radar-ring ring-3"></div>
+                    <div class="radar-crosshair-h"></div>
+                    <div class="radar-crosshair-v"></div>
+                    <div class="radar-center-node">🏫</div>
+                    <div class="radar-blips-layer">
+                        <div class="radar-point student-dot" id="studentRadarDot" style="display:none; background-color: var(--primary); color: var(--primary); box-shadow: 0 0 12px var(--primary);">
+                            <div class="radar-point-label" style="opacity:1;">👤 You (Calculating...)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="distance-meter" id="distanceMeter" style="display:none;">
                 <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);">
-                    <span>Distance from classroom</span>
+                    <span>Perimeter distance</span>
                     <span id="distanceLabel">—</span>
                 </div>
                 <div class="distance-bar">
@@ -1137,6 +1270,18 @@ function initGPS() {
     label.textContent = 'Getting your location...';
     coordsEl.textContent = 'Please allow location access';
     document.getElementById('distanceMeter').style.display = 'none';
+    
+    const radarContainer = document.getElementById('studentRadarContainer');
+    const radarDot = document.getElementById('studentRadarDot');
+    if (radarContainer) radarContainer.style.display = 'block';
+    if (radarDot) {
+        radarDot.style.display = 'block';
+        radarDot.style.left = '90%';
+        radarDot.style.top = '10%';
+        const labelEl = radarDot.querySelector('.radar-point-label');
+        if (labelEl) labelEl.textContent = '👤 You (Locating...)';
+    }
+    
     document.getElementById('gpsMarkBtn').disabled = true;
 
     if (!navigator.geolocation) {
@@ -1155,7 +1300,7 @@ function initGPS() {
         statusEl.style.background = 'rgba(16,185,129,0.05)';
         document.getElementById('gpsMarkBtn').disabled = false;
 
-        // Show distance
+        // Show distance & update Radar
         if (modalClassLat && modalClassRadius > 0) {
             const dist = Math.round(getDistance(userLat, userLng, modalClassLat, modalClassLng));
             const pct = Math.min(100, (dist / (modalClassRadius * 2)) * 100);
@@ -1164,6 +1309,33 @@ function initGPS() {
             const fill = document.getElementById('distanceFill');
             fill.style.width = pct + '%';
             fill.style.background = dist <= modalClassRadius ? 'var(--green)' : 'var(--red)';
+
+            // Update radar position
+            if (radarDot) {
+                const distancePercent = Math.min(110, (dist / modalClassRadius) * 100);
+                const angle = 135; // standard direction for student blip
+                const rad = angle * Math.PI / 180;
+                const maxUiDist = 45;
+                const uiDist = (distancePercent / 100) * maxUiDist;
+                const x = 50 + uiDist * Math.cos(rad);
+                const y = 50 + uiDist * Math.sin(rad);
+                
+                radarDot.style.left = `${x}%`;
+                radarDot.style.top = `${y}%`;
+                
+                const labelEl = radarDot.querySelector('.radar-point-label');
+                if (dist <= modalClassRadius) {
+                    radarDot.style.backgroundColor = 'var(--green)';
+                    radarDot.style.color = 'var(--green)';
+                    radarDot.style.boxShadow = '0 0 12px var(--green)';
+                    if (labelEl) labelEl.textContent = `👤 You (${dist}m - In Zone)`;
+                } else {
+                    radarDot.style.backgroundColor = 'var(--red)';
+                    radarDot.style.color = 'var(--red)';
+                    radarDot.style.boxShadow = '0 0 12px var(--red)';
+                    if (labelEl) labelEl.textContent = `👤 You (${dist}m - Out of Zone)`;
+                }
+            }
         }
     }, () => {
         // Fallback to class coordinates if GPS fails/denied, allowing verification in dev/local testing
@@ -1182,6 +1354,17 @@ function initGPS() {
             const fill = document.getElementById('distanceFill');
             fill.style.width = '100%';
             fill.style.background = 'var(--green)';
+            
+            // Plot directly at center for fallback
+            if (radarDot) {
+                radarDot.style.left = '50%';
+                radarDot.style.top = '50%';
+                radarDot.style.backgroundColor = 'var(--green)';
+                radarDot.style.color = 'var(--green)';
+                radarDot.style.boxShadow = '0 0 12px var(--green)';
+                const labelEl = radarDot.querySelector('.radar-point-label');
+                if (labelEl) labelEl.textContent = `👤 You (0m - Fallback)`;
+            }
         }
     }, { enableHighAccuracy: true, timeout: 10000 });
 }

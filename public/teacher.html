@@ -292,6 +292,140 @@
         }
         .keypad-otp-title { font-size: 11px; font-weight: 700; color: var(--yellow); margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
 
+        /* ── Radar visualizer styles ── */
+        .radar-viewport {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 12px 0;
+        }
+        .radar-scanner {
+            width: 250px;
+            height: 250px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(108,99,255,0.06) 0%, rgba(8,10,16,0.9) 70%),
+                        repeating-radial-gradient(circle, rgba(255,255,255,0.01) 0px, rgba(255,255,255,0.01) 20px, transparent 20px, transparent 40px);
+            border: 2px solid rgba(108,99,255,0.2);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 30px rgba(108,99,255,0.1), inset 0 0 20px rgba(108,99,255,0.15);
+        }
+        .radar-sweep {
+            position: absolute;
+            width: 50%;
+            height: 50%;
+            background: linear-gradient(45deg, rgba(108,99,255,0.4) 0%, transparent 100%);
+            transform-origin: bottom right;
+            bottom: 50%;
+            right: 50%;
+            border-radius: 100% 0 0 0;
+            animation: radar-spin 3.5s linear infinite;
+        }
+        @keyframes radar-spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .radar-ring {
+            position: absolute;
+            border: 1px dashed rgba(108,99,255,0.15);
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        .radar-ring.ring-1 { width: 33%; height: 33%; }
+        .radar-ring.ring-2 { width: 66%; height: 66%; }
+        .radar-ring.ring-3 { width: 100%; height: 100%; border-style: solid; border-color: rgba(108,99,255,0.3); }
+        .radar-crosshair-h {
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: rgba(108,99,255,0.12);
+        }
+        .radar-crosshair-v {
+            position: absolute;
+            left: 50%;
+            top: 0;
+            bottom: 0;
+            width: 1px;
+            background: rgba(108,99,255,0.12);
+        }
+        .radar-center-node {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 16px;
+            z-index: 10;
+            text-shadow: 0 0 10px rgba(108,99,255,0.8);
+            animation: pulse-node 2s infinite alternate;
+        }
+        @keyframes pulse-node {
+            0% { transform: translate(-50%, -50%) scale(0.95); opacity: 0.8; }
+            100% { transform: translate(-50%, -50%) scale(1.15); opacity: 1; }
+        }
+        .radar-blips-layer {
+            position: absolute;
+            inset: 0;
+            z-index: 5;
+        }
+        .radar-point {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            z-index: 15;
+            transition: all 0.3s ease;
+        }
+        .radar-point::after {
+            content: '';
+            position: absolute;
+            inset: -4px;
+            border-radius: 50%;
+            border: 2px solid currentColor;
+            opacity: 0.4;
+            animation: blip-pulse 1.5s infinite;
+        }
+        .radar-point.present {
+            background-color: var(--green);
+            color: var(--green);
+            box-shadow: 0 0 10px var(--green);
+        }
+        .radar-point.pending {
+            background-color: var(--yellow);
+            color: var(--yellow);
+            box-shadow: 0 0 10px var(--yellow);
+        }
+        @keyframes blip-pulse {
+            0% { transform: scale(0.8); opacity: 0.5; }
+            100% { transform: scale(2.2); opacity: 0; }
+        }
+        .radar-point-label {
+            position: absolute;
+            top: -18px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 8px;
+            font-weight: 700;
+            background: rgba(8,10,16,0.85);
+            padding: 2px 4px;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+            white-space: nowrap;
+            color: var(--text-main);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+        .radar-point:hover .radar-point-label {
+            opacity: 1;
+        }
+
         @media (max-width: 400px) {
             .form-row { grid-template-columns: 1fr; }
             .download-row { grid-template-columns: 1fr; }
@@ -425,6 +559,30 @@
                 <div style="background:var(--surface2); border-radius:10px; padding:14px;">
                     <div style="font-size:26px; font-weight:800; color:var(--accent2);" id="countTotal">0</div>
                     <div style="font-size:11px; color:var(--text2); margin-top:2px;">Total</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Live Geofence Radar -->
+        <div class="card" id="radarCard" style="display:block;">
+            <div class="card-title" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                <span>📡 Live Geofence Radar</span>
+                <span class="badge blue" id="radarRadiusLabel" style="font-size:11px;">Radius: —</span>
+            </div>
+            <p style="font-size:11.5px; color:var(--text2); margin-bottom:20px; line-height:1.4;">Real-time scanning for students. Concentric rings represent classroom geofence perimeters.</p>
+            
+            <div class="radar-viewport">
+                <div class="radar-scanner">
+                    <div class="radar-sweep"></div>
+                    <div class="radar-ring ring-1"></div>
+                    <div class="radar-ring ring-2"></div>
+                    <div class="radar-ring ring-3"></div>
+                    <div class="radar-crosshair-h"></div>
+                    <div class="radar-crosshair-v"></div>
+                    <div class="radar-center-node">🏫</div>
+                    <div class="radar-blips-layer" id="radarBlips">
+                        <!-- Dynamic student blips will be placed here -->
+                    </div>
                 </div>
             </div>
         </div>
@@ -631,6 +789,7 @@ let activeSession = null; // { id, name, latitude, longitude, radius }
 let qrInterval = null;
 let requestInterval = null;
 let rosterInterval = null;
+let radarInterval = null;
 let countdownValue = 15;
 let barcodeScanner = null;
 let studentList = [];
@@ -846,8 +1005,8 @@ async function triggerSignOut(silent = false) {
 }
 
 function stopAllIntervals() {
-    clearInterval(qrInterval); clearInterval(requestInterval); clearInterval(rosterInterval);
-    qrInterval = null; requestInterval = null; rosterInterval = null;
+    clearInterval(qrInterval); clearInterval(requestInterval); clearInterval(rosterInterval); clearInterval(radarInterval);
+    qrInterval = null; requestInterval = null; rosterInterval = null; radarInterval = null;
     if (barcodeScanner) { try { barcodeScanner.stop(); } catch {} barcodeScanner = null; }
 }
 
@@ -883,7 +1042,10 @@ function switchTab(tab) {
 
     if (tab === 'requests') loadRequests();
     if (tab === 'roster') loadRoster();
-    if (tab === 'session') loadRosterSummary();
+    if (tab === 'session') {
+        loadRosterSummary();
+        updateRadar();
+    }
 }
 
 // ── Session Check ──────────────────────────────────────────────────────────
@@ -912,6 +1074,11 @@ function showActiveSessionUI() {
 
     requestInterval = setInterval(loadRequestCount, 15000);
     loadRequestCount();
+
+    // Start radar polling interval
+    clearInterval(radarInterval);
+    radarInterval = setInterval(updateRadar, 4000);
+    updateRadar();
 }
 
 function showNoSessionUI() {
@@ -1471,6 +1638,103 @@ async function generateReport(className, presentStudents, allStudents) {
         showToast('Excel downloaded!', 'success');
     } catch (e) {
         showToast('Excel generation failed: ' + e.message, 'error');
+    }
+}
+
+// ── Radar visualizer helper functions ──
+function getDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371000;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+async function updateRadar() {
+    if (!activeSession) return;
+    const blipsLayer = document.getElementById('radarBlips');
+    if (!blipsLayer) return;
+
+    // Display the radius setting
+    const radiusLabel = document.getElementById('radarRadiusLabel');
+    const radius = activeSession.radius || 50;
+    if (radiusLabel) radiusLabel.textContent = `Radius: ${radius}m`;
+
+    try {
+        // Fetch present students
+        const presentData = await api(`/api/attendance/${activeSession.id}`);
+        const present = presentData.attendance || [];
+
+        // Fetch pending requests
+        const requestData = await api(`/api/pending-requests/${activeSession.id}`);
+        const requests = requestData.requests || [];
+
+        let blipsHtml = '';
+        const centerLat = activeSession.latitude;
+        const centerLng = activeSession.longitude;
+
+        const allStudents = [];
+
+        // Add present students
+        present.forEach(p => {
+            if (p.request_lat && p.request_lon) {
+                const dist = getDistance(centerLat, centerLng, p.request_lat, p.request_lon);
+                allStudents.push({
+                    id: p.student_id,
+                    username: p.username,
+                    status: 'present',
+                    distance: dist
+                });
+            } else {
+                // Mock coordinate within radius if missing coordinates (e.g. OTP, barcode)
+                allStudents.push({
+                    id: p.student_id || Math.floor(Math.random() * 1000),
+                    username: p.username,
+                    status: 'present',
+                    distance: radius * 0.4
+                });
+            }
+        });
+
+        // Add pending requests
+        requests.forEach(r => {
+            allStudents.push({
+                id: r.student_id,
+                username: r.username,
+                status: 'pending',
+                distance: r.distance
+            });
+        });
+
+        // Plot student blips
+        allStudents.forEach(s => {
+            // Deterministic angle per student ID so they stay visually static in their direction
+            const angle = (s.id * 53) % 360; 
+            const distancePercent = radius <= 0 ? 30 : Math.min(110, (s.distance / radius) * 100);
+            
+            const rad = angle * Math.PI / 180;
+            // Center of radar is at 50%, 50%
+            // Distance on UI should max out at 45% to stay inside the boundary nicely
+            const maxUiDist = 45; 
+            const uiDist = (distancePercent / 100) * maxUiDist;
+            
+            const x = 50 + uiDist * Math.cos(rad);
+            const y = 50 + uiDist * Math.sin(rad);
+
+            const statusClass = s.status === 'present' ? 'present' : 'pending';
+            const labelText = `${s.username} (${Math.round(s.distance)}m)`;
+
+            blipsHtml += `
+                <div class="radar-point ${statusClass}" style="left: ${x}%; top: ${y}%;" title="${labelText}">
+                    <div class="radar-point-label">${labelText}</div>
+                </div>
+            `;
+        });
+
+        blipsLayer.innerHTML = blipsHtml;
+
+    } catch (err) {
+        console.error('[Radar Update Error]', err);
     }
 }
 </script>
