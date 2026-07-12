@@ -512,9 +512,12 @@
                     safeStorage.removeItem('user');
                     window.location.href = 'index.html';
                 }
-                return { status: res.status, success: res.ok && data.success !== false, ...data };
+                // BUGFIX: spread data first, then override success so server false always wins
+                const computedSuccess = res.ok && data.success !== false && !data.error;
+                return { ...data, status: res.status, success: computedSuccess };
             } catch (e) {
-                return { success: false, message: 'Network connection lost.' };
+                console.error('[API ERROR]', e);
+                return { success: false, message: 'Network connection lost. Check your internet.' };
             }
         }
 
@@ -682,12 +685,14 @@
         }
 
         async function unlockStudent(studentId) {
+            showToast('Unlocking student... please wait.', 'info');
             const res = await api('/api/coordinator/unlock-student', 'POST', { student_id: studentId });
             if (res.success) {
-                showToast('Student check-in privileges unlocked.', 'success');
+                showToast('✅ Student check-in privileges unlocked successfully!', 'success');
                 loadTracking();
             } else {
-                showToast(res.message || 'Failed to unlock student privileges', 'error');
+                const errMsg = res.message || res.error || 'Failed to unlock student privileges';
+                showToast('❌ Unlock failed: ' + errMsg, 'error');
             }
         }
 
@@ -734,47 +739,55 @@
         }
 
         async function reverseAttendance(alertId) {
+            showToast('Reversing attendance... please wait.', 'info');
             const res = await api(`/api/alerts/${alertId}/reverse-attendance`, 'POST');
             if (res.success) {
-                showToast('Attendance successfully updated to present and alert resolved.', 'success');
+                showToast('✅ Attendance reversed to Present successfully!', 'success');
                 loadAnomalies();
                 loadTracking();
             } else {
-                showToast(res.message || 'Failed to override attendance.', 'error');
+                const errMsg = res.message || res.error || 'Failed to reverse attendance.';
+                showToast('❌ Reversal failed: ' + errMsg, 'error');
             }
         }
 
         async function dismissAlert(alertId) {
             const res = await api(`/api/alerts/${alertId}/read`, 'POST');
             if (res.success) {
-                showToast('Alert resolved & dismissed.', 'success');
+                showToast('✅ Alert dismissed successfully.', 'success');
                 loadAnomalies();
             } else {
-                showToast(res.message || 'Failed to dismiss alert.', 'error');
+                const errMsg = res.message || res.error || 'Failed to dismiss alert.';
+                showToast('❌ Dismiss failed: ' + errMsg, 'error');
             }
         }
 
         async function dismissAllAlerts() {
-            if (!confirm('Are you sure you want to dismiss all pending alerts?')) return;
+            // No confirm() — mobile browsers block it. Proceed directly.
             const res = await api('/api/alerts/dismiss-all', 'POST');
             if (res.success) {
-                showToast('All alerts dismissed successfully.', 'success');
+                showToast('✅ All alerts dismissed successfully.', 'success');
                 loadAnomalies();
             } else {
-                showToast(res.message || 'Failed to dismiss all alerts.', 'error');
+                const errMsg = res.message || res.error || 'Failed to dismiss all alerts.';
+                showToast('❌ Dismiss All failed: ' + errMsg, 'error');
             }
         }
 
         async function notifyParent(alertId) {
+            showToast('Sending parent notification... please wait.', 'info');
             const res = await api(`/api/alerts/${alertId}/notify-parent`, 'POST');
             if (res.success) {
-                document.getElementById('smsModalPhone').textContent = res.parent_phone;
-                document.getElementById('smsModalBody').textContent = res.sms_body;
+                const phone = res.parent_phone || 'N/A';
+                const body = res.sms_body || res.message || '';
+                document.getElementById('smsModalPhone').textContent = phone;
+                document.getElementById('smsModalBody').textContent = body;
                 document.getElementById('smsModal').style.display = 'flex';
-                showToast('Parent SMS notification dispatched.', 'success');
+                showToast('✅ Parent SMS dispatched to ' + phone, 'success');
                 loadAnomalies();
             } else {
-                showToast(res.message || 'Failed to send SMS to parent.', 'error');
+                const errMsg = res.message || res.error || 'Failed to send SMS to parent.';
+                showToast('❌ Notify Parent failed: ' + errMsg, 'error');
             }
         }
 
