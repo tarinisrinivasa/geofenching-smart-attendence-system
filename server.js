@@ -403,8 +403,8 @@ app.get('/api/alerts', authenticateToken, (req, res) => {
         ORDER BY a.status ASC, a.id DESC
     `;
     db.all(query, [], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ alerts: rows });
+        if (err) return res.status(500).json({ success: false, error: err.message });
+        res.json({ success: true, alerts: rows });
     });
 });
 
