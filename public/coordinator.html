@@ -558,6 +558,31 @@
                 safeStorage.removeItem('user');
                 window.location.href = 'index.html';
             });
+
+            // BUGFIX: moved here from bare scope — elements must exist before binding
+            document.getElementById('studentSearch').addEventListener('input', (e) => {
+                const q = e.target.value.toLowerCase();
+                const filtered = allStudents.filter(s => s.username.toLowerCase().includes(q) || s.id.toString().includes(q));
+                renderStudents(filtered);
+            });
+            document.getElementById('btnCancelOtp').addEventListener('click', () => {
+                document.getElementById('otpModal').style.display = 'none';
+            });
+            document.getElementById('btnVerifyOtp').addEventListener('click', async () => {
+                const code = document.getElementById('otpEntry').value.trim();
+                if (code.length < 4) {
+                    showToast('Please enter the 4-digit code', 'error');
+                    return;
+                }
+                const res = await api('/api/coordinator/verify-keypad-otp', 'POST', { student_id: activeOtpStudent, otp_code: code });
+                if (res.success) {
+                    showToast('OTP verified! Student marked present.', 'success');
+                    document.getElementById('otpModal').style.display = 'none';
+                    loadRoster();
+                } else {
+                    showToast(res.message || 'Incorrect OTP code entered.', 'error');
+                }
+            });
         });
 
         function showToast(msg, type = 'info') {
@@ -708,11 +733,7 @@
             `).join('');
         }
 
-        document.getElementById('studentSearch').addEventListener('input', (e) => {
-            const q = e.target.value.toLowerCase();
-            const filtered = allStudents.filter(s => s.username.toLowerCase().includes(q) || s.id.toString().includes(q));
-            renderStudents(filtered);
-        });
+
 
         async function toggleKeypad(studentId, isKeypad) {
             const res = await api('/api/coordinator/toggle-keypad', 'POST', { student_id: studentId, is_keypad: isKeypad });
@@ -725,7 +746,6 @@
         }
 
         async function resetDevice(studentId) {
-            if (!confirm("Are you sure you want to clear this student's device hardware binding? This will allow them to login on a new phone.")) return;
             const res = await api('/api/coordinator/reset-device', 'POST', { student_id: studentId });
             if (res.success) {
                 showToast(res.message, 'success');
@@ -753,28 +773,7 @@
             }
         }
 
-        document.getElementById('btnCancelOtp').addEventListener('click', () => {
-            document.getElementById('otpModal').style.display = 'none';
-        });
 
-        document.getElementById('btnVerifyOtp').addEventListener('click', async () => {
-            const code = document.getElementById('otpEntry').value.trim();
-            if (code.length < 4) {
-                showToast('Please enter the 4-digit code', 'error');
-                return;
-            }
-
-            const res = await api('/api/coordinator/verify-keypad-otp', 'POST', { student_id: activeOtpStudent, otp_code: code });
-            if (res.success) {
-                showToast('OTP verified! Student marked present.', 'success');
-                document.getElementById('otpModal').style.display = 'none';
-                loadRoster();
-            } else {
-                showToast(res.message || 'Incorrect OTP code entered.', 'error');
-            }
-        });
-
-        // ── Live Roster ──
         async function loadRoster() {
             const res = await api('/api/coordinator/roster');
             const container = document.getElementById('rosterList');
