@@ -434,54 +434,72 @@
     <div id="toastContainer"></div>
 
     <script>
+        console.log('[HOD V3] Script loaded at', new Date().toISOString());
+
         window.addEventListener('error', function (e) {
-            fetch('/api/log-error', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    url: window.location.href,
-                    message: e.message,
-                    stack: e.error ? e.error.stack : null
-                })
-            }).catch(() => {});
+            try {
+                fetch('/api/log-error', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        url: window.location.href,
+                        message: e.message,
+                        stack: e.error ? e.error.stack : null
+                    })
+                }).catch(function(){});
+            } catch(err) {}
         });
 
-        const safeStorage = {
-            getItem(k) { try { return localStorage.getItem(k); } catch { return null; } },
-            setItem(k, v) { try { localStorage.setItem(k, v); } catch {} },
-            removeItem(k) { try { localStorage.removeItem(k); } catch {} }
+        var safeStorage = {
+            getItem: function(k) { try { return localStorage.getItem(k); } catch(e) { return null; } },
+            setItem: function(k, v) { try { localStorage.setItem(k, v); } catch(e) {} },
+            removeItem: function(k) { try { localStorage.removeItem(k); } catch(e) {} }
         };
 
-        const authToken = safeStorage.getItem('token');
-        let currentUser = null;
-        try { currentUser = JSON.parse(safeStorage.getItem('user')); } catch {}
+        var authToken = safeStorage.getItem('token');
+        var currentUser = null;
+        try { currentUser = JSON.parse(safeStorage.getItem('user')); } catch(e) {}
 
         if (!authToken || !currentUser || currentUser.role !== 'hod') {
             window.location.href = 'index.html';
         }
 
-        document.getElementById('headerTitle').textContent = `${currentUser.username.toUpperCase()} (HOD)`;
+        var headerEl = document.getElementById('headerTitle');
+        if (headerEl && currentUser) { headerEl.textContent = currentUser.username.toUpperCase() + ' (HOD)'; }
 
-        window.addEventListener('DOMContentLoaded', () => {
-            initNavigation();
-            loadCampusSettings();
-            loadStudents();
-            loadOutpasses();
-            loadTracking();
-            loadAnomalies();
+        function hodInit() {
+            console.log('[HOD V3] Init running');
+            try {
+                initNavigation();
+                loadCampusSettings();
+                loadStudents();
+                loadOutpasses();
+                loadTracking();
+                loadAnomalies();
 
-            // Bind Event Listeners
-            document.getElementById('campusForm').addEventListener('submit', saveCampusSettings);
-            document.getElementById('outpassForm').addEventListener('submit', grantOutpass);
-            document.getElementById('btnRefreshTracking').addEventListener('click', loadTracking);
-            document.getElementById('btnRefreshAnomalies').addEventListener('click', loadAnomalies);
-            document.getElementById('btnDismissAllAnomalies').addEventListener('click', dismissAllAlerts);
-            document.getElementById('logoutBtn').addEventListener('click', () => {
-                safeStorage.removeItem('token');
-                safeStorage.removeItem('user');
-                window.location.href = 'index.html';
-            });
-        });
+                var el;
+                el = document.getElementById('campusForm'); if(el) el.addEventListener('submit', saveCampusSettings);
+                el = document.getElementById('outpassForm'); if(el) el.addEventListener('submit', grantOutpass);
+                el = document.getElementById('btnRefreshTracking'); if(el) el.addEventListener('click', loadTracking);
+                el = document.getElementById('btnRefreshAnomalies'); if(el) el.addEventListener('click', loadAnomalies);
+                el = document.getElementById('btnDismissAllAnomalies'); if(el) el.addEventListener('click', dismissAllAlerts);
+                el = document.getElementById('logoutBtn'); if(el) el.addEventListener('click', function() {
+                    safeStorage.removeItem('token');
+                    safeStorage.removeItem('user');
+                    window.location.href = 'index.html';
+                });
+                console.log('[HOD V3] Init complete - all listeners bound');
+            } catch(err) {
+                console.error('[HOD V3] Init error:', err);
+            }
+        }
+
+        // Bulletproof DOMContentLoaded: works whether DOM is already ready or still loading
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', hodInit);
+        } else {
+            hodInit();
+        }
 
         function showToast(msg, type = 'info') {
             const container = document.getElementById('toastContainer');
@@ -507,10 +525,11 @@
             try {
                 const res = await fetch(endpoint, opts);
                 const data = await res.json();
-                if (res.status === 401) {
+                if (res.status === 401 || res.status === 403) {
                     safeStorage.removeItem('token');
                     safeStorage.removeItem('user');
                     window.location.href = 'index.html';
+                    return { success: false, message: 'Session expired. Redirecting...' };
                 }
                 // BUGFIX: spread data first, then override success so server false always wins
                 const computedSuccess = res.ok && data.success !== false && !data.error;

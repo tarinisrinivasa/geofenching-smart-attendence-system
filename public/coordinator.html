@@ -513,77 +513,90 @@
     <div id="toastContainer"></div>
 
     <script>
+        console.log('[COORDINATOR V3] Script loaded at', new Date().toISOString());
+
         window.addEventListener('error', function (e) {
-            fetch('/api/log-error', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    url: window.location.href,
-                    message: e.message,
-                    stack: e.error ? e.error.stack : null
-                })
-            }).catch(() => {});
+            try {
+                fetch('/api/log-error', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        url: window.location.href,
+                        message: e.message,
+                        stack: e.error ? e.error.stack : null
+                    })
+                }).catch(function(){});
+            } catch(err) {}
         });
 
-        const safeStorage = {
-            getItem(k) { try { return localStorage.getItem(k); } catch { return null; } },
-            setItem(k, v) { try { localStorage.setItem(k, v); } catch {} },
-            removeItem(k) { try { localStorage.removeItem(k); } catch {} }
+        var safeStorage = {
+            getItem: function(k) { try { return localStorage.getItem(k); } catch(e) { return null; } },
+            setItem: function(k, v) { try { localStorage.setItem(k, v); } catch(e) {} },
+            removeItem: function(k) { try { localStorage.removeItem(k); } catch(e) {} }
         };
 
-        const authToken = safeStorage.getItem('token');
-        let currentUser = null;
-        try { currentUser = JSON.parse(safeStorage.getItem('user')); } catch {}
+        var authToken = safeStorage.getItem('token');
+        var currentUser = null;
+        try { currentUser = JSON.parse(safeStorage.getItem('user')); } catch(e) {}
 
         if (!authToken || !currentUser || (currentUser.role !== 'coordinator' && currentUser.role !== 'hod')) {
             window.location.href = 'index.html';
         }
 
-        document.getElementById('headerTitle').textContent = `${currentUser.username.toUpperCase()}`;
+        var headerEl = document.getElementById('headerTitle');
+        if (headerEl && currentUser) { headerEl.textContent = currentUser.username.toUpperCase(); }
 
-        window.addEventListener('DOMContentLoaded', () => {
-            initNavigation();
-            loadClassrooms();
-            loadStudents();
-            loadRoster();
-            loadAlerts();
+        function coordinatorInit() {
+            console.log('[COORDINATOR V3] Init running');
+            try {
+                initNavigation();
+                loadClassrooms();
+                loadStudents();
+                loadRoster();
+                loadAlerts();
 
-            // Bind Form Submit
-            document.getElementById('classroomForm').addEventListener('submit', createClassroom);
-            document.getElementById('btnRefreshRoster').addEventListener('click', loadRoster);
-            document.getElementById('btnRefreshAlerts').addEventListener('click', loadAlerts);
-            document.getElementById('btnDismissAllAlerts').addEventListener('click', dismissAllAlerts);
-            document.getElementById('logoutBtn').addEventListener('click', () => {
-                safeStorage.removeItem('token');
-                safeStorage.removeItem('user');
-                window.location.href = 'index.html';
-            });
-
-            // BUGFIX: moved here from bare scope — elements must exist before binding
-            document.getElementById('studentSearch').addEventListener('input', (e) => {
-                const q = e.target.value.toLowerCase();
-                const filtered = allStudents.filter(s => s.username.toLowerCase().includes(q) || s.id.toString().includes(q));
-                renderStudents(filtered);
-            });
-            document.getElementById('btnCancelOtp').addEventListener('click', () => {
-                document.getElementById('otpModal').style.display = 'none';
-            });
-            document.getElementById('btnVerifyOtp').addEventListener('click', async () => {
-                const code = document.getElementById('otpEntry').value.trim();
-                if (code.length < 4) {
-                    showToast('Please enter the 4-digit code', 'error');
-                    return;
-                }
-                const res = await api('/api/coordinator/verify-keypad-otp', 'POST', { student_id: activeOtpStudent, otp_code: code });
-                if (res.success) {
-                    showToast('OTP verified! Student marked present.', 'success');
+                var el;
+                el = document.getElementById('classroomForm'); if(el) el.addEventListener('submit', createClassroom);
+                el = document.getElementById('btnRefreshRoster'); if(el) el.addEventListener('click', loadRoster);
+                el = document.getElementById('btnRefreshAlerts'); if(el) el.addEventListener('click', loadAlerts);
+                el = document.getElementById('btnDismissAllAlerts'); if(el) el.addEventListener('click', dismissAllAlerts);
+                el = document.getElementById('logoutBtn'); if(el) el.addEventListener('click', function() {
+                    safeStorage.removeItem('token');
+                    safeStorage.removeItem('user');
+                    window.location.href = 'index.html';
+                });
+                el = document.getElementById('studentSearch'); if(el) el.addEventListener('input', function(e) {
+                    var q = e.target.value.toLowerCase();
+                    var filtered = allStudents.filter(function(s) { return s.username.toLowerCase().includes(q) || s.id.toString().includes(q); });
+                    renderStudents(filtered);
+                });
+                el = document.getElementById('btnCancelOtp'); if(el) el.addEventListener('click', function() {
                     document.getElementById('otpModal').style.display = 'none';
-                    loadRoster();
-                } else {
-                    showToast(res.message || 'Incorrect OTP code entered.', 'error');
-                }
-            });
-        });
+                });
+                el = document.getElementById('btnVerifyOtp'); if(el) el.addEventListener('click', async function() {
+                    var code = document.getElementById('otpEntry').value.trim();
+                    if (code.length < 4) { showToast('Please enter the 4-digit code', 'error'); return; }
+                    var res = await api('/api/coordinator/verify-keypad-otp', 'POST', { student_id: activeOtpStudent, otp_code: code });
+                    if (res.success) {
+                        showToast('OTP verified! Student marked present.', 'success');
+                        document.getElementById('otpModal').style.display = 'none';
+                        loadRoster();
+                    } else {
+                        showToast(res.message || 'Incorrect OTP code entered.', 'error');
+                    }
+                });
+                console.log('[COORDINATOR V3] Init complete - all listeners bound');
+            } catch(err) {
+                console.error('[COORDINATOR V3] Init error:', err);
+            }
+        }
+
+        // Bulletproof DOMContentLoaded: works whether DOM is already ready or still loading
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', coordinatorInit);
+        } else {
+            coordinatorInit();
+        }
 
         function showToast(msg, type = 'info') {
             const container = document.getElementById('toastContainer');
@@ -609,10 +622,11 @@
             try {
                 const res = await fetch(endpoint, opts);
                 const data = await res.json();
-                if (res.status === 401) {
+                if (res.status === 401 || res.status === 403) {
                     safeStorage.removeItem('token');
                     safeStorage.removeItem('user');
                     window.location.href = 'index.html';
+                    return { success: false, message: 'Session expired. Redirecting...' };
                 }
                 // BUGFIX: spread data first, then override success so server false always wins
                 const computedSuccess = res.ok && data.success !== false && !data.error;
