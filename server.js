@@ -1586,8 +1586,14 @@ app.post('/api/coordinator/unlock-student', authenticateToken, (req, res) => {
         return res.status(400).json({ success: false, message: "Missing student_id." });
     }
 
-    db.run("UPDATE users SET attendance_locked = 0 WHERE id = ?", [student_id], (err) => {
-        if (err) return res.status(500).json({ error: err.message });
+    console.log(`[UNLOCK REQUEST] User: ${req.user.username} (Role: ${req.user.role}) | Target Student ID: ${student_id}`);
+
+    db.run("UPDATE users SET attendance_locked = 0 WHERE id = ?", [student_id], function(err) {
+        if (err) {
+            console.error(`[UNLOCK ERROR] Failed to update DB for student ${student_id}:`, err);
+            return res.status(500).json({ error: err.message });
+        }
+        console.log(`[UNLOCK SUCCESS] Student ${student_id} check-in privileges unlocked successfully.`);
         res.json({ success: true, message: "Student check-in privileges unlocked successfully!" });
     });
 });
