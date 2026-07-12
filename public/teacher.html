@@ -583,6 +583,13 @@
         <div class="card">
             <div class="card-title">📷 Dynamic QR Code</div>
             <p style="font-size:12px; color:var(--text2); margin-bottom:16px;">Students scan this QR code to mark attendance. It refreshes every 15 seconds for security.</p>
+            
+            <div class="empty-state" id="qrEmptyState" style="display: none; padding: 24px; text-align: center; border: 1px dashed var(--border); border-radius: var(--radius); background: rgba(255, 255, 255, 0.02); margin-top: 14px;">
+                <div class="empty-icon" style="font-size: 32px; margin-bottom: 8px;">⚠️</div>
+                <div class="empty-title" style="font-weight: 700; font-size: 14px; margin-bottom: 6px; color: var(--accent);">No Active Class Session</div>
+                <div class="empty-sub" style="font-size: 12px; color: var(--text3); line-height: 1.5; max-width: 280px; margin: 0 auto;">Please go to the <strong>Session</strong> tab and start a class session first to generate a dynamic scan code.</div>
+            </div>
+
             <div class="qr-container" id="qrContainer">
                 <canvas id="qrCanvas" width="220" height="220"></canvas>
                 <div class="qr-countdown">
@@ -1153,7 +1160,6 @@ async function createSession() {
 function startQRRefresh() {
     refreshQR();
     qrInterval = setInterval(refreshQR, 15000);
-    startCountdown();
 }
 function stopQR() {
     clearInterval(qrInterval); qrInterval = null;
@@ -1161,14 +1167,33 @@ function stopQR() {
 }
 
 async function refreshQR() {
-    if (!activeSession) return;
+    if (!activeSession) {
+        document.getElementById('qrContainer').style.display = 'none';
+        document.getElementById('qrEmptyState').style.display = 'block';
+        clearInterval(window._cdInterval); window._cdInterval = null;
+        return;
+    }
+    document.getElementById('qrContainer').style.display = 'flex';
+    document.getElementById('qrEmptyState').style.display = 'none';
+
     const data = await api(`/api/classes/${activeSession.id}/token`);
     if (data.token) {
         const canvas = document.getElementById('qrCanvas');
         try {
             await QRCode.toCanvas(canvas, data.token, { width: 220, margin: 1, color: { dark: '#000', light: '#fff' } });
             if (window.AG && window.AG.onQRRefresh) window.AG.onQRRefresh();
-        } catch (e) {}
+        } catch (e) {
+            console.error("QR Code Error:", e);
+            fetch('/api/log-error', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    url: window.location.href,
+                    message: "QR Code Render Error: " + e.message,
+                    stack: e.stack
+                })
+            }).catch(() => {});
+        }
     }
     countdownValue = 15;
     startCountdown();
