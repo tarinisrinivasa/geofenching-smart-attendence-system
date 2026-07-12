@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap">
     <!-- QR Scanner -->
-    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script src="html5-qrcode.min.js"></script>
     <!-- Barcode Generator -->
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
     <style>
@@ -723,6 +723,18 @@
 </div>
 
 <script>
+window.addEventListener('error', function (e) {
+    fetch('/api/log-error', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            url: window.location.href,
+            message: e.message,
+            stack: e.error ? e.error.stack : null
+        })
+    }).catch(() => {});
+});
+
 // ── PWA Service Worker & Cache Buster (Force unregister inside portals too) ─
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.getRegistrations().then(regs => {
