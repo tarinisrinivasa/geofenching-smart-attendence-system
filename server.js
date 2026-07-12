@@ -662,7 +662,7 @@ app.post('/api/alerts/geofence-breach', authenticateToken, (req, res) => {
         // Log this breach alert for the HOD
         db.run("INSERT INTO alerts (student_id, class_id, message) VALUES (?, ?, ?)", [student_id, class_id, message], function(err) {
             if (err) return res.status(500).json({ error: err.message });
-            res.json({ success: true, message: "Geofence boundary breach logged for HOD review." });
+            res.json({ success: true, alert_id: this.lastID, message: "Geofence boundary breach logged for HOD review." });
         });
     });
 });
