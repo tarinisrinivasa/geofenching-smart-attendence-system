@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -928,7 +928,7 @@
                 <div style="font-size: 10px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">Message Content:</div>
                 <div id="smsModalBody" style="font-size: 13px; color: var(--text-muted); margin-top: 4px; line-height: 1.5;"></div>
             </div>
-            <button class="btn btn-primary" onclick="closeSmsModal()" style="width: 100%; max-width: 100%;">Close Simulator</button>
+            <button class="btn btn-primary" data-action="close-sms" style="width: 100%; max-width: 100%;">Close Simulator</button>
         </div>
     </div>
     <!-- Global delegated click handler: handles all dynamic buttons safely on all mobile browsers -->
@@ -946,6 +946,7 @@
             else if (action === 'toggle-keypad') toggleKeypad(parseInt(id, 10), btn.checked);
             else if (action === 'reset-device') resetDevice(parseInt(id, 10));
             else if (action === 'send-otp') sendOtpModal(parseInt(id, 10));
+            else if (action === 'close-sms') closeSmsModal();
         });
         // Handle checkbox change events (keypad toggle) via delegation
         document.addEventListener('change', function(e) {
