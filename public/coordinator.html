@@ -960,5 +960,44 @@
             <button class="btn btn-primary" onclick="closeSmsModal()" style="width: 100%; max-width: 100%;">Close Simulator</button>
         </div>
     </div>
+    <!-- Floating Console Logger for Mobile Debugging -->
+    <div id="debugConsole" style="position:fixed; bottom:0; left:0; right:0; height:150px; background:rgba(0,0,0,0.95); color:#00ff00; font-family:monospace; font-size:10px; overflow-y:auto; z-index:10000; border-top:2px solid #00ff00; padding:8px;">
+        <div style="font-weight:bold; border-bottom:1px solid #00ff00; margin-bottom:4px; display:flex; justify-content:space-between;">
+            <span>[DIAGNOSTIC CONSOLE]</span>
+            <button onclick="document.getElementById('debugConsole').style.display='none'" style="background:none; border:none; color:#ff0000; font-weight:bold; cursor:pointer;">[HIDE]</button>
+        </div>
+        <div id="debugLogs"></div>
+    </div>
+    <script>
+        (function() {
+            var logContainer = document.getElementById('debugLogs');
+            function log(msg, type) {
+                var el = document.createElement('div');
+                el.style.color = type === 'error' ? '#ff3333' : type === 'warn' ? '#ffcc00' : '#00ff00';
+                el.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
+                logContainer.appendChild(el);
+                logContainer.scrollTop = logContainer.scrollHeight;
+            }
+            var oldLog = console.log;
+            console.log = function() {
+                var args = Array.prototype.slice.call(arguments);
+                log(args.join(' '), 'log');
+                oldLog.apply(console, arguments);
+            };
+            var oldErr = console.error;
+            console.error = function() {
+                var args = Array.prototype.slice.call(arguments);
+                log(args.join(' '), 'error');
+                oldErr.apply(console, arguments);
+            };
+            window.addEventListener('error', function(e) {
+                log(e.message + ' at ' + e.filename + ':' + e.lineno, 'error');
+            });
+            window.addEventListener('unhandledrejection', function(e) {
+                log('Promise rejection: ' + e.reason, 'error');
+            });
+            console.log('Mobile diagnostic console active.');
+        })();
+    </script>
 </body>
 </html>
