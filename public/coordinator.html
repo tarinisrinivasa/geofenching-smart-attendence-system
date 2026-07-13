@@ -647,7 +647,21 @@
 
                     tab.classList.add('active');
                     const pageId = tab.id.replace('tab-', 'page-');
-                    document.getElementById(pageId).classList.add('active');
+                    const newPage = document.getElementById(pageId);
+                    if (newPage) newPage.classList.add('active');
+
+                    // Motion One spring animation on tab switch
+                    if (newPage && window.Motion) {
+                        const { animate, spring, stagger } = window.Motion;
+                        animate(newPage, { opacity: [0, 1], y: [18, 0] },
+                            { duration: 0.38, easing: spring({ stiffness: 340, damping: 26 }) });
+                        const cards = newPage.querySelectorAll('.card');
+                        if (cards.length) {
+                            animate(cards, { opacity: [0, 1], y: [22, 0], scale: [0.97, 1] },
+                                { delay: stagger(0.08, { start: 0.04 }), duration: 0.42,
+                                  easing: spring({ stiffness: 360, damping: 28 }) });
+                        }
+                    }
 
                     if (pageId === 'page-roster') loadRoster();
                     if (pageId === 'page-alerts') loadAlerts();
@@ -670,7 +684,7 @@
                             <div class="student-avatar" style="background:rgba(139, 92, 246, 0.15); color:var(--purple);">🏫</div>
                             <div class="student-details">
                                 <div class="student-name">${c.name}</div>
-                                <div class="student-meta">Lat: ${c.latitude.toFixed(6)}, Lng: ${c.longitude.toFixed(6)} | Radius: ${c.radius}m | Accuracy: ${c.accuracy}m</div>
+                                <div class="student-meta">📍 ${c.latitude.toFixed(6)}, ${c.longitude.toFixed(6)} &nbsp;|&nbsp; 🎯 ${c.radius}m radius &nbsp;|&nbsp; 📡 ±${c.accuracy}m</div>
                             </div>
                         </div>
                         <button class="btn btn-danger btn-sm" data-action="delete-classroom" data-id="${c.id}">Delete</button>
@@ -808,6 +822,21 @@
                         </div>
                     `;
                 }).join('');
+                // Motion One stagger animation
+                if (window.Motion) {
+                    const rows = container.querySelectorAll('.student-row');
+                    const { animate, stagger, spring } = window.Motion;
+                    animate(rows, { opacity: [0, 1], x: [-18, 0] },
+                        { delay: stagger(0.055), duration: 0.38, easing: spring({ stiffness: 420, damping: 32 }) });
+                    container.querySelectorAll('.badge-green').forEach(b => {
+                        animate(b, { boxShadow: ['0 0 0px rgba(16,185,129,0)', '0 0 10px rgba(16,185,129,0.5)', '0 0 0px rgba(16,185,129,0)'] },
+                            { duration: 2.2, easing: 'ease-in-out', repeat: Infinity });
+                    });
+                    container.querySelectorAll('.badge-red').forEach(b => {
+                        animate(b, { boxShadow: ['0 0 0px rgba(244,63,94,0)', '0 0 10px rgba(244,63,94,0.5)', '0 0 0px rgba(244,63,94,0)'] },
+                            { duration: 1.8, easing: 'ease-in-out', repeat: Infinity });
+                    });
+                }
             }
         }
 
@@ -956,5 +985,6 @@
             }
         });
     </script>
+<script src="animations.js" defer></script>
 </body>
 </html>

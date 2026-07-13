@@ -550,7 +550,21 @@
 
                     tab.classList.add('active');
                     const pageId = tab.id.replace('tab-', 'page-');
-                    document.getElementById(pageId).classList.add('active');
+                    const newPage = document.getElementById(pageId);
+                    if (newPage) newPage.classList.add('active');
+
+                    // Motion One spring animation on tab switch
+                    if (newPage && window.Motion) {
+                        const { animate, spring, stagger } = window.Motion;
+                        animate(newPage, { opacity: [0, 1], y: [18, 0] },
+                            { duration: 0.38, easing: spring({ stiffness: 340, damping: 26 }) });
+                        const cards = newPage.querySelectorAll('.card');
+                        if (cards.length) {
+                            animate(cards, { opacity: [0, 1], y: [22, 0], scale: [0.97, 1] },
+                                { delay: stagger(0.08, { start: 0.04 }), duration: 0.42,
+                                  easing: spring({ stiffness: 360, damping: 28 }) });
+                        }
+                    }
 
                     if (pageId === 'page-tracking') loadTracking();
                     if (pageId === 'page-anomalies') loadAnomalies();
@@ -848,5 +862,6 @@
         });
         
     </script>
+<script src="animations.js" defer></script>
 </body>
 </html>

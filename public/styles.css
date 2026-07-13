@@ -1216,3 +1216,309 @@ input::placeholder { color: rgba(148, 163, 184, 0.4); }
     h2 { font-size:1.55rem !important; }
     .btn { font-size:0.88rem !important; }
 }
+
+
+/* ═══════════════════════════════════════════════════════════════
+   MOTION ONE + GSAP PREMIUM ANIMATION UPGRADES v4.0
+═══════════════════════════════════════════════════════════════ */
+
+/* ── Enhanced cursor glow with smooth CSS transition ── */
+.cursor-glow {
+    width: 420px !important;
+    height: 420px !important;
+    transition: left 0.18s cubic-bezier(0.16,1,0.3,1),
+                top  0.18s cubic-bezier(0.16,1,0.3,1),
+                width 0.35s cubic-bezier(0.34,1.56,0.64,1),
+                height 0.35s cubic-bezier(0.34,1.56,0.64,1),
+                opacity 0.35s ease,
+                background 0.35s ease;
+}
+
+/* ── Button — premium press effect ── */
+.btn {
+    transform-style: preserve-3d;
+    will-change: transform;
+}
+.btn:active {
+    transform: scale(0.95) translateY(1px) !important;
+}
+
+/* ── Card — shimmer streak on hover ── */
+.card {
+    transform-style: preserve-3d;
+    will-change: transform;
+    transition: border-color 0.25s ease, box-shadow 0.3s ease, transform 0.3s ease;
+}
+.card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: -100%;
+    width: 60%;
+    height: 100%;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(255,255,255,0.04) 50%,
+        transparent 100%
+    );
+    transition: left 0.6s cubic-bezier(0.16,1,0.3,1);
+    pointer-events: none;
+    border-radius: inherit;
+}
+.card:hover::before {
+    left: 150%;
+}
+.card:hover {
+    border-color: rgba(255,255,255,0.12);
+    box-shadow: 0 20px 50px rgba(0,0,0,0.4), 0 0 30px rgba(59,130,246,0.06);
+}
+
+/* ── Nav tab — smooth active indicator ── */
+.nav-tab {
+    position: relative;
+    overflow: hidden;
+    transition: color 0.25s ease, background 0.25s ease;
+}
+.nav-tab::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 50%;
+    width: 0; height: 2px;
+    background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+    border-radius: 2px 2px 0 0;
+    transition: width 0.3s cubic-bezier(0.34,1.56,0.64,1), left 0.3s cubic-bezier(0.34,1.56,0.64,1);
+}
+.nav-tab.active::after {
+    width: 100%;
+    left: 0;
+}
+
+/* ── Student row — premium hover ── */
+.student-row {
+    transition: all 0.22s cubic-bezier(0.16,1,0.3,1);
+    position: relative;
+    overflow: hidden;
+}
+.student-row:hover {
+    transform: translateX(4px);
+    border-color: rgba(59,130,246,0.25) !important;
+    background: rgba(59,130,246,0.04) !important;
+}
+.student-row::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: linear-gradient(180deg, #3b82f6, #8b5cf6);
+    transform: scaleY(0);
+    transform-origin: center;
+    transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1);
+    border-radius: 0 2px 2px 0;
+}
+.student-row:hover::before {
+    transform: scaleY(1);
+}
+
+/* ── Badge — premium transitions ── */
+.badge {
+    transition: all 0.2s cubic-bezier(0.34,1.56,0.64,1);
+    will-change: transform, box-shadow;
+}
+.badge:hover {
+    transform: scale(1.06);
+}
+
+/* ── Badge breathing (applied via JS) ── */
+.badge-green {
+    transition: box-shadow 0.3s ease;
+}
+.badge-red {
+    transition: box-shadow 0.3s ease;
+}
+
+/* ── Alert card — pulse left border ── */
+.card[style*="border-left:4px solid var(--red)"],
+.card[style*="border-left: 4px solid var(--red)"] {
+    animation: ag-alert-border-pulse 2.5s ease-in-out infinite;
+}
+@keyframes ag-alert-border-pulse {
+    0%,100% { box-shadow: -4px 0 12px rgba(244,63,94,0.2); }
+    50%      { box-shadow: -4px 0 24px rgba(244,63,94,0.5); }
+}
+
+/* ── Search input — glow on focus ── */
+.search-input:focus,
+.form-control:focus {
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.15), 0 0 20px rgba(59,130,246,0.08) !important;
+    transform: translateY(-1px);
+    transition: all 0.25s cubic-bezier(0.34,1.56,0.64,1) !important;
+}
+
+/* ── Toast container — bottom right with blur ── */
+#toastContainer {
+    z-index: 10001 !important;
+}
+.toast {
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 16px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04);
+    transition: transform 0.2s ease;
+}
+.toast:hover {
+    transform: translateX(-4px);
+}
+
+/* ── OTP modal — pulse glow ── */
+#otpModal .card,
+#smsModal .card {
+    animation: ag-modal-glow 3s ease-in-out infinite;
+}
+@keyframes ag-modal-glow {
+    0%,100% { box-shadow: 0 32px 80px rgba(0,0,0,0.7), 0 0 0 rgba(59,130,246,0); }
+    50%      { box-shadow: 0 32px 80px rgba(0,0,0,0.7), 0 0 40px rgba(59,130,246,0.12); }
+}
+
+/* ── OTP display — digital flicker ── */
+#otpSimulatedDisplay {
+    font-family: 'Courier New', monospace;
+    letter-spacing: 12px;
+    animation: ag-otp-flicker 0.1s ease-in-out;
+    animation-fill-mode: both;
+}
+@keyframes ag-otp-flicker {
+    0%  { opacity: 0.3; }
+    50% { opacity: 1; }
+    100%{ opacity: 1; }
+}
+
+/* ── Header — glass depth upgrade ── */
+.header {
+    transition: box-shadow 0.3s ease, backdrop-filter 0.3s ease;
+    will-change: box-shadow;
+}
+
+/* ── Classroom entry — coordinates badge glow ── */
+.student-meta a[href*="maps"] {
+    position: relative;
+    transition: all 0.2s ease;
+}
+.student-meta a[href*="maps"]:hover {
+    text-shadow: 0 0 10px rgba(59,130,246,0.8);
+    transform: translateY(-1px);
+}
+
+/* ── Ripple overflow fix ── */
+.btn { overflow: hidden; }
+
+/* ── Page section transitions ── */
+.page {
+    transition: opacity 0.25s ease;
+}
+.page:not(.active) {
+    opacity: 0;
+    pointer-events: none;
+}
+.page.active {
+    opacity: 1;
+}
+
+/* ── Switch / toggle premium ── */
+.slider {
+    transition: background-color 0.3s cubic-bezier(0.34,1.56,0.64,1) !important;
+}
+.slider:before {
+    transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1) !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4) !important;
+}
+input:checked + .slider {
+    box-shadow: 0 0 12px rgba(16,185,129,0.4) !important;
+}
+
+/* ── Logout button — pulse on hover ── */
+#logoutBtn:hover {
+    animation: ag-logout-pulse 0.6s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes ag-logout-pulse {
+    0%  { transform: scale(1); }
+    40% { transform: scale(1.06); }
+    70% { transform: scale(0.97); }
+    100%{ transform: scale(1); }
+}
+
+/* ── Form submit button loading state ── */
+.btn[data-loading] {
+    position: relative;
+    color: transparent !important;
+    pointer-events: none;
+}
+.btn[data-loading]::after {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 18px; height: 18px;
+    border: 2px solid rgba(255,255,255,0.4);
+    border-top-color: white;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    animation: ag-spin 0.7s linear infinite;
+}
+@keyframes ag-spin {
+    to { transform: translate(-50%,-50%) rotate(360deg); }
+}
+
+/* ── Scroll into view for cards ── */
+@supports (animation-timeline: scroll()) {
+    .card {
+        animation: ag-card-scroll-in linear;
+        animation-timeline: view();
+        animation-range: entry 0% entry 30%;
+    }
+    @keyframes ag-card-scroll-in {
+        from { opacity: 0.4; transform: translateY(16px) scale(0.98); }
+        to   { opacity: 1;   transform: none; }
+    }
+}
+
+/* ── Live pulse dot (for active status) ── */
+.ag-live-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #10b981;
+    box-shadow: 0 0 0 0 rgba(16,185,129,0.6);
+    animation: ag-live-pulse 2s cubic-bezier(0.4,0,0.6,1) infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+}
+@keyframes ag-live-pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(16,185,129,0.6); }
+    70%  { box-shadow: 0 0 0 8px rgba(16,185,129,0); }
+    100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
+}
+
+/* ── Breach alert dot ── */
+.ag-breach-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #f43f5e;
+    box-shadow: 0 0 0 0 rgba(244,63,94,0.6);
+    animation: ag-breach-pulse 1.4s cubic-bezier(0.4,0,0.6,1) infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+}
+@keyframes ag-breach-pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(244,63,94,0.6); }
+    70%  { box-shadow: 0 0 0 8px rgba(244,63,94,0); }
+    100% { box-shadow: 0 0 0 0 rgba(244,63,94,0); }
+}
+
+/* ── Float animation for avatar ── */
+.student-avatar {
+    transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.25s ease;
+}
+.student-row:hover .student-avatar {
+    transform: scale(1.1) rotate(-3deg);
+    box-shadow: 0 8px 20px rgba(59,130,246,0.3);
+}
