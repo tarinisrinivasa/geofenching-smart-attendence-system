@@ -138,6 +138,36 @@ app.get('/api/debug/errors', (req, res) => {
     });
 });
 
+app.get('/api/debug/requests', (req, res) => {
+    db.all("SELECT * FROM request_logs ORDER BY id DESC LIMIT 100", [], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true, requests: rows });
+    });
+});
+
+// Request logging middleware
+app.use('/api', (req, res, next) => {
+    let username = 'Guest';
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    if (token) {
+        try {
+            const payload = jwt.verify(token, JWT_SECRET);
+            username = `${payload.username} (${payload.role})`;
+        } catch(e) {}
+    }
+    res.on('finish', () => {
+        // Skip logging debug requests themselves to avoid logs bloat
+        if (req.path.startsWith('/debug/')) return;
+        db.run("INSERT INTO request_logs (method, path, user_info, status_code) VALUES (?, ?, ?, ?)", 
+            [req.method, req.baseUrl + req.path, username, res.statusCode], (err) => {
+                if (err) console.error('[DB] Request log fail:', err.message);
+            }
+        );
+    });
+    next();
+});
+
 app.use(securityFirewall);
 
 // JWT authentication verification middleware

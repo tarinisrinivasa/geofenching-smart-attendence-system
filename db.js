@@ -135,6 +135,17 @@ const db = new sqlite3.Database(dbPath, (err) => {
             if (err) console.error('[DB] Error creating client_errors table:', err.message); 
         });
 
+        db.run(`CREATE TABLE IF NOT EXISTS request_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            method TEXT,
+            path TEXT,
+            user_info TEXT,
+            status_code INTEGER,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`, (err) => { 
+            if (err) console.error('[DB] Error creating request_logs table:', err.message); 
+        });
+
         // ── Safe Migrations (for older databases already deployed) ──
         // These will silently fail if column already exists — that's intentional
         const safeAlter = (sql) => db.run(sql, () => {}); // ignore duplicate-column errors
