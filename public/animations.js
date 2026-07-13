@@ -877,17 +877,105 @@
             .ag-page-enter {
                 animation: ag-fade-up-kf 0.4s cubic-bezier(0.16,1,0.3,1) both;
             }
+
+            /* ── Core Background Elements (Fixed position fallback) ── */
+            #three-canvas {
+                position: fixed !important;
+                top: 0 !important; left: 0 !important;
+                width: 100vw !important; height: 100vh !important;
+                z-index: -3 !important;
+                pointer-events: none !important;
+            }
+            .aurora-blob {
+                position: fixed !important;
+                border-radius: 50% !important;
+                filter: blur(100px) !important;
+                opacity: 0.25 !important;
+                pointer-events: none !important;
+                z-index: -2 !important;
+                will-change: transform !important;
+            }
+            .aurora-blob-1 {
+                width: 700px; height: 700px;
+                background: radial-gradient(circle, #06b6d4, transparent 65%) !important;
+                top: -15%; left: -15%;
+                animation: auroraFloat1 20s ease-in-out infinite alternate;
+            }
+            .aurora-blob-2 {
+                width: 800px; height: 800px;
+                background: radial-gradient(circle, #8b5cf6, transparent 65%) !important;
+                bottom: -20%; right: -15%;
+                animation: auroraFloat2 25s ease-in-out infinite alternate;
+            }
+            .aurora-blob-3 {
+                width: 500px; height: 500px;
+                background: radial-gradient(circle, #3b82f6, transparent 65%) !important;
+                top: 40%; left: 50%;
+                animation: auroraFloat3 18s ease-in-out infinite alternate;
+            }
+            .aurora-blob-4 {
+                width: 400px; height: 400px;
+                background: radial-gradient(circle, #ec4899, transparent 65%) !important;
+                top: 20%; right: 10%;
+                opacity: 0.12 !important;
+                animation: auroraFloat1 22s ease-in-out infinite alternate-reverse;
+            }
+            .grid-overlay {
+                position: fixed !important;
+                top: 0 !important; left: 0 !important;
+                width: 100% !important; height: 100% !important;
+                background-image:
+                    linear-gradient(rgba(6, 182, 212, 0.025) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(6, 182, 212, 0.025) 1px, transparent 1px) !important;
+                background-size: 48px 48px !important;
+                mask-image: radial-gradient(ellipse at center, black 30%, transparent 80%) !important;
+                -webkit-mask-image: radial-gradient(ellipse at center, black 30%, transparent 80%) !important;
+                z-index: -1 !important;
+                pointer-events: none !important;
+                animation: gridPulse 8s ease-in-out infinite;
+            }
+            .cursor-glow {
+                position: fixed !important;
+                width: 420px !important; height: 420px !important;
+                background: radial-gradient(circle, rgba(6, 182, 212, 0.1) 0%, transparent 65%) !important;
+                border-radius: 50% !important;
+                pointer-events: none !important;
+                transform: translate(-50%, -50%) !important;
+                z-index: 0 !important;
+                will-change: left, top !important;
+            }
+            @keyframes auroraFloat1 {
+                0%   { transform: translate(0, 0) scale(1); }
+                33%  { transform: translate(80px, -60px) scale(1.1); }
+                66%  { transform: translate(-40px, 40px) scale(0.95); }
+                100% { transform: translate(60px, -80px) scale(1.08); }
+            }
+            @keyframes auroraFloat2 {
+                0%   { transform: translate(0, 0) scale(1); }
+                33%  { transform: translate(-60px, 50px) scale(1.12); }
+                66%  { transform: translate(50px, -30px) scale(0.9); }
+                100% { transform: translate(-80px, 60px) scale(1.05); }
+            }
+            @keyframes auroraFloat3 {
+                0%   { transform: translate(-50%, 0) scale(1); }
+                50%  { transform: translate(-50%, -40px) scale(1.15); }
+                100% { transform: translate(-50%, 20px) scale(0.9); }
+            }
+            @keyframes gridPulse {
+                0%, 100% { opacity: 0.5; }
+                50% { opacity: 1; }
+            }
         `;
         document.head.appendChild(s);
     })();
 
     /* ═══════════════════════════════════════════════════════════════
        BOOT SEQUENCE
-    ═══════════════════════════════════════════════════════════════ */
+     ═══════════════════════════════════════════════════════════════ */
     function boot() {
-        const isLoginPage = !!document.getElementById('loginBtn') ||
-                            window.location.pathname.endsWith('index.html') ||
-                            window.location.pathname === '/' ||
+        const isLoginPage = !!document.getElementById('loginBtn') || 
+                            window.location.pathname.endsWith('index.html') || 
+                            window.location.pathname === '/' || 
                             document.title.toLowerCase().includes('login');
 
         injectBackgroundElements(isLoginPage);
@@ -900,7 +988,7 @@
             const threeCanvas = document.getElementById('three-canvas');
             if (threeCanvas) threeCanvas.remove();
             loadScript(
-                'https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js',
+                'gsap.min.js',
                 'gsap-cdn',
                 () => requestAnimationFrame(initGSAPAnimations)
             );
@@ -910,9 +998,9 @@
         /* Dashboard — full immersive experience */
         if (!isMobile) spawnParticleRain();
 
-        /* Load Motion One (modern micro-animation) */
+        /* Load Motion One (locally hosted) */
         loadScript(
-            'https://cdn.jsdelivr.net/npm/motion@11.11.13/dist/motion.js',
+            'motion.js',
             'motion-one-cdn',
             function() {
                 /* Motion One exports as window.Motion */
@@ -924,21 +1012,21 @@
             }
         );
 
-        /* Load Three.js */
+        /* Load Three.js (locally hosted) */
         loadScript(
-            'https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js',
+            'three.min.js',
             'three-js-cdn',
             () => setTimeout(initThreeParticles, 100)
         );
 
-        /* Load GSAP + ScrollTrigger */
+        /* Load GSAP + ScrollTrigger (locally hosted) */
         loadScript(
-            'https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js',
+            'gsap.min.js',
             'gsap-cdn',
             function() {
                 requestAnimationFrame(initGSAPAnimations);
                 loadScript(
-                    'https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js',
+                    'ScrollTrigger.min.js',
                     'gsap-st-cdn',
                     () => requestAnimationFrame(initScrollEffects)
                 );
