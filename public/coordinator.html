@@ -673,7 +673,7 @@
                                 <div class="student-meta">Lat: ${c.latitude.toFixed(6)}, Lng: ${c.longitude.toFixed(6)} | Radius: ${c.radius}m | Accuracy: ${c.accuracy}m</div>
                             </div>
                         </div>
-                        <button class="btn btn-danger btn-sm" onclick="deleteClassroom(${c.id})">Delete</button>
+                        <button class="btn btn-danger btn-sm" data-action="delete-classroom" data-id="${c.id}">Delete</button>
                     </div>
                 `).join('');
             }
@@ -698,7 +698,6 @@
         }
 
         async function deleteClassroom(id) {
-            if (!confirm('Are you sure you want to delete this classroom location?')) return;
             const res = await api(`/api/classrooms/${id}`, 'DELETE');
             if (res.success) {
                 showToast('Classroom configuration removed.', 'success');
@@ -722,31 +721,13 @@
         function renderStudents(students) {
             const container = document.getElementById('studentsList');
             if (students.length === 0) {
-                container.innerHTML = `<div style="text-align:center; color:var(--text3); font-size:13px; padding:20px;">No students matching search.</div>`;
+                container.innerHTML = '<div style="text-align:center; color:var(--text3); font-size:13px; padding:20px;">No students matching search.</div>';
                 return;
             }
-            container.innerHTML = students.map(s => `
-                <div class="student-row">
-                    <div class="student-info">
-                        <div class="student-avatar">${s.username.charAt(0).toUpperCase()}</div>
-                        <div class="student-details">
-                            <div class="student-name">${s.username}</div>
-                            <div class="student-meta">Student ID: ${s.id} | Phone: ${s.student_phone || 'None'}</div>
-                        </div>
-                    </div>
-                    <div class="student-actions">
-                        <div class="switch-container">
-                            <span style="font-size:11px; color:var(--text2); font-weight:600;">Keypad:</span>
-                            <label class="switch">
-                                <input type="checkbox" ${s.is_keypad ? 'checked' : ''} onchange="toggleKeypad(${s.id}, this.checked)">
-                                <span class="slider"></span>
-                            </label>
-                        </div>
-                        ${s.is_keypad ? `<button class="btn btn-primary btn-sm" onclick="sendOtpModal(${s.id})">🔑 OTP</button>` : ''}
-                        <button class="btn btn-secondary btn-sm" onclick="resetDevice(${s.id})">Reset Device</button>
-                    </div>
-                </div>
-            `).join('');
+            container.innerHTML = students.map(s => {
+                const otpBtn = s.is_keypad ? '<button class="btn btn-primary btn-sm" data-action="send-otp" data-id="' + s.id + '">\ud83d\udd11 OTP</button>' : '';
+                return '<div class="student-row"><div class="student-info"><div class="student-avatar">' + s.username.charAt(0).toUpperCase() + '</div><div class="student-details"><div class="student-name">' + s.username + '</div><div class="student-meta">Student ID: ' + s.id + ' | Phone: ' + (s.student_phone || 'None') + '</div></div></div><div class="student-actions"><div class="switch-container"><span style="font-size:11px; color:var(--text2); font-weight:600;">Keypad:</span><label class="switch"><input type="checkbox" data-action="toggle-keypad" data-id="' + s.id + '" ' + (s.is_keypad ? 'checked' : '') + '><span class="slider"></span></label></div>' + otpBtn + '<button class="btn btn-secondary btn-sm" data-action="reset-device" data-id="' + s.id + '">Reset Device</button></div></div>';
+            }).join('');
         }
 
 
@@ -789,7 +770,6 @@
             }
         }
 
-
         async function loadRoster() {
             const res = await api('/api/coordinator/roster');
             const container = document.getElementById('rosterList');
@@ -822,7 +802,7 @@
                             </div>
                             <div class="student-actions">
                                 ${r.attendance_locked ? `
-                                    <button class="btn btn-danger btn-sm" onclick="unlockStudent(${r.id})">🔓 Unlock privileges</button>
+                                    <button class="btn btn-danger btn-sm" data-action="unlock" data-id="${r.id}">🔓 Unlock privileges</button>
                                 ` : ''}
                             </div>
                         </div>
@@ -852,31 +832,18 @@
             if (res.success && res.alerts) {
                 const unresolved = res.alerts.filter(a => a.status < 2);
                 if (unresolved.length === 0) {
-                    container.innerHTML = `<div style="text-align:center; color:var(--text3); font-size:13px; padding:20px;">All clear. No pending breach alerts.</div>`;
+                    container.innerHTML = '<div style="text-align:center; color:var(--text3); font-size:13px; padding:20px;">All clear. No pending breach alerts.</div>';
                     return;
                 }
-                container.innerHTML = unresolved.map(a => `
-                    <div class="card" style="border-left: 4px solid var(--red); background: rgba(244, 63, 94, 0.02);">
-                        <div style="display:flex; justify-content:between; align-items:center; margin-bottom:8px;">
-                            <div style="font-weight:700; font-size:13px; color:var(--red);">GEOFENCE BREACH</div>
-                            <div style="font-size:11px; color:var(--text3);">${new Date(a.timestamp).toLocaleTimeString()}</div>
-                        </div>
-                        <p style="font-size:13px; color:var(--text); margin-bottom:10px;">${a.message}</p>
-                        ${a.student_reason ? `
-                            <div style="padding:10px; background:rgba(255,255,255,0.03); border-radius:8px; border: 1px solid var(--border); margin-bottom:12px;">
-                                <div style="font-size:10px; font-weight:700; color:var(--yellow); text-transform:uppercase;">Student Explanation:</div>
-                                <div style="font-size:12px; color:var(--text2); margin-top:2px;">"${a.student_reason}"</div>
-                            </div>
-                        ` : `
-                            <div style="font-size:11px; color:var(--text3); margin-bottom:12px; font-style:italic;">No student explanation submitted yet.</div>
-                        `}
-                        <div style="display:flex; gap:8px;">
-                            <button class="btn btn-primary btn-sm" onclick="reverseAttendance(${a.id})">✅ Reverse to Present</button>
-                            <button class="btn btn-secondary btn-sm" onclick="dismissAlert(${a.id})">Dismiss Alert</button>
-                            <button class="btn btn-danger btn-sm" onclick="notifyParent(${a.id})">📞 Notify Parent</button>
-                        </div>
-                    </div>
-                `).join('');
+                container.innerHTML = unresolved.map(a => {
+                    const timeStr = new Date(a.timestamp).toLocaleTimeString();
+                    const reasonHtml = a.student_reason
+                        ? '<div style="padding:10px; background:rgba(255,255,255,0.03); border-radius:8px; border:1px solid var(--border); margin-bottom:12px;"><div style="font-size:10px; font-weight:700; color:var(--yellow); text-transform:uppercase;">Student Explanation:</div><div style="font-size:12px; color:var(--text2); margin-top:2px;">"' + a.student_reason + '"</div></div>'
+                        : '<div style="font-size:11px; color:var(--text3); margin-bottom:12px; font-style:italic;">No student explanation submitted yet.</div>';
+                    return '<div class="card" style="border-left:4px solid var(--red); background:rgba(244,63,94,0.02);"><div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;"><div style="font-weight:700; font-size:13px; color:var(--red);">GEOFENCE BREACH</div><div style="font-size:11px; color:var(--text3);">' + timeStr + '</div></div><p style="font-size:13px; color:var(--text); margin-bottom:10px;">' + a.message + '</p>' + reasonHtml + '<div style="display:flex; gap:8px; flex-wrap:wrap;"><button class="btn btn-primary btn-sm" data-action="reverse" data-id="' + a.id + '">\u2705 Reverse to Present</button><button class="btn btn-secondary btn-sm" data-action="dismiss" data-id="' + a.id + '">Dismiss Alert</button><button class="btn btn-danger btn-sm" data-action="notify" data-id="' + a.id + '">\ud83d\udcde Notify Parent</button></div></div>';
+                }).join('');
+            } else {
+                container.innerHTML = '<div style="text-align:center; color:var(--red); font-size:13px; padding:20px;">Failed to load alerts: ' + (res.message || 'Server error') + '</div>';
             }
         }
 
@@ -964,44 +931,29 @@
             <button class="btn btn-primary" onclick="closeSmsModal()" style="width: 100%; max-width: 100%;">Close Simulator</button>
         </div>
     </div>
-    <!-- Floating Console Logger for Mobile Debugging -->
-    <div id="debugConsole" style="position:fixed; bottom:0; left:0; right:0; height:150px; background:rgba(0,0,0,0.95); color:#00ff00; font-family:monospace; font-size:10px; overflow-y:auto; z-index:10000; border-top:2px solid #00ff00; padding:8px;">
-        <div style="font-weight:bold; border-bottom:1px solid #00ff00; margin-bottom:4px; display:flex; justify-content:space-between;">
-            <span>[DIAGNOSTIC CONSOLE]</span>
-            <button onclick="document.getElementById('debugConsole').style.display='none'" style="background:none; border:none; color:#ff0000; font-weight:bold; cursor:pointer;">[HIDE]</button>
-        </div>
-        <div id="debugLogs"></div>
-    </div>
+    <!-- Global delegated click handler: handles all dynamic buttons safely on all mobile browsers -->
     <script>
-        (function() {
-            var logContainer = document.getElementById('debugLogs');
-            function log(msg, type) {
-                var el = document.createElement('div');
-                el.style.color = type === 'error' ? '#ff3333' : type === 'warn' ? '#ffcc00' : '#00ff00';
-                el.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
-                logContainer.appendChild(el);
-                logContainer.scrollTop = logContainer.scrollHeight;
+        document.addEventListener('click', function(e) {
+            var btn = e.target.closest('[data-action]');
+            if (!btn) return;
+            var action = btn.getAttribute('data-action');
+            var id = btn.getAttribute('data-id');
+            if (action === 'unlock') unlockStudent(parseInt(id, 10));
+            else if (action === 'reverse') reverseAttendance(parseInt(id, 10));
+            else if (action === 'dismiss') dismissAlert(parseInt(id, 10));
+            else if (action === 'notify') notifyParent(parseInt(id, 10));
+            else if (action === 'delete-classroom') deleteClassroom(parseInt(id, 10));
+            else if (action === 'toggle-keypad') toggleKeypad(parseInt(id, 10), btn.checked);
+            else if (action === 'reset-device') resetDevice(parseInt(id, 10));
+            else if (action === 'send-otp') sendOtpModal(parseInt(id, 10));
+        });
+        // Handle checkbox change events (keypad toggle) via delegation
+        document.addEventListener('change', function(e) {
+            var el = e.target;
+            if (el.getAttribute('data-action') === 'toggle-keypad') {
+                toggleKeypad(parseInt(el.getAttribute('data-id'), 10), el.checked);
             }
-            var oldLog = console.log;
-            console.log = function() {
-                var args = Array.prototype.slice.call(arguments);
-                log(args.join(' '), 'log');
-                oldLog.apply(console, arguments);
-            };
-            var oldErr = console.error;
-            console.error = function() {
-                var args = Array.prototype.slice.call(arguments);
-                log(args.join(' '), 'error');
-                oldErr.apply(console, arguments);
-            };
-            window.addEventListener('error', function(e) {
-                log(e.message + ' at ' + e.filename + ':' + e.lineno, 'error');
-            });
-            window.addEventListener('unhandledrejection', function(e) {
-                log('Promise rejection: ' + e.reason, 'error');
-            });
-            console.log('Mobile diagnostic console active.');
-        })();
+        });
     </script>
 </body>
 </html>

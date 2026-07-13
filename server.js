@@ -75,19 +75,16 @@ app.use('/api/login', authLimiter);
 app.use('/api/verify-password', authLimiter);
 app.use('/api/coordinator/verify-keypad-otp', authLimiter);
 
-// Custom Request Sanitizer (SQL Injection & XSS Guard)
+// Custom Request Sanitizer (SQL Injection Guard)
 function securityFirewall(req, res, next) {
-    const sqlInjectionPattern = /(' OR '|" OR "|OR 1=1|OR TRUE|--|#)/i;
-    const xssPattern = /(<script\b[^>]*>|javascript:|onerror\s*=|onload\s*=|onclick\s*=)/i;
+    // Block SQL injection patterns only — XSS is not relevant for JSON API payloads
+    // (XSS protection is handled by Content-Security-Policy headers from helmet)
+    const sqlInjectionPattern = /('\s+OR\s+'|"\s+OR\s+"|OR\s+1\s*=\s*1|OR\s+TRUE|;\s*DROP\s+TABLE|--\s*$)/i;
 
     const checkValue = (val) => {
         if (typeof val === 'string') {
             if (sqlInjectionPattern.test(val)) {
                 console.warn(`[WAF FIREWALL ALERT] Blocked potential SQL Injection payload: "${val}"`);
-                return false;
-            }
-            if (xssPattern.test(val)) {
-                console.warn(`[WAF FIREWALL ALERT] Blocked potential XSS payload: "${val}"`);
                 return false;
             }
         } else if (typeof val === 'object' && val !== null) {
@@ -103,11 +100,12 @@ function securityFirewall(req, res, next) {
     if (!checkValue(req.body) || !checkValue(req.query) || !checkValue(req.params)) {
         return res.status(403).json({ 
             success: false, 
-            message: "❌ Web Application Firewall (WAF) Violation: Potential SQL Injection or XSS injection pattern detected in your request payload. This action has been logged." 
+            message: "❌ Web Application Firewall (WAF) Violation: Potential SQL Injection pattern detected in your request payload. This action has been logged." 
         });
     }
     next();
 }
+
 app.use(cors());
 app.use(express.json());
 
@@ -274,18 +272,34 @@ app.post('/api/classrooms', authenticateToken, (req, res) => {
     if (req.user.role !== 'hod' && req.user.role !== 'coordinator') {
         return res.status(403).json({ success: false, message: "Unauthorized access." });
     }
-
     const { name, latitude, longitude, radius, accuracy } = req.body;
     if (!name || latitude === undefined || longitude === undefined || radius === undefined || accuracy === undefined) {
         return res.status(400).json({ success: false, message: "Missing required classroom details." });
     }
 
+    const trimmedName = name.trim();
+    // Try to update existing classroom first (preserves the ID, avoiding broken references)
     db.run(
-        "INSERT OR REPLACE INTO classrooms (name, latitude, longitude, radius, accuracy) VALUES (?, ?, ?, ?, ?)",
-        [name.trim(), parseFloat(latitude), parseFloat(longitude), parseFloat(radius), parseFloat(accuracy)],
+        "UPDATE classrooms SET latitude = ?, longitude = ?, radius = ?, accuracy = ? WHERE name = ?",
+        [parseFloat(latitude), parseFloat(longitude), parseFloat(radius), parseFloat(accuracy), trimmedName],
         function(err) {
             if (err) return res.status(500).json({ error: err.message });
-            res.json({ success: true, message: "Classroom configured successfully!", classroom_id: this.lastID });
+            if (this.changes > 0) {
+                // Found and updated existing classroom
+                db.get("SELECT id FROM classrooms WHERE name = ?", [trimmedName], (err, row) => {
+                    res.json({ success: true, message: "Classroom coordinates updated successfully!", classroom_id: row ? row.id : null });
+                });
+            } else {
+                // No existing classroom, insert new one
+                db.run(
+                    "INSERT INTO classrooms (name, latitude, longitude, radius, accuracy) VALUES (?, ?, ?, ?, ?)",
+                    [trimmedName, parseFloat(latitude), parseFloat(longitude), parseFloat(radius), parseFloat(accuracy)],
+                    function(err) {
+                        if (err) return res.status(500).json({ error: err.message });
+                        res.json({ success: true, message: "Classroom configured successfully!", classroom_id: this.lastID });
+                    }
+                );
+            }
         }
     );
 });

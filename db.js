@@ -255,11 +255,11 @@ const db = new sqlite3.Database(dbPath, (err) => {
                         (e) => { if (e) console.error('[DB] Failed to seed class 3:', e.message); });
 
                     // 6. Seed Demo Alerts for Testing Dashboard Action Buttons
-                    db.run("INSERT INTO alerts (student_id, class_id, message, status, timestamp) VALUES (22, 1, '🚨 Geofence Breach: student1 exited CSE-A (Section Alpha) geofence boundary.', 0, datetime('now', '-5 minutes'))");
-                    db.run("INSERT INTO alerts (student_id, class_id, message, status, timestamp) VALUES (23, 1, '🚨 Geofence Breach: student2 exited CSE-A (Section Alpha) geofence boundary.', 0, datetime('now', '-10 minutes'))");
+                    db.run("INSERT INTO alerts (student_id, class_id, message, status, timestamp) SELECT id, 1, '🚨 Geofence Breach: student1 exited CSE-A (Section Alpha) geofence boundary.', 0, datetime('now', '-5 minutes') FROM users WHERE username = 'student1'");
+                    db.run("INSERT INTO alerts (student_id, class_id, message, status, timestamp) SELECT id, 1, '🚨 Geofence Breach: student2 exited CSE-A (Section Alpha) geofence boundary.', 0, datetime('now', '-10 minutes') FROM users WHERE username = 'student2'");
                     
                     // 7. Force Lock Students 1 and 2 for Testing Override/Unlock Buttons
-                    db.run("UPDATE users SET attendance_locked = 1 WHERE id IN (22, 23)");
+                    db.run("UPDATE users SET attendance_locked = 1 WHERE username IN ('student1', 'student2')");
 
                     console.log("[DB] Demo accounts, classes, and test alerts/locks seeded successfully!");
                 });
@@ -273,9 +273,9 @@ const db = new sqlite3.Database(dbPath, (err) => {
             if (!err && row && row.count === 0) {
                 console.log("[DB] No alerts found. Populating test alerts and locks...");
                 db.serialize(() => {
-                    db.run("INSERT INTO alerts (student_id, class_id, message, status, timestamp) VALUES (22, 1, '🚨 Geofence Breach: student1 exited CSE-A (Section Alpha) geofence boundary.', 0, datetime('now', '-5 minutes'))");
-                    db.run("INSERT INTO alerts (student_id, class_id, message, status, timestamp) VALUES (23, 1, '🚨 Geofence Breach: student2 exited CSE-A (Section Alpha) geofence boundary.', 0, datetime('now', '-10 minutes'))");
-                    db.run("UPDATE users SET attendance_locked = 1 WHERE id IN (22, 23)");
+                    db.run("INSERT INTO alerts (student_id, class_id, message, status, timestamp) SELECT id, 1, '🚨 Geofence Breach: student1 exited CSE-A geofence boundary.', 0, datetime('now', '-5 minutes') FROM users WHERE username = 'student1'");
+                    db.run("INSERT INTO alerts (student_id, class_id, message, status, timestamp) SELECT id, 1, '🚨 Geofence Breach: student2 exited CSE-A geofence boundary.', 0, datetime('now', '-10 minutes') FROM users WHERE username = 'student2'");
+                    db.run("UPDATE users SET attendance_locked = 1 WHERE username IN ('student1', 'student2')");
                 });
             }
         });

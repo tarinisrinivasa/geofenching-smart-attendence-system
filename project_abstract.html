@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comprehensive Project Synopsis - Geofence Attendance System</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-dark: #3730a3;
+            --success: #10b981;
+            --error: #ef4444;
+            --warning: #f59e0b;
+            --text-dark: #111827;
+            --text-light: #4b5563;
+            --bg-light: #f9fafb;
+            --border-color: #e5e7eb;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            color: var(--text-dark);
+            line-height: 1.6;
+            background: #fff;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 3rem 2rem;
+        }
+
+        .header {
+            text-align: center;
+            border-bottom: 2px solid var(--primary);
+            padding-bottom: 1.5rem;
+            margin-bottom: 2.5rem;
+        }
+
+        .project-tag {
+            text-transform: uppercase;
+            font-weight: 700;
+            font-size: 0.85rem;
+            color: var(--primary);
+            letter-spacing: 0.15em;
+        }
+
+        h1 {
+            font-size: 2rem;
+            font-weight: 800;
+            color: #111827;
+            margin: 0.5rem 0 0 0;
+            line-height: 1.3;
+        }
+
+        h2 {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--primary-dark);
+            border-bottom: 1.5px solid var(--primary);
+            padding-bottom: 0.4rem;
+            margin-top: 2.5rem;
+            margin-bottom: 1.25rem;
+        }
+
+        h3 {
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: var(--text-dark);
+            margin-top: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        p {
+            font-size: 0.95rem;
+            color: var(--text-light);
+            text-align: justify;
+            margin-bottom: 1.25rem;
+        }
+
+        ul, ol {
+            font-size: 0.95rem;
+            color: var(--text-light);
+            margin-bottom: 1.25rem;
+            padding-left: 1.5rem;
+        }
+
+        li {
+            margin-bottom: 0.5rem;
+        }
+
+        .highlight-box {
+            background: var(--bg-light);
+            border-left: 4px solid var(--primary);
+            padding: 1.25rem;
+            border-radius: 0 8px 8px 0;
+            margin: 1.5rem 0;
+        }
+
+        .highlight-box p {
+            margin: 0;
+            font-size: 0.9rem;
+            color: var(--text-dark);
+            font-style: italic;
+        }
+
+        .btn-print {
+            display: inline-block;
+            background: var(--primary);
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);
+            transition: background 0.2s;
+            cursor: pointer;
+            border: none;
+        }
+
+        .btn-print:hover {
+            background: var(--primary-dark);
+        }
+
+        .page-break {
+            page-break-before: always;
+        }
+
+        .diagram-container {
+            text-align: center;
+            margin: 2.5rem 0;
+            padding: 1.5rem;
+            background: var(--bg-light);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+        }
+
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+            .container {
+                padding: 1.5rem 1rem;
+            }
+            body {
+                font-size: 11pt;
+            }
+            .diagram-container {
+                page-break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Print Button (Hidden on PDF print output) -->
+        <div class="no-print" style="text-align: right;">
+            <button onclick="window.print()" class="btn-print">📄 Save as PDF / Print Document</button>
+        </div>
+
+        <div class="header">
+            <span class="project-tag">Full A to Z Technical Project synopsis</span>
+            <h1>IoT-Enabled Smart Attendance Management System with Real-Time Geofencing, Cryptographic WebAuthn Biometrics, and AI-Driven Bunking Anomaly Detection</h1>
+        </div>
+
+        <h2>1. Abstract Overview</h2>
+        <p>
+            Traditional academic and corporate attendance models—ranging from manual roll-calls to barcode card swipes and static QR scans—suffer from severe vulnerability to proxy check-ins (buddy system fraud), location spoofing, and unauthorized mid-session exits. To solve these problems, this project presents an end-to-end **Smart Attendance Management System** that combines high-precision GPS geolocation telemetry, hardware-bound device lockers, cryptographic WebAuthn biometrics, and active campus-wide geofencing to enforce absolute physical presence.
+        </p>
+        <p>
+            The system architecture is powered by a secure HTTPS Node.js/Express server paired with an SQLite relational database, providing distinct, modern dashboards for HODs, Class Coordinators, Teachers, and Students. The backend locks each student profile to a single unique hardware <code>device_id</code> on initial login, blocking account sharing. To check in, a student must pass a three-tiered validation process: matching GPS geofence bounds, scanning a dynamic HMAC SHA-256 rotating QR code (regenerated every 15 seconds), and completing a native fingerprint/FaceID scan via WebAuthn. Legacy keypad phone exemptions are supported via simulated SMS OTP gate overrides.
+        </p>
+        <p>
+            Following check-in, the student's mobile browser runs a continuous background telemetry script (Campus Guard) which continually calculates Haversine geofence bounds. If a student leaves the designated campus geofence perimeter during college hours without a valid digital out-pass granted by the HOD, the system immediately suspends check-in privileges and logs a geofence breach alert. At class completion, AI-driven backend analysis identifies unverified absences and consecutive-class skipping (bunking) anomalies, triggering parent SMS alerts.
+        </p>
+
+        <!-- Diagram 1: System Telemetry Flow -->
+        <div class="diagram-container">
+            <h3 style="margin-top:0; margin-bottom: 1.5rem; color: var(--primary-dark);">Diagram 1: End-to-End System Security & Telemetry Flow</h3>
+            <svg viewBox="0 0 800 240" width="100%" height="auto" xmlns="http://www.w3.org/2000/svg">
+                <!-- Node 1: Login & Bind -->
+                <rect x="10" y="70" width="130" height="70" rx="8" fill="#e0e7ff" stroke="#4f46e5" stroke-width="2"/>
+                <text x="75" y="100" font-family="'Inter', sans-serif" font-size="11" font-weight="700" fill="#1e1b4b" text-anchor="middle">1. User Login</text>
+                <text x="75" y="118" font-family="'Inter', sans-serif" font-size="9" fill="#4f46e5" text-anchor="middle">Hardware Device-Lock</text>
+
+                <!-- Arrow 1 -->
+                <path d="M 140 105 L 170 105" fill="none" stroke="#4f46e5" stroke-width="2" marker-end="url(#arrow)"/>
+
+                <!-- Node 2: Check-In -->
+                <rect x="175" y="70" width="140" height="70" rx="8" fill="#d1fae5" stroke="#10b981" stroke-width="2"/>
+                <text x="245" y="95" font-family="'Inter', sans-serif" font-size="11" font-weight="700" fill="#064e3b" text-anchor="middle">2. Check-In Verification</text>
+                <text x="245" y="112" font-family="'Inter', sans-serif" font-size="9" fill="#059669" text-anchor="middle">GPS Bounds + WebAuthn</text>
+                <text x="245" y="125" font-family="'Inter', sans-serif" font-size="9" fill="#059669" text-anchor="middle">Rotating QR Code Check</text>
+
+                <!-- Arrow 2 -->
+                <path d="M 315 105 L 345 105" fill="none" stroke="#10b981" stroke-width="2" marker-end="url(#arrow)"/>
+
+                <!-- Node 3: Active Guard -->
+                <rect x="350" y="70" width="140" height="70" rx="8" fill="#fef3c7" stroke="#f59e0b" stroke-width="2"/>
+                <text x="420" y="100" font-family="'Inter', sans-serif" font-size="11" font-weight="700" fill="#78350f" text-anchor="middle">3. Campus Guard</text>
+                <text x="420" y="118" font-family="'Inter', sans-serif" font-size="9" fill="#d97706" text-anchor="middle">Active Telemetry Loops</text>
+
+                <!-- Arrow 3 -->
+                <path d="M 490 105 L 520 105" fill="none" stroke="#f59e0b" stroke-width="2" marker-end="url(#arrow)"/>
+
+                <!-- Node 4: Breach Detection -->
+                <rect x="525" y="20" width="130" height="70" rx="8" fill="#fee2e2" stroke="#ef4444" stroke-width="2"/>
+                <text x="590" y="50" font-family="'Inter', sans-serif" font-size="11" font-weight="700" fill="#7f1d1d" text-anchor="middle">4A. Geofence Breach</text>
+                <text x="590" y="68" font-family="'Inter', sans-serif" font-size="9" fill="#dc2626" text-anchor="middle">Lock Privilege + HOD Alert</text>
+
+                <!-- Node 5: Out-Pass Bypass -->
+                <rect x="525" y="120" width="130" height="70" rx="8" fill="#e0f2fe" stroke="#0ea5e9" stroke-width="2"/>
+                <text x="590" y="150" font-family="'Inter', sans-serif" font-size="11" font-weight="700" fill="#0c4a6e" text-anchor="middle">4B. Active Out-Pass</text>
+                <text x="590" y="168" font-family="'Inter', sans-serif" font-size="9" fill="#0284c7" text-anchor="middle">Temporarily Suspends Alert</text>
+
+                <!-- Branching Arrows -->
+                <path d="M 490 105 L 515 55" fill="none" stroke="#4b5563" stroke-width="1.5" stroke-dasharray="3"/>
+                <path d="M 490 105 L 515 155" fill="none" stroke="#4b5563" stroke-width="1.5" stroke-dasharray="3"/>
+
+                <!-- Node 6: Resolve & SMS -->
+                <rect x="680" y="70" width="110" height="70" rx="8" fill="#f3f4f6" stroke="#4b5563" stroke-width="2"/>
+                <text x="735" y="100" font-family="'Inter', sans-serif" font-size="11" font-weight="700" fill="#111827" text-anchor="middle">5. Resolution</text>
+                <text x="735" y="118" font-family="'Inter', sans-serif" font-size="9" fill="#4b5563" text-anchor="middle">HOD Reversal / SMS</text>
+
+                <!-- Connecting Arrows to End Node -->
+                <path d="M 655 55 L 675 85" fill="none" stroke="#4b5563" stroke-width="1.5" stroke-dasharray="3"/>
+                <path d="M 655 155 L 675 125" fill="none" stroke="#4b5563" stroke-width="1.5" stroke-dasharray="3"/>
+
+                <!-- Marker Definitions -->
+                <defs>
+                    <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                        <path d="M 0 0 L 10 5 L 0 10 z" fill="#4b5563"/>
+                    </marker>
+                </defs>
+            </svg>
+        </div>
+
+        <div class="page-break"></div>
+
+        <h2>2. A to Z Core Feature Breakdown</h2>
+
+        <h3>A. Cryptographic Authentication & Device Locks</h3>
+        <ul>
+            <li><strong>Hardware ID Binding:</strong> Student logins are restricted to a single physical device identifier (<code>device_id</code>). Account-sharing attempts return a strict warning: <em>"This account is registered on another device."</em></li>
+            <li><strong>FIDO2 WebAuthn Biometrics:</strong> Leverages the browser's credential API to enforce fingerprint/FaceID verification directly at check-in, preventing proxy actions.</li>
+            <li><strong>Fail-safe Password Fallback:</strong> Provides older smartphones with a secure login password confirmation layer combined with geofencing.</li>
+        </ul>
+
+        <h3>B. Geofenced Classroom Check-In & anti-cheat</h3>
+        <ul>
+            <li><strong>Haversine Coordinates Check:</strong> Student GPS coordinates are validated against the class coordinates, taking device error margins into account.</li>
+            <li><strong>Rotating HMAC QR Codes:</strong> Features a dynamically rotating QR code on the teacher portal that updates every 15 seconds, preventing students from taking photos and checking in from afar.</li>
+            <li><strong>Keypad Phone SMS OTP Flows:</strong> Enables mobile-free keypad phone check-ins by generating random 4-digit codes simulated to an SMS gateway, which teachers or coordinators verify.</li>
+        </ul>
+
+        <h3>C. Background Telemetry (Campus Guard) & Penalties</h3>
+        <ul>
+            <li><strong>Telemetry Verification:</strong> Initiates background geofence telemetry loops every 20 seconds.</li>
+            <li><strong>Breach Lockouts:</strong> Leaving the campus boundaries without an active out-pass triggers a geofence breach alert, flags <code>attendance_locked = 1</code>, and blocks attendance check-ins.</li>
+            <li><strong>Digital Out-Pass Lifecycle:</strong> Suspends tracking during permitted student leave windows.</li>
+            <li><strong>Reversal Overrides:</strong> Connects breach alerts to the active class session, enabling HODs to reverse statuses to present.</li>
+        </ul>
+
+        <h3>D. AI-Driven Anomalies & Parents SMS Gateway</h3>
+        <ul>
+            <li><strong>Unverified Absence Alerts:</strong> Ending a session auto-compiles unregistered students, logs alerts, and flags them.</li>
+            <li><strong>AI Bunking Analysis:</strong> Detects consecutive-class skipping behaviors.</li>
+            <li><strong>Parent Notification Gateway:</strong> Generates alert SMS notifications to registered parent contacts.</li>
+        </ul>
+
+        <h3>E. Web Application Firewall (WAF) & DDoS Protection Layer</h3>
+        <ul>
+            <li><strong>Helmet Security Headers:</strong> Dynamically injects secure HTTP headers, configuring Content Security Policies (CSP) to block Cross-Site Scripting (XSS), script hijacking, and clickjacking.</li>
+            <li><strong>Brute-Force Rate Limiting:</strong> Restricts request traffic parameters (500 requests/15 mins for general browsing; 15 requests/15 mins for sensitive login and verification routes) to prevent DDoS and credential stuffing.</li>
+            <li><strong>Custom Request Sanitizer:</strong> Checks request payloads (body, query, params) against SQL Injection and Script Tag pattern signatures, automatically rejecting malicious requests with a 403 Forbidden alert.</li>
+        </ul>
+
+        <div class="page-break"></div>
+
+        <!-- Diagram 2: Relational Database Models -->
+        <div class="diagram-container">
+            <h3 style="margin-top:0; margin-bottom: 1.5rem; color: var(--primary-dark);">Diagram 2: Relational Database Models & Schema Relations</h3>
+            <svg viewBox="0 0 800 280" width="100%" height="auto" xmlns="http://www.w3.org/2000/svg">
+                <!-- Table 1: Users -->
+                <rect x="20" y="20" width="180" height="110" rx="6" fill="#f3f4f6" stroke="#4b5563" stroke-width="1.5"/>
+                <path d="M 20 45 L 200 45" stroke="#4b5563" stroke-width="1.5"/>
+                <text x="110" y="36" font-family="'Inter', sans-serif" font-size="11" font-weight="700" fill="#111827" text-anchor="middle">TABLE: users</text>
+                <text x="30" y="62" font-family="'Inter', sans-serif" font-size="9" fill="#111827">🔑 id (INTEGER PK)</text>
+                <text x="30" y="77" font-family="'Inter', sans-serif" font-size="9" fill="#4b5563">username (TEXT UNIQUE)</text>
+                <text x="30" y="92" font-family="'Inter', sans-serif" font-size="9" fill="#4b5563">device_biometric_id (TEXT)</text>
+                <text x="30" y="107" font-family="'Inter', sans-serif" font-size="9" fill="#4b5563">attendance_locked (INT)</text>
+
+                <!-- Table 2: Classes -->
+                <rect x="20" y="150" width="180" height="110" rx="6" fill="#f3f4f6" stroke="#4b5563" stroke-width="1.5"/>
+                <path d="M 20 175 L 200 175" stroke="#4b5563" stroke-width="1.5"/>
+                <text x="110" y="166" font-family="'Inter', sans-serif" font-size="11" font-weight="700" fill="#111827" text-anchor="middle">TABLE: classes</text>
+                <text x="30" y="192" font-family="'Inter', sans-serif" font-size="9" fill="#111827">🔑 id (INTEGER PK)</text>
+                <text x="30" y="207" font-family="'Inter', sans-serif" font-size="9" fill="#4b5563">name (TEXT)</text>
+                <text x="30" y="222" font-family="'Inter', sans-serif" font-size="9" fill="#4b5563">teacher_id (INTEGER FK)</text>
+                <text x="30" y="237" font-family="'Inter', sans-serif" font-size="9" fill="#4b5563">active (INTEGER)</text>
+
+                <!-- Table 3: Attendance -->
+                <rect x="310" y="20" width="180" height="95" rx="6" fill="#f3f4f6" stroke="#4b5563" stroke-width="1.5"/>
+                <path d="M 310 45 L 490 45" stroke="#4b5563" stroke-width="1.5"/>
+                <text x="400" y="36" font-family="'Inter', sans-serif" font-size="11" font-weight="700" fill="#111827" text-anchor="middle">TABLE: attendance</text>
+                <text x="320" y="62" font-family="'Inter', sans-serif" font-size="9" fill="#111827">🔑 class_id (INTEGER FK)</text>
+                <text x="320" y="77" font-family="'Inter', sans-serif" font-size="9" fill="#111827">🔑 student_id (INTEGER FK)</text>
+                <text x="320" y="92" font-family="'Inter', sans-serif" font-size="9" fill="#4b5563">status (TEXT)</text>
+
+                <!-- Table 4: Alerts -->
+                <rect x="310" y="150" width="180" height="95" rx="6" fill="#f3f4f6" stroke="#4b5563" stroke-width="1.5"/>
+                <path d="M 310 175 L 490 175" stroke="#4b5563" stroke-width="1.5"/>
+                <text x="400" y="166" font-family="'Inter', sans-serif" font-size="11" font-weight="700" fill="#111827" text-anchor="middle">TABLE: alerts</text>
+                <text x="320" y="192" font-family="'Inter', sans-serif" font-size="9" fill="#111827">🔑 id (INTEGER PK)</text>
+                <text x="320" y="207" font-family="'Inter', sans-serif" font-size="9" fill="#4b5563">student_id (INTEGER FK)</text>
+                <text x="320" y="222" font-family="'Inter', sans-serif" font-size="9" fill="#4b5563">class_id (INTEGER FK)</text>
+
+                <!-- Table 5: OTP Codes -->
+                <rect x="600" y="20" width="180" height="95" rx="6" fill="#f3f4f6" stroke="#4b5563" stroke-width="1.5"/>
+                <path d="M 600 45 L 780 45" stroke="#4b5563" stroke-width="1.5"/>
+                <text x="690" y="36" font-family="'Inter', sans-serif" font-size="11" font-weight="700" fill="#111827" text-anchor="middle">TABLE: otp_codes</text>
+                <text x="610" y="62" font-family="'Inter', sans-serif" font-size="9" fill="#111827">🔑 student_id (INTEGER PK)</text>
+                <text x="610" y="77" font-family="'Inter', sans-serif" font-size="9" fill="#4b5563">class_id (INTEGER FK)</text>
+                <text x="610" y="92" font-family="'Inter', sans-serif" font-size="9" fill="#4b5563">otp_code (TEXT)</text>
+
+                <!-- Table 6: Student Passes -->
+                <rect x="600" y="150" width="180" height="95" rx="6" fill="#f3f4f6" stroke="#4b5563" stroke-width="1.5"/>
+                <path d="M 600 175 L 780 175" stroke="#4b5563" stroke-width="1.5"/>
+                <text x="690" y="166" font-family="'Inter', sans-serif" font-size="11" font-weight="700" fill="#111827" text-anchor="middle">TABLE: student_passes</text>
+                <text x="610" y="192" font-family="'Inter', sans-serif" font-size="9" fill="#111827">🔑 student_id (INTEGER PK)</text>
+                <text x="610" y="207" font-family="'Inter', sans-serif" font-size="9" fill="#4b5563">expiry (DATETIME)</text>
+                <text x="610" y="222" font-family="'Inter', sans-serif" font-size="9" fill="#4b5563">reason (TEXT)</text>
+
+                <!-- Relations -->
+                <!-- Users to Attendance -->
+                <path d="M 200 70 L 310 70" fill="none" stroke="#4f46e5" stroke-width="1.5" stroke-dasharray="2" marker-end="url(#arrow)"/>
+                <!-- Classes to Attendance -->
+                <path d="M 200 205 L 250 205 L 250 50 L 310 50" fill="none" stroke="#4f46e5" stroke-width="1.5" stroke-dasharray="2" marker-end="url(#arrow)"/>
+                <!-- Users to Alerts -->
+                <path d="M 120 130 L 120 145 L 310 192" fill="none" stroke="#4b5563" stroke-width="1.2" stroke-dasharray="3"/>
+                <!-- Classes to Alerts -->
+                <path d="M 200 215 L 310 215" fill="none" stroke="#4b5563" stroke-width="1.2" stroke-dasharray="3"/>
+            </svg>
+        </div>
+
+        <h2>3. Conclusion & System Integrity Summary</h2>
+        <p>
+            By consolidating multi-layered physical and cryptographic identity gates (GPS Geofences, Rotating HMAC tokens, WebAuthn keys) with a continuous client-side telemetry guard, this smart attendance management system eliminates proxy opportunities and provides administrators with a self-correcting validation system. The addition of legacy keypad phone modes, HOD pass controls, parent alerting, and consecutive skips analysis provides institutions with an all-inclusive framework that handles edge cases seamlessly while maintaining a modern user experience.
+        </p>
+    </div>
+</body>
+</html>
