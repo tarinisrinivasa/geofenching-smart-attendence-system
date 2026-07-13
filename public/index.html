@@ -732,13 +732,13 @@ function completeLogin(token, user) {
     safeStorage.setItem('user', JSON.stringify(user));
 
     const pages = { hod: 'hod.html', coordinator: 'coordinator.html', teacher: 'teacher.html', student: 'student.html' };
-    const target = pages[user.role] || 'index.html';
+    const target = (pages[user.role] || 'index.html') + '?v=3';
 
     try {
         localStorage.setItem('__t', '1'); localStorage.removeItem('__t');
         window.location.href = target;
     } catch(e) {
-        window.location.href = `${target}?token=${encodeURIComponent(token)}&user=${encodeURIComponent(JSON.stringify(user))}`;
+        window.location.href = `${target}&token=${encodeURIComponent(token)}&user=${encodeURIComponent(JSON.stringify(user))}`;
     }
 }
 
