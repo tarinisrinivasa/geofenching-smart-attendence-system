@@ -611,6 +611,7 @@
         }
 
         async function api(endpoint, method = 'GET', body = null) {
+            console.log(`[API] => ${method} ${endpoint}`);
             const opts = {
                 method,
                 headers: {
@@ -621,6 +622,7 @@
             if (body) opts.body = JSON.stringify(body);
             try {
                 const res = await fetch(endpoint, opts);
+                console.log(`[API] <= ${res.status} ${endpoint}`);
                 const data = await res.json();
                 if (res.status === 401 || res.status === 403) {
                     safeStorage.removeItem('token');
@@ -632,7 +634,7 @@
                 const computedSuccess = res.ok && data.success !== false && !data.error;
                 return { ...data, status: res.status, success: computedSuccess };
             } catch (e) {
-                console.error('[API ERROR]', e);
+                console.error('[API ERROR]', e.message || e);
                 return { success: false, message: 'Network connection lost. Check your internet.' };
             }
         }
@@ -830,8 +832,10 @@
         }
 
         async function unlockStudent(studentId) {
+            console.log(`[CLICK] unlockStudent called for Student ID: ${studentId}`);
             showToast('Unlocking student... please wait.', 'info');
             const res = await api('/api/coordinator/unlock-student', 'POST', { student_id: studentId });
+            console.log(`[RESULT] unlockStudent response:`, JSON.stringify(res));
             if (res.success) {
                 showToast('✅ Student check-in privileges unlocked successfully!', 'success');
                 loadRoster();
