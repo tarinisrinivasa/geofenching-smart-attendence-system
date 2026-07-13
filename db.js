@@ -243,10 +243,29 @@ const db = new sqlite3.Database(dbPath, (err) => {
                     db.run("INSERT INTO classes (id, name, teacher_id, latitude, longitude, radius, token_secret, accuracy) VALUES (3, 'ECE-A (Section Gamma)', 2, 17.3850, 78.4867, 50, 'sec3', 10)",
                         (e) => { if (e) console.error('[DB] Failed to seed class 3:', e.message); });
 
-                    console.log("[DB] Demo accounts and classes seeded successfully!");
+                    // 6. Seed Demo Alerts for Testing Dashboard Action Buttons
+                    db.run("INSERT INTO alerts (student_id, class_id, message, status, timestamp) VALUES (22, 1, '🚨 Geofence Breach: student1 exited CSE-A (Section Alpha) geofence boundary.', 0, datetime('now', '-5 minutes'))");
+                    db.run("INSERT INTO alerts (student_id, class_id, message, status, timestamp) VALUES (23, 1, '🚨 Geofence Breach: student2 exited CSE-A (Section Alpha) geofence boundary.', 0, datetime('now', '-10 minutes'))");
+                    
+                    // 7. Force Lock Students 1 and 2 for Testing Override/Unlock Buttons
+                    db.run("UPDATE users SET attendance_locked = 1 WHERE id IN (22, 23)");
+
+                    console.log("[DB] Demo accounts, classes, and test alerts/locks seeded successfully!");
                 });
             } else {
                 console.log(`[DB] Found ${row ? row.count : 0} coordinator(s). Skipping seed.`);
+            }
+        });
+
+        // ── Ensure Test Alerts are always seeded for testing dashboards ──
+        db.get("SELECT count(*) as count FROM alerts", (err, row) => {
+            if (!err && row && row.count === 0) {
+                console.log("[DB] No alerts found. Populating test alerts and locks...");
+                db.serialize(() => {
+                    db.run("INSERT INTO alerts (student_id, class_id, message, status, timestamp) VALUES (22, 1, '🚨 Geofence Breach: student1 exited CSE-A (Section Alpha) geofence boundary.', 0, datetime('now', '-5 minutes'))");
+                    db.run("INSERT INTO alerts (student_id, class_id, message, status, timestamp) VALUES (23, 1, '🚨 Geofence Breach: student2 exited CSE-A (Section Alpha) geofence boundary.', 0, datetime('now', '-10 minutes'))");
+                    db.run("UPDATE users SET attendance_locked = 1 WHERE id IN (22, 23)");
+                });
             }
         });
 
