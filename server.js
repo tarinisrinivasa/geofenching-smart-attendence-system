@@ -125,7 +125,17 @@ app.use(express.static(path.join(__dirname, 'public'), {
 app.post('/api/log-error', (req, res) => {
     const { url, message, stack } = req.body;
     console.error(`[CLIENT EXCEPTION] URL: ${url}\nMsg: ${message}\nStack: ${stack}\n`);
-    res.json({ success: true });
+    db.run("INSERT INTO client_errors (url, message, stack) VALUES (?, ?, ?)", [url, message, stack], (err) => {
+        if (err) console.error('[DB] Failed to insert client error:', err.message);
+        res.json({ success: true });
+    });
+});
+
+app.get('/api/debug/errors', (req, res) => {
+    db.all("SELECT * FROM client_errors ORDER BY id DESC LIMIT 50", [], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true, errors: rows });
+    });
 });
 
 app.use(securityFirewall);
