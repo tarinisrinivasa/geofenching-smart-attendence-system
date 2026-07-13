@@ -748,10 +748,10 @@ if ('serviceWorker' in navigator) {
 }
 
 // ── State ──────────────────────────────────────────────────────────────────
-const safeStorage = {
-    getItem(k) { try { return localStorage.getItem(k); } catch { try { return sessionStorage.getItem(k); } catch { return null; } } },
-    setItem(k, v) { try { localStorage.setItem(k, v); } catch { try { sessionStorage.setItem(k, v); } catch {} } },
-    removeItem(k) { try { localStorage.removeItem(k); } catch { try { sessionStorage.removeItem(k); } catch {} } }
+var safeStorage = {
+    getItem: function(k) { try { return localStorage.getItem(k); } catch(e) { try { return sessionStorage.getItem(k); } catch(e) { return null; } } },
+    setItem: function(k, v) { try { localStorage.setItem(k, v); } catch(e) { try { sessionStorage.setItem(k, v); } catch(e) {} } },
+    removeItem: function(k) { try { localStorage.removeItem(k); } catch(e) { try { sessionStorage.removeItem(k); } catch(e) {} } }
 };
 
 let currentUser = null;
@@ -771,10 +771,10 @@ window.addEventListener('DOMContentLoaded', async () => {
     const urlToken = params.get('token');
     const urlUser = params.get('user');
     if (urlToken) { safeStorage.setItem('token', urlToken); }
-    if (urlUser) { try { safeStorage.setItem('user', urlUser); } catch {} }
+    if (urlUser) { try { safeStorage.setItem('user', urlUser); } catch(e) {} }
 
     authToken = safeStorage.getItem('token');
-    try { currentUser = JSON.parse(safeStorage.getItem('user')); } catch {}
+    try { currentUser = JSON.parse(safeStorage.getItem('user')); } catch(e) {}
 
     if (!authToken || !currentUser || currentUser.role !== 'student') {
         window.location.href = 'index.html';
@@ -925,7 +925,7 @@ function api(endpoint, method = 'GET', body = null) {
     return fetch(endpoint, opts)
         .then(async r => {
             let data = {};
-            try { data = await r.json(); } catch {}
+            try { data = await r.json(); } catch(e) {}
             if (r.status === 401 || r.status === 403) {
                 if (data.message && data.message.includes('expired')) { handleSessionExpiry(); }
             }
@@ -939,7 +939,7 @@ function api(endpoint, method = 'GET', body = null) {
 
 // ── Session expiry — redirect directly, do NOT call triggerSignOut() to avoid recursion
 function handleSessionExpiry() {
-    try { showToast('Session expired. Please login again.', 'error'); } catch {}
+    try { showToast('Session expired. Please login again.', 'error'); } catch(e) {}
     safeStorage.removeItem('token');
     safeStorage.removeItem('user');
     setTimeout(() => { window.location.href = 'index.html'; }, 1500);
@@ -952,7 +952,7 @@ async function triggerSignOut(silent = false) {
     heartbeatInterval = null;
     classRefreshInterval = null;
     if (qrScanner) {
-        try { qrScanner.stop(); } catch {} // intentionally NOT awaited — can hang
+        try { qrScanner.stop(); } catch(e) {} // intentionally NOT awaited — can hang
         qrScanner = null;
     }
 
@@ -967,7 +967,7 @@ async function triggerSignOut(silent = false) {
             }),
             new Promise(resolve => setTimeout(resolve, 3000))
         ]);
-    } catch {}
+    } catch(e) {}
 
     safeStorage.removeItem('token');
     safeStorage.removeItem('user');
@@ -1057,7 +1057,7 @@ async function loadProfile() {
             document.getElementById('barcodeInput').value = barcode;
             renderBarcode(barcode);
         }
-    } catch {}
+    } catch(e) {}
 
     // Biometrics
     await loadBiometrics();
@@ -1267,12 +1267,12 @@ function openAttendModal(classId, name, lat, lng, radius) {
     document.querySelectorAll('.method-btn').forEach(b => b.classList.remove('active'));
     document.getElementById('attendModal').classList.add('active');
     // Stop any active scanner
-    if (qrScanner) { try { qrScanner.stop(); } catch {} qrScanner = null; }
+    if (qrScanner) { try { qrScanner.stop(); } catch(e) {} qrScanner = null; }
 }
 
 function closeAttendModal() {
     document.getElementById('attendModal').classList.remove('active');
-    if (qrScanner) { try { qrScanner.stop(); } catch {} qrScanner = null; }
+    if (qrScanner) { try { qrScanner.stop(); } catch(e) {} qrScanner = null; }
 }
 
 function selectMethod(method) {

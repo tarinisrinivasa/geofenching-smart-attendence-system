@@ -428,10 +428,10 @@
 
 <script>
 // ── State ──────────────────────────────────────────────────────────────────
-const safeStorage = {
-    getItem(k) { try { return localStorage.getItem(k); } catch { try { return sessionStorage.getItem(k); } catch { return null; } } },
-    setItem(k, v) { try { localStorage.setItem(k, v); } catch { try { sessionStorage.setItem(k, v); } catch {} } },
-    removeItem(k) { try { localStorage.removeItem(k); } catch { try { sessionStorage.removeItem(k); } catch {} } }
+var safeStorage = {
+    getItem: function(k) { try { return localStorage.getItem(k); } catch(e) { try { return sessionStorage.getItem(k); } catch(e2) { return null; } } },
+    setItem: function(k, v) { try { localStorage.setItem(k, v); } catch(e) { try { sessionStorage.setItem(k, v); } catch(e2) {} } },
+    removeItem: function(k) { try { localStorage.removeItem(k); } catch(e) { try { sessionStorage.removeItem(k); } catch(e2) {} } }
 };
 
 // Pending login data (token + user held until biometric passes)
@@ -680,7 +680,7 @@ async function reportBiometricBreach() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: currentUsername, device_info: deviceInfo })
         });
-    } catch {}
+    } catch(e) {}
 
     // Clear pending data — do NOT grant access
     pendingToken = null;
@@ -720,7 +720,7 @@ async function submitFallback() {
         } else {
             setMsg('fallbackMsg', '❌ Incorrect password. Try again.', 'error');
         }
-    } catch {
+    } catch(e) {
         btn.classList.remove('loading'); btn.disabled = false;
         setMsg('fallbackMsg', '❌ Server error. Try again.', 'error');
     }
@@ -737,7 +737,7 @@ function completeLogin(token, user) {
     try {
         localStorage.setItem('__t', '1'); localStorage.removeItem('__t');
         window.location.href = target;
-    } catch {
+    } catch(e) {
         window.location.href = `${target}?token=${encodeURIComponent(token)}&user=${encodeURIComponent(JSON.stringify(user))}`;
     }
 }

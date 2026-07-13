@@ -776,10 +776,10 @@ if ('serviceWorker' in navigator) {
 }
 
 // ── State ──────────────────────────────────────────────────────────────────
-const safeStorage = {
-    getItem(k) { try { return localStorage.getItem(k); } catch { try { return sessionStorage.getItem(k); } catch { return null; } } },
-    setItem(k, v) { try { localStorage.setItem(k, v); } catch { try { sessionStorage.setItem(k, v); } catch {} } },
-    removeItem(k) { try { localStorage.removeItem(k); } catch { try { sessionStorage.removeItem(k); } catch {} } }
+var safeStorage = {
+    getItem: function(k) { try { return localStorage.getItem(k); } catch(e) { try { return sessionStorage.getItem(k); } catch(e) { return null; } } },
+    setItem: function(k, v) { try { localStorage.setItem(k, v); } catch(e) { try { sessionStorage.setItem(k, v); } catch(e) {} } },
+    removeItem: function(k) { try { localStorage.removeItem(k); } catch(e) { try { sessionStorage.removeItem(k); } catch(e) {} } }
 };
 
 let currentUser = null;
@@ -800,10 +800,10 @@ window.addEventListener('DOMContentLoaded', async () => {
     const urlToken = params.get('token');
     const urlUser = params.get('user');
     if (urlToken) safeStorage.setItem('token', urlToken);
-    if (urlUser) { try { safeStorage.setItem('user', urlUser); } catch {} }
+    if (urlUser) { try { safeStorage.setItem('user', urlUser); } catch(e) {} }
 
     authToken = safeStorage.getItem('token');
-    try { currentUser = JSON.parse(safeStorage.getItem('user')); } catch {}
+    try { currentUser = JSON.parse(safeStorage.getItem('user')); } catch(e) {}
 
     if (!authToken || !currentUser || currentUser.role !== 'teacher') {
         window.location.href = 'index.html'; return;
@@ -970,9 +970,9 @@ function api(endpoint, method = 'GET', body = null) {
     return fetch(endpoint, opts)
         .then(async r => {
             let data = {};
-            try { data = await r.json(); } catch {}
+            try { data = await r.json(); } catch(e) {}
             if (r.status === 401) {
-                try { showToast('Session expired. Please login again.', 'error'); } catch {}
+                try { showToast('Session expired. Please login again.', 'error'); } catch(e) {}
                 safeStorage.removeItem('token');
                 safeStorage.removeItem('user');
                 setTimeout(() => { window.location.href = 'index.html'; }, 1500);
@@ -996,7 +996,7 @@ async function triggerSignOut(silent = false) {
             }),
             new Promise(resolve => setTimeout(resolve, 3000))
         ]);
-    } catch {}
+    } catch(e) {}
 
     safeStorage.removeItem('token');
     safeStorage.removeItem('user');
@@ -1006,7 +1006,7 @@ async function triggerSignOut(silent = false) {
 function stopAllIntervals() {
     clearInterval(qrInterval); clearInterval(requestInterval); clearInterval(rosterInterval); clearInterval(radarInterval);
     qrInterval = null; requestInterval = null; rosterInterval = null; radarInterval = null;
-    if (barcodeScanner) { try { barcodeScanner.stop(); } catch {} barcodeScanner = null; }
+    if (barcodeScanner) { try { barcodeScanner.stop(); } catch(e) {} barcodeScanner = null; }
 }
 
 // ── Toast ──────────────────────────────────────────────────────────────────
@@ -1241,7 +1241,7 @@ function startBarcodeScanner() {
 }
 
 function stopBarcode() {
-    if (barcodeScanner) { try { barcodeScanner.stop().catch(() => {}); } catch {} barcodeScanner = null; }
+    if (barcodeScanner) { try { barcodeScanner.stop().catch(() => {}); } catch(e) {} barcodeScanner = null; }
 }
 
 async function submitBarcode(barcode, resultEl) {
