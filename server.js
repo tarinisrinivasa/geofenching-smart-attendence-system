@@ -110,7 +110,17 @@ function securityFirewall(req, res, next) {
 }
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+
+// Force browsers/CDNs to always re-fetch HTML files (prevents stale cached JS)
+app.use(express.static(path.join(__dirname, 'public'), {
+    setHeaders: function(res, filePath) {
+        if (filePath.endsWith('.html')) {
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            res.setHeader('Pragma', 'no-cache');
+            res.setHeader('Expires', '0');
+        }
+    }
+}));
 
 app.post('/api/log-error', (req, res) => {
     const { url, message, stack } = req.body;
