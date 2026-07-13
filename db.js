@@ -181,6 +181,9 @@ const db = new sqlite3.Database(dbPath, (err) => {
                     db.run("INSERT INTO campus_settings (key, value) VALUES ('campus_radius', '500')");
                     db.run("INSERT INTO campus_settings (key, value) VALUES ('college_start_time', '09:00')");
                     db.run("INSERT INTO campus_settings (key, value) VALUES ('college_end_time', '16:00')");
+                    db.run("INSERT INTO campus_settings (key, value) VALUES ('stop_tracking_on_exit', '0')");
+                    db.run("INSERT INTO campus_settings (key, value) VALUES ('exact_live_tracking', '1')");
+                    db.run("INSERT INTO campus_settings (key, value) VALUES ('track_after_hours', '0')");
                 });
             }
         });

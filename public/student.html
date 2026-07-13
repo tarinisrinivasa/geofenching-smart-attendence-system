@@ -1178,24 +1178,49 @@ async function registerBiometrics() {
 }
 
 // ── Heartbeat ──────────────────────────────────────────────────────────────
+let currentHeartbeatIntervalMs = 25000;
+let trackActive = true;
+let enableHighAccuracy = true;
+
 function startHeartbeat() {
-    const beat = () => {
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(pos => {
-                api('/api/student/heartbeat', 'POST', {
-                    latitude: pos.coords.latitude,
-                    longitude: pos.coords.longitude
-                });
-            }, () => {
-                // fallback or silent fail if GPS disabled
-                api('/api/student/heartbeat', 'POST');
-            }, { enableHighAccuracy: true, timeout: 10000 });
+    const beat = async () => {
+        const payload = {};
+        
+        if (trackActive && navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(async pos => {
+                payload.latitude = pos.coords.latitude;
+                payload.longitude = pos.coords.longitude;
+                payload.accuracy = pos.coords.accuracy;
+                
+                const res = await api('/api/student/heartbeat', 'POST', payload);
+                handleHeartbeatResponse(res);
+            }, async () => {
+                // Silent fail/GPSError fallback
+                const res = await api('/api/student/heartbeat', 'POST');
+                handleHeartbeatResponse(res);
+            }, { enableHighAccuracy: enableHighAccuracy, timeout: 10000 });
         } else {
-            api('/api/student/heartbeat', 'POST');
+            const res = await api('/api/student/heartbeat', 'POST');
+            handleHeartbeatResponse(res);
         }
     };
+
+    function handleHeartbeatResponse(res) {
+        if (res && res.success) {
+            trackActive = res.track_active !== false;
+            enableHighAccuracy = res.enable_high_accuracy !== false;
+            const newInterval = res.interval_ms || 25000;
+            
+            if (newInterval !== currentHeartbeatIntervalMs) {
+                currentHeartbeatIntervalMs = newInterval;
+                clearInterval(heartbeatInterval);
+                heartbeatInterval = setInterval(beat, currentHeartbeatIntervalMs);
+            }
+        }
+    }
+
     beat();
-    heartbeatInterval = setInterval(beat, 25000);
+    heartbeatInterval = setInterval(beat, currentHeartbeatIntervalMs);
 }
 
 // ── History ────────────────────────────────────────────────────────────────

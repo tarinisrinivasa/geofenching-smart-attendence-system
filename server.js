@@ -36,7 +36,7 @@ app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
-            scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdn.jsdelivr.net", "https://unpkg.com"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdn.jsdelivr.net", "https://unpkg.com", "https://cdnjs.cloudflare.com"],
             styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
             fontSrc: ["'self'", "https://fonts.gstatic.com"],
             imgSrc: ["'self'", "data:", "https://images.unsplash.com", "https://bwipjs-api.metafloor.com", "https://*.onrender.com"],
@@ -385,7 +385,7 @@ app.post('/api/classes/:class_id/end', authenticateToken, (req, res) => {
         db.get("SELECT name FROM classes WHERE id = ?", [classId], (err, currentClass) => {
             if (err || !currentClass) return;
 
-            // 1. Unverified Absence Analysis (Alert coordinator for any student who didn't mark check-in)
+            // 1. Unverified Absence Analysis (Alert coordinator and mark student as absent)
             db.all("SELECT id, username FROM users WHERE role = 'student'", [], (err, allStudents) => {
                 if (err || !allStudents) return;
 
@@ -397,11 +397,16 @@ app.post('/api/classes/:class_id/end', authenticateToken, (req, res) => {
 
                     if (unmarkedStudents.length > 0) {
                         const insertUnmarkedAlert = db.prepare("INSERT INTO alerts (student_id, class_id, message) VALUES (?, ?, ?)");
+                        const insertAbsentAttendance = db.prepare("INSERT OR REPLACE INTO attendance (class_id, student_id, status) VALUES (?, ?, 'absent')");
+                        
                         unmarkedStudents.forEach(u => {
                             const alertMsg = `⚠️ Unverified Absence: Student "${u.username}" did not mark attendance for class session "${currentClass.name}".`;
                             insertUnmarkedAlert.run([u.id, classId, alertMsg]);
+                            insertAbsentAttendance.run([classId, u.id]);
                         });
+                        
                         insertUnmarkedAlert.finalize();
+                        insertAbsentAttendance.finalize();
                     }
                 });
             });
@@ -1008,7 +1013,7 @@ app.post('/api/campus-settings', authenticateToken, (req, res) => {
         return res.status(403).json({ success: false, message: "Unauthorized access." });
     }
 
-    const { campus_latitude, campus_longitude, campus_radius, college_start_time, college_end_time } = req.body;
+    const { campus_latitude, campus_longitude, campus_radius, college_start_time, college_end_time, stop_tracking_on_exit, exact_live_tracking, track_after_hours } = req.body;
     
     if (campus_latitude === undefined || campus_longitude === undefined || campus_radius === undefined || college_start_time === undefined || college_end_time === undefined) {
         return res.status(400).json({ success: false, message: "Missing required bounds or college hours values." });
@@ -1019,9 +1024,14 @@ app.post('/api/campus-settings', authenticateToken, (req, res) => {
         db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('campus_longitude', ?)", [campus_longitude.toString()]);
         db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('campus_radius', ?)", [campus_radius.toString()]);
         db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('college_start_time', ?)", [college_start_time]);
-        db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('college_end_time', ?)", [college_end_time], function(err) {
+        db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('college_end_time', ?)", [college_end_time]);
+        
+        // Save the new configurations
+        db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('stop_tracking_on_exit', ?)", [stop_tracking_on_exit !== undefined ? stop_tracking_on_exit.toString() : '0']);
+        db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('exact_live_tracking', ?)", [exact_live_tracking !== undefined ? exact_live_tracking.toString() : '1']);
+        db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('track_after_hours', ?)", [track_after_hours !== undefined ? track_after_hours.toString() : '0'], function(err) {
             if (err) return res.status(500).json({ error: err.message });
-            res.json({ success: true, message: "Campus geofence settings updated successfully!" });
+            res.json({ success: true, message: "Campus geofence and tracking configurations updated successfully!" });
         });
     });
 });
@@ -1211,7 +1221,7 @@ app.post('/api/teacher/verify-student-otp', authenticateToken, (req, res) => {
     );
 });
 
-// Student API: Heartbeat telemetry and location reporting
+// Student API: Heartbeat telemetry, campus geofence validation, and dynamic location tracking
 app.post('/api/student/heartbeat', authenticateToken, (req, res) => {
     if (req.user.role !== 'student') {
         return res.status(403).json({ success: false, message: "Unauthorized." });
@@ -1220,25 +1230,109 @@ app.post('/api/student/heartbeat', authenticateToken, (req, res) => {
     const student_id = req.user.id;
     const { latitude, longitude } = req.body;
 
-    if (latitude !== undefined && longitude !== undefined) {
-        db.run(
-            "UPDATE users SET last_seen = datetime('now', 'localtime'), last_lat = ?, last_lon = ? WHERE id = ?",
-            [latitude, longitude, student_id],
-            function(err) {
-                if (err) return res.status(500).json({ error: err.message });
-                res.json({ success: true, message: "Heartbeat & location telemetry logged." });
+    // 1. Fetch campus settings
+    db.all("SELECT key, value FROM campus_settings", [], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        
+        const settings = {
+            campus_latitude: 17.3850,
+            campus_longitude: 78.4867,
+            campus_radius: 500,
+            college_start_time: '09:00',
+            college_end_time: '16:00',
+            stop_tracking_on_exit: 0,
+            exact_live_tracking: 1,
+            track_after_hours: 0
+        };
+
+        rows.forEach(r => {
+            if (r.key === 'college_start_time' || r.key === 'college_end_time') {
+                settings[r.key] = r.value;
+            } else {
+                settings[r.key] = parseFloat(r.value);
             }
-        );
-    } else {
-        db.run(
-            "UPDATE users SET last_seen = datetime('now', 'localtime') WHERE id = ?",
-            [student_id],
-            function(err) {
-                if (err) return res.status(500).json({ error: err.message });
-                res.json({ success: true, message: "Heartbeat logged." });
+        });
+
+        // 2. Check if current local time is within college hours
+        const nowLocal = new Date();
+        const hours = nowLocal.getHours();
+        const minutes = nowLocal.getMinutes();
+        const currentMin = hours * 60 + minutes;
+
+        const [startH, startM] = settings.college_start_time.split(':').map(Number);
+        const [endH, endM] = settings.college_end_time.split(':').map(Number);
+        const startMin = startH * 60 + startM;
+        const endMin = endH * 60 + endM;
+
+        const isCollegeHours = currentMin >= startMin && currentMin <= endMin;
+
+        // 3. Calculate distance and campus residency status
+        let inside_campus = true;
+        let distance = 0;
+        if (latitude !== undefined && longitude !== undefined) {
+            distance = getDistance(settings.campus_latitude, settings.campus_longitude, latitude, longitude);
+            inside_campus = distance <= settings.campus_radius;
+        }
+
+        // 4. Resolve active out-pass
+        db.get("SELECT expiry, reason FROM student_passes WHERE student_id = ?", [student_id], (err, pass) => {
+            if (err) return res.status(500).json({ error: err.message });
+            
+            const has_pass = pass && Date.now() < new Date(pass.expiry + 'Z').getTime();
+            let track_active = true;
+
+            // 5. Enforce Geofencing rules and alerts during college hours
+            if (isCollegeHours) {
+                if (!inside_campus && !has_pass && latitude !== undefined && longitude !== undefined) {
+                    // Check alert count today to avoid alert spamming
+                    const alertCountQuery = `
+                        SELECT COUNT(*) as count FROM alerts 
+                        WHERE student_id = ? 
+                          AND message LIKE '%Campus Geofence Breach%' 
+                          AND date(timestamp) = date('now')
+                    `;
+                    db.get(alertCountQuery, [student_id], (err, countRow) => {
+                        const alertCount = countRow ? countRow.count : 0;
+                        
+                        if (alertCount < 4) {
+                            const alertMsg = `🚨 Campus Geofence Breach: Student "${req.user.username}" walked outside campus boundary during college hours. (Distance: ${Math.round(distance)}m, Limit: ${settings.campus_radius}m).`;
+                            db.run("INSERT INTO alerts (student_id, message, latitude, longitude) VALUES (?, ?, ?, ?)", [student_id, alertMsg, latitude, longitude]);
+                            db.run("UPDATE users SET attendance_locked = 1 WHERE id = ?", [student_id]);
+                        }
+                    });
+
+                    // Stop tracking on exit option
+                    if (settings.stop_tracking_on_exit === 1) {
+                        track_active = false;
+                    }
+                }
+            } else {
+                // Outside operating hours
+                if (settings.track_after_hours === 0) {
+                    track_active = false;
+                }
             }
-        );
-    }
+
+            // 6. Update student telemetry/status in database
+            const updateSql = (track_active && latitude !== undefined && longitude !== undefined)
+                ? "UPDATE users SET last_seen = datetime('now', 'localtime'), last_lat = ?, last_lon = ? WHERE id = ?"
+                : "UPDATE users SET last_seen = datetime('now', 'localtime') WHERE id = ?";
+            const updateParams = (track_active && latitude !== undefined && longitude !== undefined)
+                ? [latitude, longitude, student_id]
+                : [student_id];
+
+            db.run(updateSql, updateParams, function(err) {
+                if (err) return res.status(500).json({ error: err.message });
+                res.json({
+                    success: true,
+                    track_active: track_active,
+                    enable_high_accuracy: settings.exact_live_tracking === 1,
+                    interval_ms: settings.exact_live_tracking === 1 ? 10000 : 25000,
+                    message: "Telemetry processed successfully."
+                });
+            });
+        });
+    });
 });
 
 // Student API: Check if they have an active out-pass
@@ -1367,17 +1461,34 @@ app.post('/api/biometrics/register', authenticateToken, (req, res) => {
         return res.status(400).json({ success: false, message: "Missing credential_id." });
     }
 
-    // 1. Check if another student has already registered THIS credential ID (meaning they are using the same phone!)
-    db.get("SELECT username FROM users WHERE device_biometric_id = ? AND id != ?", [credential_id, req.user.id], (err, other) => {
+    // Check if this student already has a registered biometric credential (prevent overwrite/re-registration)
+    db.get("SELECT device_biometric_id, username FROM users WHERE id = ?", [req.user.id], (err, userRow) => {
         if (err) return res.status(500).json({ error: err.message });
-        if (other) {
-            return res.status(400).json({ success: false, message: `This device is already registered and bound to another student account (${other.username}). Sharing phones is not allowed.` });
+        
+        if (userRow && userRow.device_biometric_id) {
+            // Biometric already bound! Log bypass attempt alert to HOD/Coordinator
+            const alertMsg = `⚠️ Security Bypass Warning: Student "${userRow.username}" attempted to register a new biometric fingerprint/face on an already bound device. (Action Blocked)`;
+            db.run("INSERT INTO alerts (student_id, message) VALUES (?, ?)", [req.user.id, alertMsg], (alertErr) => {
+                if (alertErr) console.error("Failed to insert security alert:", alertErr.message);
+            });
+            return res.status(400).json({ 
+                success: false, 
+                message: "❌ Security Block: A fingerprint is already bound to this account. To register a different device/fingerprint, please contact your HOD or Coordinator to reset your biometrics." 
+            });
         }
 
-        // 2. Register the credential ID for this student
-        db.run("UPDATE users SET device_biometric_id = ? WHERE id = ?", [credential_id, req.user.id], function(err) {
+        // 1. Check if another student has already registered THIS credential ID (meaning they are using the same phone!)
+        db.get("SELECT username FROM users WHERE device_biometric_id = ? AND id != ?", [credential_id, req.user.id], (err, other) => {
             if (err) return res.status(500).json({ error: err.message });
-            res.json({ success: true, message: "Biometrics successfully registered and bound to this device!" });
+            if (other) {
+                return res.status(400).json({ success: false, message: `This device is already registered and bound to another student account (${other.username}). Sharing phones is not allowed.` });
+            }
+
+            // 2. Register the credential ID for this student
+            db.run("UPDATE users SET device_biometric_id = ? WHERE id = ?", [credential_id, req.user.id], function(err) {
+                if (err) return res.status(500).json({ error: err.message });
+                res.json({ success: true, message: "Biometrics successfully registered and bound to this device!" });
+            });
         });
     });
 });
@@ -1413,29 +1524,7 @@ app.post('/api/biometrics/verify', authenticateToken, (req, res) => {
     });
 });
 
-// Student API: Periodic heartbeat status update to prevent logout/offline bypasses
-app.post('/api/student/heartbeat', authenticateToken, (req, res) => {
-    if (req.user.role !== 'student') {
-        return res.status(403).json({ success: false, message: "Unauthorized." });
-    }
-
-    db.get("SELECT is_keypad FROM users WHERE id = ?", [req.user.id], (err, u) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (u && u.is_keypad === 1) {
-            return res.json({ success: true, message: "Exempted due to keypad/no-phone status." });
-        }
-
-        const nowIso = new Date().toISOString();
-        db.run(
-            "UPDATE users SET last_seen = ? WHERE id = ?",
-            [nowIso, req.user.id],
-            (err) => {
-                if (err) return res.status(500).json({ error: err.message });
-                res.json({ success: true, message: "Heartbeat synced successfully!" });
-            }
-        );
-    });
-});
+// (Duplicate heartbeat handler removed, using the upgraded dynamic geofencing telemetry heartbeat handler registered above)
 
 // Student API: Full attendance history across ALL sessions (active + ended)
 app.get('/api/student/history', authenticateToken, (req, res) => {
@@ -1766,7 +1855,7 @@ app.post('/api/coordinator/update-student-phone', authenticateToken, (req, res) 
     });
 });
 
-// Coordinator & HOD API: Reset student device hardware lock
+// Coordinator & HOD API: Reset student device hardware & biometric locks
 app.post('/api/coordinator/reset-device', authenticateToken, (req, res) => {
     if (req.user.role !== 'coordinator' && req.user.role !== 'hod') {
         return res.status(403).json({ success: false, message: "Unauthorized." });
@@ -1776,9 +1865,9 @@ app.post('/api/coordinator/reset-device', authenticateToken, (req, res) => {
         return res.status(400).json({ success: false, message: "Missing student_id." });
     }
 
-    db.run("UPDATE users SET device_id = NULL WHERE id = ? AND role = 'student'", [student_id], (err) => {
+    db.run("UPDATE users SET device_id = NULL, device_biometric_id = NULL WHERE id = ? AND role = 'student'", [student_id], (err) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json({ success: true, message: "Student device hardware lock reset successfully!" });
+        res.json({ success: true, message: "Student device hardware and biometric fingerprint lock reset successfully!" });
     });
 });
 
