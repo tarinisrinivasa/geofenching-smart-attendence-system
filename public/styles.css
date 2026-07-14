@@ -1278,13 +1278,20 @@ input::placeholder { color: rgba(148, 163, 184, 0.4); }
     position: relative;
     overflow: hidden;
     transition: color 0.25s ease, background 0.25s ease;
+    color: var(--text-muted) !important;
+}
+.nav-tab:hover {
+    color: var(--text-main) !important;
+}
+.nav-tab.active {
+    color: var(--primary) !important;
 }
 .nav-tab::after {
     content: '';
     position: absolute;
     bottom: 0; left: 50%;
     width: 0; height: 2px;
-    background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+    background: linear-gradient(90deg, #06b6d4, #3b82f6);
     border-radius: 2px 2px 0 0;
     transition: width 0.3s cubic-bezier(0.34,1.56,0.64,1), left 0.3s cubic-bezier(0.34,1.56,0.64,1);
 }

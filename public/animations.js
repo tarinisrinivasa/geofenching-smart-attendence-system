@@ -209,13 +209,13 @@
         /* Page header */
         const header = document.querySelector('.header');
         if (header) {
-            gsap.from(header, { y: -60, opacity: 0, duration: 0.8, ease: 'power3.out' });
+            gsap.from(header, { y: -60, opacity: 0, duration: 0.8, ease: 'power3.out', clearProps: 'all' });
         }
 
         /* Nav tabs */
         const tabs = document.querySelectorAll('.nav-tab');
         if (tabs.length) {
-            gsap.from(tabs, { y: -20, opacity: 0, stagger: 0.07, duration: 0.5, ease: 'power2.out', delay: 0.3 });
+            gsap.from(tabs, { y: -20, opacity: 0, stagger: 0.07, duration: 0.5, ease: 'power2.out', delay: 0.3, clearProps: 'all' });
         }
 
         /* Cards stagger cascade */
@@ -876,6 +876,20 @@
             /* ── Entrance for whole page sections ── */
             .ag-page-enter {
                 animation: ag-fade-up-kf 0.4s cubic-bezier(0.16,1,0.3,1) both;
+            }
+
+            /* ── Nav tab global style corrections for high contrast ── */
+            .nav-tab {
+                position: relative !important;
+                overflow: hidden !important;
+                color: var(--text-muted, #7d8fa9) !important;
+                opacity: 1 !important;
+            }
+            .nav-tab:hover {
+                color: var(--text-main, #f1f5f9) !important;
+            }
+            .nav-tab.active {
+                color: var(--primary, #06b6d4) !important;
             }
 
             /* ── Core Background Elements (Fixed position fallback) ── */
