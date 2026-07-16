@@ -16,6 +16,12 @@ const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_key_for_attendance_sy
 // Only treat as Render/cloud when explicitly signalled — avoids false-positive on Windows where PORT may already be set in env
 const isRender = process.env.RENDER === 'true' || process.env.RENDER_EXTERNAL_URL !== undefined;
 
+// Secure start check: enforce a custom secret in production/Render
+if (isRender && JWT_SECRET === 'super_secret_key_for_attendance_system') {
+    console.error("FATAL ERROR: JWT_SECRET environment variable is missing or insecure in production/Render environment!");
+    process.exit(1);
+}
+
 let httpsOptions = null;
 if (!isRender) {
     // Generate self-signed certificates on startup for secure local device testing (only needed for local network phone access)
@@ -30,6 +36,25 @@ if (!isRender) {
 const app = express();
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3000;
+
+// Security Event Logger Utility
+function logSecurityEvent(eventType, ip, userId, username, details) {
+    db.run(
+        "INSERT INTO security_logs (event_type, ip, user_id, username, details) VALUES (?, ?, ?, ?, ?)",
+        [eventType, ip || 'N/A', userId || null, username || null, details || ''],
+        (err) => {
+            if (err) console.error('[SECURITY LOG ERROR] Failed to write event:', err.message);
+        }
+    );
+}
+
+// Enforce HTTPS redirection in production/Render
+app.use((req, res, next) => {
+    if (isRender && req.headers['x-forwarded-proto'] !== 'https') {
+        return res.redirect('https://' + req.headers.host + req.url);
+    }
+    next();
+});
 
 // Configure High-Level WAF (Web Application Firewall) Security Headers
 app.use(helmet({
@@ -60,13 +85,17 @@ const generalLimiter = rateLimit({
 });
 app.use(generalLimiter);
 
-// Stricter Rate Limiter for Authentication & Verification Endpoints (15 requests per 15 minutes per IP)
+// Stricter Rate Limiter for Authentication (15 requests per 15 minutes per IP)
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 15,
     message: {
         success: false,
-        message: "❌ Stricter Rate Limit: Too many authentication/verification attempts from this IP. Please try again after 15 minutes."
+        message: "❌ Stricter Rate Limit: Too many authentication attempts from this IP. Please try again after 15 minutes."
+    },
+    handler: (req, res, next, options) => {
+        logSecurityEvent('RATE_LIMITED', req.ip, req.user ? req.user.id : null, req.user ? req.user.username : null, `Auth rate limit exceeded on ${req.originalUrl}`);
+        res.status(options.statusCode).send(options.message);
     },
     standardHeaders: true,
     legacyHeaders: false,
@@ -75,15 +104,57 @@ app.use('/api/login', authLimiter);
 app.use('/api/verify-password', authLimiter);
 app.use('/api/coordinator/verify-keypad-otp', authLimiter);
 
+// High-Risk API Actions Limiter (Forgot/Reset Password, Verification - 5 attempts per 15 minutes)
+const authActionLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 5,
+    message: {
+        success: false,
+        message: "❌ Too many security verification requests from this IP. Please try again after 15 minutes."
+    },
+    handler: (req, res, next, options) => {
+        logSecurityEvent('RATE_LIMITED', req.ip, null, null, `Auth action rate limit exceeded on ${req.originalUrl}`);
+        res.status(options.statusCode).send(options.message);
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+app.use('/api/auth/forgot-password', authActionLimiter);
+app.use('/api/auth/reset-password', authActionLimiter);
+app.use('/api/auth/verify-email', authActionLimiter);
+app.use('/api/auth/resend-verification', authActionLimiter);
+
+// Abuse Limiter for Attendance & Telemetry (30 requests per minute)
+const abuseLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 30,
+    message: {
+        success: false,
+        message: "❌ Abuse Protection: Too many rapid attendance/telemetry requests. Please wait a minute."
+    },
+    handler: (req, res, next, options) => {
+        logSecurityEvent('ABUSE_ATTEMPT', req.ip, req.user ? req.user.id : null, req.user ? req.user.username : null, `Abuse rate limit exceeded on ${req.originalUrl}`);
+        res.status(options.statusCode).send(options.message);
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+app.use('/api/mark-attendance', abuseLimiter);
+app.use('/api/mark-barcode', abuseLimiter);
+app.use('/api/student/heartbeat', abuseLimiter);
+app.use('/api/teacher/generate-otp', abuseLimiter);
+app.use('/api/teacher/verify-student-otp', abuseLimiter);
+app.use('/api/biometrics/register', abuseLimiter);
+app.use('/api/biometrics/verify', abuseLimiter);
+
 // Custom Request Sanitizer (SQL Injection Guard)
 function securityFirewall(req, res, next) {
-    // Block SQL injection patterns only — XSS is not relevant for JSON API payloads
-    // (XSS protection is handled by Content-Security-Policy headers from helmet)
     const sqlInjectionPattern = /('\s+OR\s+'|"\s+OR\s+"|OR\s+1\s*=\s*1|OR\s+TRUE|;\s*DROP\s+TABLE|--\s*$)/i;
 
     const checkValue = (val) => {
         if (typeof val === 'string') {
             if (sqlInjectionPattern.test(val)) {
+                logSecurityEvent('BLOCKED_SQLI', req.ip, req.user ? req.user.id : null, req.user ? req.user.username : null, `Blocked SQL Injection payload: "${val}" in ${req.originalUrl}`);
                 console.warn(`[WAF FIREWALL ALERT] Blocked potential SQL Injection payload: "${val}"`);
                 return false;
             }
@@ -105,6 +176,8 @@ function securityFirewall(req, res, next) {
     }
     next();
 }
+// Globally enable WAF security firewall middleware!
+app.use(securityFirewall);
 
 app.use(cors());
 app.use(express.json());
@@ -177,12 +250,19 @@ function authenticateToken(req, res, next) {
         return res.status(401).json({ success: false, message: "Access denied. Login required." });
     }
 
-    jwt.verify(token, JWT_SECRET, (err, payload) => {
-        if (err) {
-            return res.status(403).json({ success: false, message: "Session expired or invalid. Please login again." });
+    db.get("SELECT token FROM token_blacklist WHERE token = ?", [token], (err, blacklisted) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (blacklisted) {
+            return res.status(401).json({ success: false, message: "Session invalidated. Please login again." });
         }
-        req.user = payload; // contains user id, username, role
-        next();
+
+        jwt.verify(token, JWT_SECRET, (err, payload) => {
+            if (err) {
+                return res.status(403).json({ success: false, message: "Session expired or invalid. Please login again." });
+            }
+            req.user = payload; // contains user id, username, role
+            next();
+        });
     });
 }
 
@@ -193,15 +273,23 @@ app.post('/api/login', (req, res) => {
     db.get("SELECT * FROM users WHERE username = ?", [username], (err, row) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!row) {
+            logSecurityEvent('AUTH_FAIL', req.ip, null, username, 'Login attempt failed: invalid username');
             return res.status(401).json({ success: false, message: "Invalid username or password" });
         }
         
         // Verify hashed password
         const passwordMatch = bcrypt.compareSync(password, row.password);
         if (!passwordMatch) {
+            logSecurityEvent('AUTH_FAIL', req.ip, row.id, row.username, 'Login attempt failed: incorrect password');
             return res.status(401).json({ success: false, message: "Invalid username or password" });
         }
 
+        // Enforce email verification
+        if (row.is_email_verified === 0) {
+            logSecurityEvent('AUTH_UNVERIFIED', req.ip, row.id, row.username, 'Login attempt rejected: email not verified');
+            return res.status(403).json({ success: false, is_unverified: true, message: "Your email is not verified. Please verify your email to log in." });
+        }
+        
         // Helper to sign JWT and return response
         // For students: also return biometric registration status so the login page
         // can enforce the 2-step biometric verification flow BEFORE granting portal access.
@@ -212,6 +300,8 @@ app.post('/api/login', (req, res) => {
                 { expiresIn: '12h' }
             );
             const baseUser = { id: row.id, username: row.username, role: row.role, barcode: row.barcode, coordinator_class_id: row.coordinator_class_id };
+
+            logSecurityEvent('AUTH_SUCCESS', req.ip, row.id, row.username, `Successful login (Role: ${row.role})`);
 
             if (row.role === 'student') {
                 // Fetch biometric status for the 2-step login flow
@@ -238,17 +328,20 @@ app.post('/api/login', (req, res) => {
                 db.get("SELECT username FROM users WHERE device_id = ? AND id != ?", [device_id, row.id], (err, boundUser) => {
                     if (err) return res.status(500).json({ error: err.message });
                     if (boundUser) {
+                        logSecurityEvent('DEVICE_BIND_FAIL', req.ip, row.id, row.username, `Device registration failed: device already bound to ${boundUser.username}`);
                         return res.status(400).json({ success: false, message: `This device is already registered to student: ${boundUser.username}` });
                     }
                     
                     // Bind this device ID
                     db.run("UPDATE users SET device_id = ? WHERE id = ?", [device_id, row.id], (err) => {
                         if (err) return res.status(500).json({ error: err.message });
+                        logSecurityEvent('DEVICE_BOUND', req.ip, row.id, row.username, `Device registered with ID: ${device_id}`);
                         completeLogin();
                     });
                 });
             } else if (row.device_id !== device_id) {
                 // Lockout: Prevent login from other devices
+                logSecurityEvent('DEVICE_LOCKOUT', req.ip, row.id, row.username, `Login blocked: device ID mismatch (Attempted: ${device_id}, Registered: ${row.device_id})`);
                 return res.status(400).json({ success: false, message: "This account is registered on another device." });
             } else {
                 completeLogin();
@@ -256,6 +349,158 @@ app.post('/api/login', (req, res) => {
         } else {
             completeLogin();
         }
+    });
+});
+
+// ─── Email Verification & Password Reset Endpoints ──────────────────────────
+
+// Email Verification Endpoint
+app.post('/api/auth/verify-email', (req, res) => {
+    const { token } = req.body;
+    if (!token) {
+        return res.status(400).json({ success: false, message: "Verification token is required." });
+    }
+
+    db.get("SELECT user_id, expires_at FROM email_verification_tokens WHERE token = ?", [token.trim()], (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!row) {
+            return res.status(400).json({ success: false, message: "Invalid or expired verification token." });
+        }
+
+        if (Date.now() > row.expires_at) {
+            db.run("DELETE FROM email_verification_tokens WHERE user_id = ?", [row.user_id]);
+            return res.status(400).json({ success: false, message: "Verification token has expired. Please request a new one." });
+        }
+
+        db.serialize(() => {
+            db.run("UPDATE users SET is_email_verified = 1 WHERE id = ?", [row.user_id]);
+            db.run("DELETE FROM email_verification_tokens WHERE user_id = ?", [row.user_id]);
+            
+            db.get("SELECT username FROM users WHERE id = ?", [row.user_id], (err, userRow) => {
+                const username = userRow ? userRow.username : null;
+                logSecurityEvent('EMAIL_VERIFIED', req.ip, row.user_id, username, 'User email verified successfully');
+                console.log(`[EMAIL VERIFICATION] User ID ${row.user_id} verified successfully.`);
+                res.json({ success: true, message: "Email verified successfully! You can now log in." });
+            });
+        });
+    });
+});
+
+// Resend Email Verification Token
+app.post('/api/auth/resend-verification', (req, res) => {
+    const { username_or_email } = req.body;
+    if (!username_or_email) {
+        return res.status(400).json({ success: false, message: "Username or email is required." });
+    }
+
+    db.get("SELECT id, username, email, is_email_verified FROM users WHERE username = ? OR email = ?", [username_or_email.trim(), username_or_email.trim()], (err, user) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!user) {
+            // To prevent username enumeration, return a generic success message
+            return res.json({ success: true, message: "If this account is unverified, a verification link has been sent." });
+        }
+
+        if (user.is_email_verified === 1) {
+            return res.status(400).json({ success: false, message: "This account's email is already verified." });
+        }
+
+        const token = crypto.randomBytes(32).toString('hex');
+        const expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
+
+        db.run(
+            "INSERT OR REPLACE INTO email_verification_tokens (user_id, token, expires_at) VALUES (?, ?, ?)",
+            [user.id, token, expiresAt],
+            (err) => {
+                if (err) return res.status(500).json({ error: err.message });
+
+                // Simulate sending email
+                console.log(`\n==================================================================`);
+                console.log(`[EMAIL SIMULATOR] Resending Verification Token to ${user.email}`);
+                console.log(`Verification URL: http://localhost:${PORT}/verify-email.html?token=${token}`);
+                console.log(`==================================================================\n`);
+
+                logSecurityEvent('VERIFICATION_SENT', req.ip, user.id, user.username, 'Verification link resent');
+                res.json({ success: true, message: "If this account is unverified, a verification link has been sent." });
+            }
+        );
+    });
+});
+
+// Forgot Password Request
+app.post('/api/auth/forgot-password', (req, res) => {
+    const { email } = req.body;
+    if (!email) {
+        return res.status(400).json({ success: false, message: "Email is required." });
+    }
+
+    db.get("SELECT id, username, email FROM users WHERE email = ?", [email.trim()], (err, user) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!user) {
+            // To prevent email enumeration, return a generic success message
+            return res.json({ success: true, message: "If the email is registered, a password reset link has been sent." });
+        }
+
+        const token = crypto.randomBytes(32).toString('hex');
+        const expiresAt = Date.now() + 1 * 60 * 60 * 1000; // 1 hour
+
+        db.run(
+            "INSERT OR REPLACE INTO password_reset_tokens (user_id, token, expires_at) VALUES (?, ?, ?)",
+            [user.id, token, expiresAt],
+            (err) => {
+                if (err) return res.status(500).json({ error: err.message });
+
+                // Simulate sending email
+                console.log(`\n==================================================================`);
+                console.log(`[EMAIL SIMULATOR] Sending Password Reset Token to ${user.email}`);
+                console.log(`Reset URL: http://localhost:${PORT}/reset-password.html?token=${token}`);
+                console.log(`==================================================================\n`);
+
+                logSecurityEvent('RESET_REQUESTED', req.ip, user.id, user.username, 'Password reset link sent');
+                res.json({ success: true, message: "If the email is registered, a password reset link has been sent." });
+            }
+        );
+    });
+});
+
+// Reset Password Completion with Complexity Check
+app.post('/api/auth/reset-password', (req, res) => {
+    const { token, password } = req.body;
+    if (!token || !password) {
+        return res.status(400).json({ success: false, message: "Token and new password are required." });
+    }
+
+    // Password Complexity Regex: min 8 characters, at least 1 uppercase, 1 lowercase, 1 number, 1 special character
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    if (!passwordRegex.test(password)) {
+        return res.status(400).json({
+            success: false,
+            message: "Password does not meet security requirements. It must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character."
+        });
+    }
+
+    db.get("SELECT user_id, expires_at FROM password_reset_tokens WHERE token = ?", [token.trim()], (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!row) {
+            return res.status(400).json({ success: false, message: "Invalid or expired reset token." });
+        }
+
+        if (Date.now() > row.expires_at) {
+            db.run("DELETE FROM password_reset_tokens WHERE user_id = ?", [row.user_id]);
+            return res.status(400).json({ success: false, message: "Reset token has expired. Please request a new link." });
+        }
+
+        const hash = bcrypt.hashSync(password, 10);
+        db.serialize(() => {
+            db.run("UPDATE users SET password = ? WHERE id = ?", [hash, row.user_id]);
+            db.run("DELETE FROM password_reset_tokens WHERE user_id = ?", [row.user_id]);
+            
+            db.get("SELECT username FROM users WHERE id = ?", [row.user_id], (err, userRow) => {
+                const username = userRow ? userRow.username : null;
+                logSecurityEvent('PASSWORD_RESET', req.ip, row.user_id, username, 'Password reset completed successfully');
+                console.log(`[PASSWORD RESET] User ID ${row.user_id} password reset successfully.`);
+                res.json({ success: true, message: "Password has been reset successfully! You can now log in with your new password." });
+            });
+        });
     });
 });
 
@@ -349,6 +594,12 @@ app.post('/api/classes', authenticateToken, (req, res) => {
 
 // Teacher API: Get classes for teacher (with optional attendance counts)
 app.get('/api/classes/:teacher_id', authenticateToken, (req, res) => {
+    const reqTeacherId = parseInt(req.params.teacher_id, 10);
+    if (req.user.role !== 'hod' && req.user.role !== 'coordinator' && req.user.id !== reqTeacherId) {
+        logSecurityEvent('IDOR_ATTEMPT', req.ip, req.user.id, req.user.username, `Blocked IDOR: attempt to fetch classes of teacher ID ${reqTeacherId}`);
+        return res.status(403).json({ success: false, message: "Unauthorized access: You can only view your own classes." });
+    }
+
     const withCounts = req.query.with_counts === 'true';
     if (withCounts) {
         const query = `
@@ -358,12 +609,12 @@ app.get('/api/classes/:teacher_id', authenticateToken, (req, res) => {
             WHERE c.teacher_id = ?
             ORDER BY c.id DESC
         `;
-        db.all(query, [req.params.teacher_id], (err, rows) => {
+        db.all(query, [reqTeacherId], (err, rows) => {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ classes: rows });
         });
     } else {
-        db.all("SELECT * FROM classes WHERE teacher_id = ? ORDER BY id DESC", [req.params.teacher_id], (err, rows) => {
+        db.all("SELECT * FROM classes WHERE teacher_id = ? ORDER BY id DESC", [reqTeacherId], (err, rows) => {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ classes: rows });
         });
@@ -378,11 +629,21 @@ app.post('/api/classes/:class_id/end', authenticateToken, (req, res) => {
     }
 
     const classId = parseInt(req.params.class_id);
-    db.run("UPDATE classes SET active = 0 WHERE id = ?", [classId], function(err) {
-        if (err) return res.status(500).json({ error: err.message });
 
-        // Run AI Analysis and Unverified Absence Alerts asynchronously
-        db.get("SELECT name FROM classes WHERE id = ?", [classId], (err, currentClass) => {
+    db.get("SELECT teacher_id FROM classes WHERE id = ?", [classId], (err, cls) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!cls) return res.status(404).json({ success: false, message: "Class session not found." });
+
+        if (req.user.role !== 'hod' && req.user.role !== 'coordinator' && cls.teacher_id !== req.user.id) {
+            logSecurityEvent('IDOR_ATTEMPT', req.ip, req.user.id, req.user.username, `Blocked IDOR: attempt to end class session ID ${classId} owned by teacher ID ${cls.teacher_id}`);
+            return res.status(403).json({ success: false, message: "Unauthorized access: You do not own this class session." });
+        }
+
+        db.run("UPDATE classes SET active = 0 WHERE id = ?", [classId], function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+
+            // Run AI Analysis and Unverified Absence Alerts asynchronously
+            db.get("SELECT name FROM classes WHERE id = ?", [classId], (err, currentClass) => {
             if (err || !currentClass) return;
 
             // 1. Unverified Absence Analysis (Alert coordinator and mark student as absent)
@@ -445,6 +706,7 @@ app.post('/api/classes/:class_id/end', authenticateToken, (req, res) => {
         });
 
         res.json({ success: true, message: "Class session ended successfully!" });
+    });
     });
 });
 
@@ -640,25 +902,46 @@ app.post('/api/alerts/dismiss-all', authenticateToken, (req, res) => {
 
 // Teacher API: Get attendance for a specific class (only present students)
 app.get('/api/attendance/:class_id', authenticateToken, (req, res) => {
-    const query = `
-        SELECT u.id as student_id, u.username, a.timestamp, a.request_lat, a.request_lon 
-        FROM attendance a
-        JOIN users u ON a.student_id = u.id
-        WHERE a.class_id = ? AND a.status = 'present'
-        ORDER BY a.timestamp DESC
-    `;
-    db.all(query, [req.params.class_id], (err, rows) => {
+    const classId = req.params.class_id;
+    db.get("SELECT teacher_id FROM classes WHERE id = ?", [classId], (err, cls) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json({ attendance: rows });
+        if (!cls) return res.status(404).json({ error: "Class session not found." });
+
+        if (req.user.role !== 'hod' && req.user.role !== 'coordinator' && cls.teacher_id !== req.user.id) {
+            logSecurityEvent('IDOR_ATTEMPT', req.ip, req.user.id, req.user.username, `Blocked IDOR: attempt to view attendance for class session ID ${classId} owned by teacher ID ${cls.teacher_id}`);
+            return res.status(403).json({ success: false, message: "Unauthorized access." });
+        }
+
+        const query = `
+            SELECT u.id as student_id, u.username, a.timestamp, a.request_lat, a.request_lon 
+            FROM attendance a
+            JOIN users u ON a.student_id = u.id
+            WHERE a.class_id = ? AND a.status = 'present'
+            ORDER BY a.timestamp DESC
+        `;
+        db.all(query, [classId], (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ attendance: rows });
+        });
     });
 });
 
 // Teacher API: Get current Dynamic QR Code token
 app.get('/api/classes/:class_id/token', authenticateToken, (req, res) => {
     const classId = req.params.class_id;
-    db.get("SELECT token_secret FROM classes WHERE id = ?", [classId], (err, row) => {
+    if (req.user.role !== 'teacher' && req.user.role !== 'hod' && req.user.role !== 'coordinator') {
+        logSecurityEvent('IDOR_ATTEMPT', req.ip, req.user.id, req.user.username, `Blocked IDOR: non-teacher attempted to access class token for class ID ${classId}`);
+        return res.status(403).json({ success: false, message: "Unauthorized access." });
+    }
+
+    db.get("SELECT token_secret, teacher_id FROM classes WHERE id = ?", [classId], (err, row) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!row) return res.status(404).json({ error: "Class not found" });
+
+        if (req.user.role !== 'hod' && req.user.role !== 'coordinator' && row.teacher_id !== req.user.id) {
+            logSecurityEvent('IDOR_ATTEMPT', req.ip, req.user.id, req.user.username, `Blocked IDOR: attempt to access class token for class ID ${classId} owned by teacher ID ${row.teacher_id}`);
+            return res.status(403).json({ success: false, message: "Unauthorized access." });
+        }
         
         const timeIndex = Math.floor(Date.now() / 15000); // 15-second intervals
         const token = crypto.createHmac('sha256', row.token_secret || 'fallback_secret')
@@ -676,22 +959,32 @@ app.post('/api/mark-barcode', authenticateToken, (req, res) => {
     }
 
     const { class_id, barcode } = req.body;
-    db.get("SELECT id, username FROM users WHERE barcode = ?", [barcode], (err, student) => {
+    db.get("SELECT teacher_id FROM classes WHERE id = ?", [class_id], (err, cls) => {
         if (err) return res.status(500).json({ error: err.message });
-        if (!student) return res.status(404).json({ success: false, message: "Barcode not registered to any student." });
+        if (!cls) return res.status(404).json({ success: false, message: "Class session not found." });
 
-        db.run("INSERT INTO attendance (class_id, student_id, status) VALUES (?, ?, 'present')", [class_id, student.id], function(err) {
-            if (err) {
-                if (err.message.includes("UNIQUE")) {
-                    db.run("UPDATE attendance SET status = 'present' WHERE class_id = ? AND student_id = ?", [class_id, student.id], function(updateErr) {
-                        if (updateErr) return res.status(500).json({ error: updateErr.message });
-                        return res.json({ success: true, message: `Attendance updated to Present for ${student.username}.` });
-                    });
-                    return;
+        if (req.user.role !== 'hod' && req.user.role !== 'coordinator' && cls.teacher_id !== req.user.id) {
+            logSecurityEvent('IDOR_ATTEMPT', req.ip, req.user.id, req.user.username, `Blocked IDOR: attempt to mark barcode for class session ID ${class_id} owned by teacher ID ${cls.teacher_id}`);
+            return res.status(403).json({ success: false, message: "Unauthorized access." });
+        }
+
+        db.get("SELECT id, username FROM users WHERE barcode = ?", [barcode], (err, student) => {
+            if (err) return res.status(500).json({ error: err.message });
+            if (!student) return res.status(404).json({ success: false, message: "Barcode not registered to any student." });
+
+            db.run("INSERT INTO attendance (class_id, student_id, status) VALUES (?, ?, 'present')", [class_id, student.id], function(err) {
+                if (err) {
+                    if (err.message.includes("UNIQUE")) {
+                        db.run("UPDATE attendance SET status = 'present' WHERE class_id = ? AND student_id = ?", [class_id, student.id], function(updateErr) {
+                            if (updateErr) return res.status(500).json({ error: updateErr.message });
+                            return res.json({ success: true, message: `Attendance updated to Present for ${student.username}.` });
+                        });
+                        return;
+                    }
+                    return res.status(500).json({ error: err.message });
                 }
-                return res.status(500).json({ error: err.message });
-            }
-            res.json({ success: true, message: `Attendance marked for ${student.username}.` });
+                res.json({ success: true, message: `Attendance marked for ${student.username}.` });
+            });
         });
     });
 });
@@ -808,9 +1101,19 @@ app.post('/api/request-approval', authenticateToken, (req, res) => {
 // Teacher API: Get pending approval requests
 app.get('/api/pending-requests/:class_id', authenticateToken, (req, res) => {
     const classId = req.params.class_id;
-    db.get("SELECT latitude, longitude, radius FROM classes WHERE id = ?", [classId], (err, cls) => {
+    if (req.user.role !== 'teacher' && req.user.role !== 'hod' && req.user.role !== 'coordinator') {
+        logSecurityEvent('IDOR_ATTEMPT', req.ip, req.user.id, req.user.username, `Blocked IDOR: student attempted to access pending requests for class ID ${classId}`);
+        return res.status(403).json({ success: false, message: "Unauthorized access." });
+    }
+
+    db.get("SELECT latitude, longitude, radius, teacher_id FROM classes WHERE id = ?", [classId], (err, cls) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!cls) return res.status(404).json({ error: "Class not found" });
+
+        if (req.user.role !== 'hod' && req.user.role !== 'coordinator' && cls.teacher_id !== req.user.id) {
+            logSecurityEvent('IDOR_ATTEMPT', req.ip, req.user.id, req.user.username, `Blocked IDOR: attempt to view pending requests for class ID ${classId} owned by teacher ID ${cls.teacher_id}`);
+            return res.status(403).json({ success: false, message: "Unauthorized access." });
+        }
 
         const query = `
             SELECT a.id as attendance_id, u.username, u.id as student_id, a.request_lat, a.request_lon, a.timestamp 
@@ -845,17 +1148,27 @@ app.post('/api/approve-request', authenticateToken, (req, res) => {
     }
 
     const { class_id, student_id } = req.body;
-    db.run(
-        "UPDATE attendance SET status = 'present' WHERE class_id = ? AND student_id = ? AND status = 'pending'",
-        [class_id, student_id],
-        function(err) {
-            if (err) return res.status(500).json({ error: err.message });
-            if (this.changes === 0) {
-                return res.status(404).json({ success: false, message: "No pending request found for this student." });
-            }
-            res.json({ success: true, message: "Student approved successfully!" });
+    db.get("SELECT teacher_id FROM classes WHERE id = ?", [class_id], (err, cls) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!cls) return res.status(404).json({ success: false, message: "Class not found" });
+
+        if (req.user.role !== 'hod' && req.user.role !== 'coordinator' && cls.teacher_id !== req.user.id) {
+            logSecurityEvent('IDOR_ATTEMPT', req.ip, req.user.id, req.user.username, `Blocked IDOR: attempt to approve request for class ID ${class_id} owned by teacher ID ${cls.teacher_id}`);
+            return res.status(403).json({ success: false, message: "Unauthorized access." });
         }
-    );
+
+        db.run(
+            "UPDATE attendance SET status = 'present' WHERE class_id = ? AND student_id = ? AND status = 'pending'",
+            [class_id, student_id],
+            function(err) {
+                if (err) return res.status(500).json({ error: err.message });
+                if (this.changes === 0) {
+                    return res.status(404).json({ success: false, message: "No pending request found for this student." });
+                }
+                res.json({ success: true, message: "Student approved successfully!" });
+            }
+        );
+    });
 });
 
 // Teacher API: Decline a student request (deletes the pending record)
@@ -865,14 +1178,24 @@ app.post('/api/decline-request', authenticateToken, (req, res) => {
     }
 
     const { class_id, student_id } = req.body;
-    db.run(
-        "DELETE FROM attendance WHERE class_id = ? AND student_id = ? AND status = 'pending'",
-        [class_id, student_id],
-        function(err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ success: true, message: "Request declined successfully." });
+    db.get("SELECT teacher_id FROM classes WHERE id = ?", [class_id], (err, cls) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!cls) return res.status(404).json({ success: false, message: "Class not found" });
+
+        if (req.user.role !== 'hod' && req.user.role !== 'coordinator' && cls.teacher_id !== req.user.id) {
+            logSecurityEvent('IDOR_ATTEMPT', req.ip, req.user.id, req.user.username, `Blocked IDOR: attempt to decline request for class ID ${class_id} owned by teacher ID ${cls.teacher_id}`);
+            return res.status(403).json({ success: false, message: "Unauthorized access." });
         }
-    );
+
+        db.run(
+            "DELETE FROM attendance WHERE class_id = ? AND student_id = ? AND status = 'pending'",
+            [class_id, student_id],
+            function(err) {
+                if (err) return res.status(500).json({ error: err.message });
+                res.json({ success: true, message: "Request declined successfully." });
+            }
+        );
+    });
 });
 
 
@@ -1156,17 +1479,27 @@ app.post('/api/teacher/generate-otp', authenticateToken, (req, res) => {
         return res.status(400).json({ success: false, message: "Missing class_id or student_id." });
     }
 
-    // Generate a random 4-digit code (padded with zeros)
-    const otp = Math.floor(1000 + Math.random() * 9000).toString();
+    db.get("SELECT teacher_id FROM classes WHERE id = ?", [class_id], (err, cls) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!cls) return res.status(404).json({ success: false, message: "Class session not found." });
 
-    db.run(
-        "INSERT OR REPLACE INTO otp_codes (student_id, class_id, otp_code, timestamp) VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
-        [student_id, class_id, otp],
-        function(err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ success: true, otp, expires_in: 60 });
+        if (req.user.role !== 'hod' && req.user.role !== 'coordinator' && cls.teacher_id !== req.user.id) {
+            logSecurityEvent('IDOR_ATTEMPT', req.ip, req.user.id, req.user.username, `Blocked IDOR: attempt to generate OTP for class ID ${class_id} owned by teacher ID ${cls.teacher_id}`);
+            return res.status(403).json({ success: false, message: "Unauthorized access." });
         }
-    );
+
+        // Generate a random 4-digit code (padded with zeros)
+        const otp = Math.floor(1000 + Math.random() * 9000).toString();
+
+        db.run(
+            "INSERT OR REPLACE INTO otp_codes (student_id, class_id, otp_code, timestamp) VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
+            [student_id, class_id, otp],
+            function(err) {
+                if (err) return res.status(500).json({ error: err.message });
+                res.json({ success: true, otp, expires_in: 60 });
+            }
+        );
+    });
 });
 
 // Deterministic Time-based OTP (TOTP) verification helper for student-generated codes
@@ -1197,28 +1530,38 @@ app.post('/api/teacher/verify-student-otp', authenticateToken, (req, res) => {
         return res.status(400).json({ success: false, message: "Missing student_id, otp_code, or class_id." });
     }
 
-    if (!verifyStudentLocalOTP(student_id, otp_code)) {
-        return res.status(400).json({ success: false, message: "Incorrect or expired student OTP. Ask student for a fresh code." });
-    }
+    db.get("SELECT teacher_id FROM classes WHERE id = ?", [class_id], (err, cls) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!cls) return res.status(404).json({ success: false, message: "Class session not found." });
 
-    // OTP verified! Mark student present
-    db.run(
-        "INSERT OR REPLACE INTO attendance (class_id, student_id, status) VALUES (?, ?, 'present')",
-        [class_id, student_id],
-        function(err) {
-            if (err) {
-                if (err.message.includes("UNIQUE")) {
-                    db.run("UPDATE attendance SET status = 'present' WHERE class_id = ? AND student_id = ? AND status = 'pending'", [class_id, student_id], function(updateErr) {
-                        if (updateErr) return res.status(500).json({ error: updateErr.message });
-                        return res.json({ success: true, message: "OTP verified! Student marked present." });
-                    });
-                    return;
-                }
-                return res.status(500).json({ error: err.message });
-            }
-            res.json({ success: true, message: "Student OTP verified! Attendance marked successfully." });
+        if (req.user.role !== 'hod' && req.user.role !== 'coordinator' && cls.teacher_id !== req.user.id) {
+            logSecurityEvent('IDOR_ATTEMPT', req.ip, req.user.id, req.user.username, `Blocked IDOR: attempt to verify student OTP for class ID ${class_id} owned by teacher ID ${cls.teacher_id}`);
+            return res.status(403).json({ success: false, message: "Unauthorized access." });
         }
-    );
+
+        if (!verifyStudentLocalOTP(student_id, otp_code)) {
+            return res.status(400).json({ success: false, message: "Incorrect or expired student OTP. Ask student for a fresh code." });
+        }
+
+        // OTP verified! Mark student present
+        db.run(
+            "INSERT OR REPLACE INTO attendance (class_id, student_id, status) VALUES (?, ?, 'present')",
+            [class_id, student_id],
+            function(err) {
+                if (err) {
+                    if (err.message.includes("UNIQUE")) {
+                        db.run("UPDATE attendance SET status = 'present' WHERE class_id = ? AND student_id = ? AND status = 'pending'", [class_id, student_id], function(updateErr) {
+                            if (updateErr) return res.status(500).json({ error: updateErr.message });
+                            return res.json({ success: true, message: "OTP verified! Student marked present." });
+                        });
+                        return;
+                    }
+                    return res.status(500).json({ error: err.message });
+                }
+                res.json({ success: true, message: "Student OTP verified! Attendance marked successfully." });
+            }
+        );
+    });
 });
 
 // Student API: Heartbeat telemetry, campus geofence validation, and dynamic location tracking
@@ -1875,8 +2218,20 @@ const useHttps = process.env.USE_HTTPS === 'true';
 
 // ─── Logout Endpoint ─────────────────────────────────────────────────────────
 app.post('/api/logout', authenticateToken, (req, res) => {
-    console.log(`[LOGOUT] User "${req.user.username}" (role: ${req.user.role}) logged out at ${new Date().toISOString()}`);
-    res.json({ success: true, message: 'Logged out successfully.' });
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    
+    if (token) {
+        const expiresAt = Date.now() + 12 * 60 * 60 * 1000; // 12h expiry fallback
+        db.run("INSERT OR IGNORE INTO token_blacklist (token, expires_at) VALUES (?, ?)", [token, expiresAt], (err) => {
+            if (err) console.error('[DB] Blacklist token fail:', err.message);
+            logSecurityEvent('AUTH_LOGOUT', req.ip, req.user.id, req.user.username, 'User logged out and token blacklisted');
+            console.log(`[LOGOUT] User "${req.user.username}" (role: ${req.user.role}) logged out and token blacklisted.`);
+            res.json({ success: true, message: 'Logged out successfully.' });
+        });
+    } else {
+        res.json({ success: true, message: 'Logged out successfully.' });
+    }
 });
 app.get('/api/logout', (req, res) => {
     res.json({ success: true, message: 'Logged out.' });
@@ -1917,6 +2272,16 @@ app.post('/api/alerts/biometric-breach', (req, res) => {
     });
 });
 // ─────────────────────────────────────────────────────────────────────────────
+
+// Global Error Handler Middleware (OWASP Secure Error Handling)
+app.use((err, req, res, next) => {
+    const errorDetails = `Error: ${err.message}\nStack: ${err.stack}`;
+    logSecurityEvent('API_ERROR', req.ip, req.user ? req.user.id : null, req.user ? req.user.username : null, errorDetails.substring(0, 500));
+    console.error(`[SERVER ERROR] ${err.message}\nStack:\n`, err.stack);
+    
+    // Prevent sensitive internal details leakage to frontend client
+    res.status(500).json({ success: false, message: "❌ Internal Server Error. Please contact admin." });
+});
 
 if (isRender || !useHttps) {
     // Start standard HTTP server (default for local development and cloud hosting)

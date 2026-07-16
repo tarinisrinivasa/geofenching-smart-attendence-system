@@ -434,6 +434,20 @@ var safeStorage = {
     removeItem: function(k) { try { localStorage.removeItem(k); } catch(e) { try { sessionStorage.removeItem(k); } catch(e2) {} } }
 };
 
+// Early redirection check for already logged-in users to prevent auth screen exposure
+const savedToken = safeStorage.getItem('token');
+const savedUser = safeStorage.getItem('user');
+if (savedToken && savedUser) {
+    try {
+        const u = JSON.parse(savedUser);
+        const pages = { hod: 'hod.html', coordinator: 'coordinator.html', teacher: 'teacher.html', student: 'student.html' };
+        const target = pages[u.role];
+        if (target) {
+            window.location.replace(target + '?v=3');
+        }
+    } catch(e) {}
+}
+
 // Pending login data (token + user held until biometric passes)
 let pendingToken = null;
 let pendingUser = null;

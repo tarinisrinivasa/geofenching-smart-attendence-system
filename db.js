@@ -45,7 +45,9 @@ const db = new sqlite3.Database(dbPath, (err) => {
             attendance_locked INTEGER DEFAULT 0,
             student_phone TEXT,
             last_lat REAL,
-            last_lon REAL
+            last_lon REAL,
+            email TEXT UNIQUE,
+            is_email_verified INTEGER DEFAULT 0
         )`, (err) => { if (err) console.error('[DB] Error creating users table:', err.message); });
 
         db.run(`CREATE TABLE IF NOT EXISTS classes (
@@ -103,6 +105,33 @@ const db = new sqlite3.Database(dbPath, (err) => {
             notified_expired INTEGER DEFAULT 0
         )`, (err) => { if (err) console.error('[DB] Error creating student_passes table:', err.message); });
 
+        db.run(`CREATE TABLE IF NOT EXISTS token_blacklist (
+            token TEXT PRIMARY KEY,
+            expires_at INTEGER
+        )`, (err) => { if (err) console.error('[DB] Error creating token_blacklist table:', err.message); });
+
+        db.run(`CREATE TABLE IF NOT EXISTS email_verification_tokens (
+            user_id INTEGER PRIMARY KEY,
+            token TEXT,
+            expires_at INTEGER
+        )`, (err) => { if (err) console.error('[DB] Error creating email_verification_tokens table:', err.message); });
+
+        db.run(`CREATE TABLE IF NOT EXISTS password_reset_tokens (
+            user_id INTEGER PRIMARY KEY,
+            token TEXT,
+            expires_at INTEGER
+        )`, (err) => { if (err) console.error('[DB] Error creating password_reset_tokens table:', err.message); });
+
+        db.run(`CREATE TABLE IF NOT EXISTS security_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_type TEXT,
+            ip TEXT,
+            user_id INTEGER,
+            username TEXT,
+            details TEXT,
+            timestamp TEXT DEFAULT (datetime('now', 'localtime'))
+        )`, (err) => { if (err) console.error('[DB] Error creating security_logs table:', err.message); });
+
         db.run(`CREATE TABLE IF NOT EXISTS classrooms (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT UNIQUE,
@@ -158,6 +187,8 @@ const db = new sqlite3.Database(dbPath, (err) => {
         safeAlter("ALTER TABLE users ADD COLUMN student_phone TEXT");
         safeAlter("ALTER TABLE users ADD COLUMN last_lat REAL");
         safeAlter("ALTER TABLE users ADD COLUMN last_lon REAL");
+        safeAlter("ALTER TABLE users ADD COLUMN email TEXT");
+        safeAlter("ALTER TABLE users ADD COLUMN is_email_verified INTEGER DEFAULT 0");
         safeAlter("ALTER TABLE alerts ADD COLUMN class_id INTEGER");
         safeAlter("ALTER TABLE alerts ADD COLUMN student_reason TEXT");
         safeAlter("ALTER TABLE alerts ADD COLUMN latitude REAL");
@@ -206,8 +237,8 @@ const db = new sqlite3.Database(dbPath, (err) => {
                     for (let i = 1; i <= 5; i++) {
                         const hash = bcrypt.hashSync('hod123', 10);
                         db.run(
-                            'INSERT INTO users (username, password, role) VALUES (?,?,?)',
-                            [`hod${i}`, hash, 'hod'],
+                            'INSERT INTO users (username, password, role, email, is_email_verified) VALUES (?,?,?,?,1)',
+                            [`hod${i}`, hash, 'hod', `hod${i}@college.edu`],
                             (e) => { if (e) console.error(`[DB] Failed to seed hod${i}:`, e.message); }
                         );
                     }
@@ -216,8 +247,8 @@ const db = new sqlite3.Database(dbPath, (err) => {
                     for (let i = 1; i <= 10; i++) {
                         const hash = bcrypt.hashSync('teacher123', 10);
                         db.run(
-                            'INSERT INTO users (username, password, role) VALUES (?,?,?)',
-                            [`teacher${i}`, hash, 'teacher'],
+                            'INSERT INTO users (username, password, role, email, is_email_verified) VALUES (?,?,?,?,1)',
+                            [`teacher${i}`, hash, 'teacher', `teacher${i}@college.edu`],
                             (e) => { if (e) console.error(`[DB] Failed to seed teacher${i}:`, e.message); }
                         );
                     }
@@ -226,8 +257,8 @@ const db = new sqlite3.Database(dbPath, (err) => {
                     for (let i = 1; i <= 6; i++) {
                         const hash = bcrypt.hashSync('coordinator123', 10);
                         db.run(
-                            'INSERT INTO users (username, password, role, coordinator_class_id) VALUES (?,?,?,?)',
-                            [`coordinator${i}`, hash, 'coordinator', i],
+                            'INSERT INTO users (username, password, role, coordinator_class_id, email, is_email_verified) VALUES (?,?,?,?,?,1)',
+                            [`coordinator${i}`, hash, 'coordinator', i, `coordinator${i}@college.edu`],
                             (e) => { if (e) console.error(`[DB] Failed to seed coordinator${i}:`, e.message); }
                         );
                     }
@@ -237,13 +268,14 @@ const db = new sqlite3.Database(dbPath, (err) => {
                         const hash = bcrypt.hashSync('student123', 10);
                         const isKeypad = (i === 20) ? 1 : 0;
                         db.run(
-                            'INSERT INTO users (username, password, role, barcode, parent_phone, student_phone, is_keypad) VALUES (?,?,?,?,?,?,?)',
+                            'INSERT INTO users (username, password, role, barcode, parent_phone, student_phone, is_keypad, email, is_email_verified) VALUES (?,?,?,?,?,?,?,?,1)',
                             [
                                 `student${i}`, hash, 'student',
                                 `STU1${i < 10 ? '0' + i : i}`,
                                 `+91 90123 456${i < 10 ? '0' + i : i}`,
                                 `+91 99887 766${i < 10 ? '0' + i : i}`,
-                                isKeypad
+                                isKeypad,
+                                `student${i}@college.edu`
                             ],
                             (e) => { if (e) console.error(`[DB] Failed to seed student${i}:`, e.message); }
                         );
