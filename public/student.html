@@ -1193,19 +1193,19 @@ function startHeartbeat() {
                 payload.accuracy = pos.coords.accuracy;
                 
                 const res = await api('/api/student/heartbeat', 'POST', payload);
-                handleHeartbeatResponse(res);
+                handleHeartbeatResponse(res, pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
             }, async () => {
                 // Silent fail/GPSError fallback
                 const res = await api('/api/student/heartbeat', 'POST');
-                handleHeartbeatResponse(res);
+                handleHeartbeatResponse(res, null, null, null);
             }, { enableHighAccuracy: enableHighAccuracy, timeout: 10000 });
         } else {
             const res = await api('/api/student/heartbeat', 'POST');
-            handleHeartbeatResponse(res);
+            handleHeartbeatResponse(res, null, null, null);
         }
     };
 
-    function handleHeartbeatResponse(res) {
+    function handleHeartbeatResponse(res, lat, lon, accuracy) {
         if (res && res.success) {
             trackActive = res.track_active !== false;
             enableHighAccuracy = res.enable_high_accuracy !== false;
@@ -1215,6 +1215,52 @@ function startHeartbeat() {
                 currentHeartbeatIntervalMs = newInterval;
                 clearInterval(heartbeatInterval);
                 heartbeatInterval = setInterval(beat, currentHeartbeatIntervalMs);
+            }
+
+            // ── Update Campus Status Card ──
+            const card = document.getElementById('campusCard');
+            const content = document.getElementById('campusStatusContent');
+            if (card && content) {
+                card.style.display = 'block';
+                const inside = res.inside_campus !== false;
+                const dist = res.distance_from_campus || 0;
+                const radius = res.campus_radius || 500;
+                const hasPass = res.has_pass;
+                const timeNow = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+                let statusIcon, statusText, statusColor, borderColor;
+                if (hasPass) {
+                    statusIcon = '🟡';
+                    statusText = 'Out-Pass Active';
+                    statusColor = '#f59e0b';
+                    borderColor = 'rgba(245,158,11,0.35)';
+                } else if (inside) {
+                    statusIcon = '🟢';
+                    statusText = 'Inside Campus';
+                    statusColor = 'var(--green)';
+                    borderColor = 'rgba(16,185,129,0.3)';
+                } else {
+                    statusIcon = '🔴';
+                    statusText = 'Outside Campus';
+                    statusColor = 'var(--red, #ef4444)';
+                    borderColor = 'rgba(239,68,68,0.35)';
+                }
+
+                card.style.borderColor = borderColor;
+                content.innerHTML = `
+                    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                        <div style="font-size:36px;line-height:1;">${statusIcon}</div>
+                        <div style="flex:1;min-width:140px;">
+                            <div style="font-size:15px;font-weight:800;color:${statusColor};">${statusText}</div>
+                            <div style="font-size:11px;color:var(--text2);margin-top:2px;">
+                                Distance from campus: <strong>${dist}m</strong> / radius: ${radius}m
+                            </div>
+                            ${lat !== null ? `<div style="font-size:10px;color:var(--text3);margin-top:2px;">📍 ${lat.toFixed(5)}, ${lon.toFixed(5)}${accuracy ? ` ±${Math.round(accuracy)}m` : ''}</div>` : '<div style="font-size:10px;color:var(--text3);margin-top:2px;">📡 GPS not available — approximate</div>'}
+                            ${hasPass ? `<div style="font-size:10px;color:#f59e0b;margin-top:3px;font-weight:600;">🪪 Out-pass granted — alerts suppressed</div>` : ''}
+                        </div>
+                        <div style="font-size:10px;color:var(--text3);white-space:nowrap;">Updated ${timeNow}</div>
+                    </div>
+                `;
             }
         }
     }

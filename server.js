@@ -1669,6 +1669,10 @@ app.post('/api/student/heartbeat', authenticateToken, (req, res) => {
                 res.json({
                     success: true,
                     track_active: track_active,
+                    inside_campus: inside_campus,
+                    distance_from_campus: Math.round(distance),
+                    campus_radius: settings.campus_radius,
+                    has_pass: !!has_pass,
                     enable_high_accuracy: settings.exact_live_tracking === 1,
                     interval_ms: settings.exact_live_tracking === 1 ? 10000 : 25000,
                     message: "Telemetry processed successfully."

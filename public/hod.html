@@ -556,6 +556,8 @@
             }
         }
 
+        let trackingAutoRefreshInterval = null;
+
         function initNavigation() {
             document.querySelectorAll('.nav-tab').forEach(tab => {
                 tab.addEventListener('click', () => {
@@ -580,12 +582,23 @@
                         }
                     }
 
-                    if (pageId === 'page-tracking') loadTracking();
+                    // Stop any existing tracking auto-refresh
+                    if (trackingAutoRefreshInterval) {
+                        clearInterval(trackingAutoRefreshInterval);
+                        trackingAutoRefreshInterval = null;
+                    }
+
+                    if (pageId === 'page-tracking') {
+                        loadTracking();
+                        // Auto-refresh live tracking every 15 seconds
+                        trackingAutoRefreshInterval = setInterval(loadTracking, 15000);
+                    }
                     if (pageId === 'page-anomalies') loadAnomalies();
                     if (pageId === 'page-outpass') { loadOutpasses(); loadStudents(); }
                 });
             });
         }
+
 
         // ── Campus Settings ──
         async function loadCampusSettings() {
@@ -708,31 +721,49 @@
                     container.innerHTML = `<div style="text-align:center; color:var(--text3); font-size:13px; padding:20px;">No students active on campus.</div>`;
                     return;
                 }
+
+                const now = Date.now();
                 container.innerHTML = res.students.map(s => {
                     let badgeClass = 'badge-yellow';
-                    if (s.status === 'Active & Guarded') badgeClass = 'badge-green';
+                    let pulseHtml = '';
+                    if (s.status === 'Active & Guarded') { badgeClass = 'badge-green'; pulseHtml = `<span class="pulse-dot" style="margin-left:6px;vertical-align:middle;"></span>`; }
                     if (s.status === 'Geofence Breach' || s.status.includes('Offline')) badgeClass = 'badge-red';
+
+                    // Only show location for recently-active students (seen within 5 min)
+                    const isRecent = s.last_seen && ((now - new Date(s.last_seen).getTime()) < 5 * 60 * 1000);
+                    const showLocation = s.last_lat && s.last_lon && isRecent;
+
+                    // Human-readable last-seen
+                    let lastSeenText = 'Never';
+                    if (s.last_seen) {
+                        const secsAgo = Math.round((now - new Date(s.last_seen).getTime()) / 1000);
+                        if (secsAgo < 60) lastSeenText = `${secsAgo}s ago`;
+                        else if (secsAgo < 3600) lastSeenText = `${Math.round(secsAgo/60)}m ago`;
+                        else lastSeenText = new Date(s.last_seen).toLocaleTimeString('en-IN', {hour:'2-digit',minute:'2-digit'});
+                    }
 
                     return `
                         <div class="student-row">
                             <div class="student-info">
                                 <div class="student-avatar" style="${s.attendance_locked ? 'border: 2px solid var(--red)' : ''}">${s.username.charAt(0).toUpperCase()}</div>
                                 <div class="student-details">
-                                    <div class="student-name">${s.username}</div>
+                                    <div class="student-name">${s.username}${pulseHtml}</div>
                                     <div class="student-meta">
-                                        Campus status: <span class="badge ${badgeClass}">${s.status}</span>
-                                        ${s.last_lat && s.last_lon ? `
+                                        <span class="badge ${badgeClass}">${s.status}</span>
+                                        <span style="font-size:10px;color:var(--text3);margin-left:6px;">🕐 ${lastSeenText}</span>
+                                        ${showLocation ? `
                                             <div style="font-size:11px; color:var(--text3); margin-top:4px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-                                                <span>📍 Live: <strong>${s.last_lat.toFixed(5)}, ${s.last_lon.toFixed(5)}</strong></span>
-                                                <a href="https://www.google.com/maps?q=${s.last_lat},${s.last_lon}" target="_blank" style="color:var(--primary); text-decoration:none; font-weight:700; border-bottom:1px dashed var(--primary);">[View Map]</a>
+                                                <span>📍 <strong>${s.last_lat.toFixed(5)}, ${s.last_lon.toFixed(5)}</strong></span>
+                                                <a href="https://www.google.com/maps?q=${s.last_lat},${s.last_lon}" target="_blank" style="color:var(--primary); text-decoration:none; font-weight:700; border-bottom:1px dashed var(--primary);">[View on Map]</a>
                                             </div>
-                                        ` : ''}
+                                        ` : (s.last_lat && s.last_lon ? `<div style="font-size:10px;color:var(--text3);margin-top:3px;">📡 Location stale (>${lastSeenText})</div>` : '')}
+                                        ${s.tracking_alert ? `<div style="font-size:10px;color:var(--red,#ef4444);margin-top:3px;font-weight:600;">🚨 ${s.tracking_alert.substring(0,80)}…</div>` : ''}
                                     </div>
                                 </div>
                             </div>
                             <div class="student-actions">
                                 ${s.attendance_locked ? `
-                                    <button class="btn btn-danger btn-sm" data-action="unlock" data-id="${s.id}">🔓 Unlock privileges</button>
+                                    <button class="btn btn-danger btn-sm" data-action="unlock" data-id="${s.id}">🔓 Unlock</button>
                                 ` : ''}
                             </div>
                         </div>
@@ -740,6 +771,7 @@
                 }).join('');
             }
         }
+
 
         async function unlockStudent(studentId) {
             console.log(`[CLICK] unlockStudent called for Student ID: ${studentId}`);
