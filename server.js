@@ -1571,7 +1571,7 @@ app.post('/api/student/heartbeat', authenticateToken, (req, res) => {
     }
 
     const student_id = req.user.id;
-    const { latitude, longitude } = req.body;
+    const { latitude, longitude, battery_level, is_charging } = req.body;
 
     // 1. Fetch campus settings
     db.all("SELECT key, value FROM campus_settings", [], (err, rows) => {
@@ -1656,13 +1656,24 @@ app.post('/api/student/heartbeat', authenticateToken, (req, res) => {
                 }
             }
 
-            // 6. Update student telemetry/status in database
-            const updateSql = (track_active && latitude !== undefined && longitude !== undefined)
-                ? "UPDATE users SET last_seen = datetime('now', 'localtime'), last_lat = ?, last_lon = ? WHERE id = ?"
-                : "UPDATE users SET last_seen = datetime('now', 'localtime') WHERE id = ?";
-            const updateParams = (track_active && latitude !== undefined && longitude !== undefined)
-                ? [latitude, longitude, student_id]
-                : [student_id];
+            // 6. Update student telemetry/status in database (always update battery; update location only if tracking active and coords present)
+            let updateSql, updateParams;
+            const hasBattery = battery_level !== undefined && battery_level !== null;
+            const hasCoords  = track_active && latitude !== undefined && longitude !== undefined;
+
+            if (hasCoords && hasBattery) {
+                updateSql = "UPDATE users SET last_seen = datetime('now', 'localtime'), last_lat = ?, last_lon = ?, battery_level = ?, is_charging = ? WHERE id = ?";
+                updateParams = [latitude, longitude, Math.round(battery_level), is_charging ? 1 : 0, student_id];
+            } else if (hasCoords) {
+                updateSql = "UPDATE users SET last_seen = datetime('now', 'localtime'), last_lat = ?, last_lon = ? WHERE id = ?";
+                updateParams = [latitude, longitude, student_id];
+            } else if (hasBattery) {
+                updateSql = "UPDATE users SET last_seen = datetime('now', 'localtime'), battery_level = ?, is_charging = ? WHERE id = ?";
+                updateParams = [Math.round(battery_level), is_charging ? 1 : 0, student_id];
+            } else {
+                updateSql = "UPDATE users SET last_seen = datetime('now', 'localtime') WHERE id = ?";
+                updateParams = [student_id];
+            }
 
             db.run(updateSql, updateParams, function(err) {
                 if (err) return res.status(500).json({ error: err.message });
@@ -1922,7 +1933,8 @@ app.get('/api/hod/students-tracking', authenticateToken, (req, res) => {
     }
 
     const query = `
-        SELECT u.id, u.username, u.last_seen, u.attendance_locked, u.last_lat, u.last_lon, a.status as attendance_status,
+        SELECT u.id, u.username, u.last_seen, u.attendance_locked, u.last_lat, u.last_lon,
+               u.battery_level, u.is_charging, a.status as attendance_status,
                (SELECT message FROM alerts WHERE student_id = u.id ORDER BY id DESC LIMIT 1) as last_alert
         FROM users u
         LEFT JOIN attendance a ON a.student_id = u.id AND date(a.timestamp, 'localtime') = date('now', 'localtime')
@@ -1964,7 +1976,9 @@ app.get('/api/hod/students-tracking', authenticateToken, (req, res) => {
                 tracking_alert,
                 attendance_locked: r.attendance_locked,
                 last_lat: r.last_lat,
-                last_lon: r.last_lon
+                last_lon: r.last_lon,
+                battery_level: r.battery_level,
+                is_charging: r.is_charging
             };
         });
         
@@ -1991,7 +2005,9 @@ app.get('/api/coordinator/roster', authenticateToken, (req, res) => {
     }
 
     const query = `
-        SELECT u.id, u.username, u.barcode, u.is_keypad, u.last_seen, u.attendance_locked, u.student_phone, u.last_lat, u.last_lon, a.status as attendance_status,
+        SELECT u.id, u.username, u.barcode, u.is_keypad, u.last_seen, u.attendance_locked,
+               u.student_phone, u.last_lat, u.last_lon, u.battery_level, u.is_charging,
+               a.status as attendance_status,
                (SELECT message FROM alerts WHERE student_id = u.id ORDER BY id DESC LIMIT 1) as last_alert
         FROM users u
         LEFT JOIN attendance a ON a.student_id = u.id AND date(a.timestamp, 'localtime') = date('now', 'localtime')
@@ -2034,7 +2050,9 @@ app.get('/api/coordinator/roster', authenticateToken, (req, res) => {
                 attendance_locked: r.attendance_locked,
                 student_phone: r.student_phone,
                 last_lat: r.last_lat,
-                last_lon: r.last_lon
+                last_lon: r.last_lon,
+                battery_level: r.battery_level,
+                is_charging: r.is_charging
             };
         });
         res.json({ success: true, roster });

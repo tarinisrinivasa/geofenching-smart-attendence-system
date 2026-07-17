@@ -1185,6 +1185,15 @@ let enableHighAccuracy = true;
 function startHeartbeat() {
     const beat = async () => {
         const payload = {};
+
+        // Read battery status if supported (Chrome/Edge/Android, not Safari/Firefox)
+        try {
+            if (navigator.getBattery) {
+                const battery = await navigator.getBattery();
+                payload.battery_level = Math.round(battery.level * 100);
+                payload.is_charging = battery.charging ? 1 : 0;
+            }
+        } catch (e) { /* Battery API not supported — silently skip */ }
         
         if (trackActive && navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(async pos => {

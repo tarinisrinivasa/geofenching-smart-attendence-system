@@ -47,7 +47,9 @@ const db = new sqlite3.Database(dbPath, (err) => {
             last_lat REAL,
             last_lon REAL,
             email TEXT UNIQUE,
-            is_email_verified INTEGER DEFAULT 0
+            is_email_verified INTEGER DEFAULT 0,
+            battery_level INTEGER,
+            is_charging INTEGER DEFAULT 0
         )`, (err) => { if (err) console.error('[DB] Error creating users table:', err.message); });
 
         db.run(`CREATE TABLE IF NOT EXISTS classes (
@@ -189,6 +191,8 @@ const db = new sqlite3.Database(dbPath, (err) => {
         safeAlter("ALTER TABLE users ADD COLUMN last_lon REAL");
         safeAlter("ALTER TABLE users ADD COLUMN email TEXT");
         safeAlter("ALTER TABLE users ADD COLUMN is_email_verified INTEGER DEFAULT 0");
+        safeAlter("ALTER TABLE users ADD COLUMN battery_level INTEGER");
+        safeAlter("ALTER TABLE users ADD COLUMN is_charging INTEGER DEFAULT 0");
         safeAlter("ALTER TABLE alerts ADD COLUMN class_id INTEGER");
         safeAlter("ALTER TABLE alerts ADD COLUMN student_reason TEXT");
         safeAlter("ALTER TABLE alerts ADD COLUMN latitude REAL");

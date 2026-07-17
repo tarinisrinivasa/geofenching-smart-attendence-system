@@ -712,6 +712,31 @@
             }
         }
 
+        // ── Battery badge helper ──
+        function batteryHtml(level, charging) {
+            if (level === null || level === undefined) return '';
+            const pct = Math.max(0, Math.min(100, level));
+            let color, icon;
+            if (charging) { color = '#3b82f6'; icon = '⚡'; }
+            else if (pct <= 15) { color = '#ef4444'; icon = '🪫'; }
+            else if (pct <= 35) { color = '#f59e0b'; icon = '🔋'; }
+            else { color = '#10b981'; icon = '🔋'; }
+
+            const barWidth = pct;
+            return `
+                <span style="display:inline-flex;align-items:center;gap:5px;font-size:10px;color:${color};font-weight:700;margin-left:6px;">
+                    ${icon}
+                    <span style="display:inline-flex;align-items:center;gap:3px;">
+                        <span style="width:28px;height:10px;border:1.5px solid ${color};border-radius:3px;position:relative;display:inline-block;">
+                            <span style="display:block;height:100%;width:${barWidth}%;background:${color};border-radius:2px;transition:width 0.4s;"></span>
+                            <span style="position:absolute;right:-4px;top:50%;transform:translateY(-50%);width:3px;height:5px;background:${color};border-radius:0 1px 1px 0;"></span>
+                        </span>
+                        ${pct}%${charging ? ' ⚡' : ''}
+                    </span>
+                </span>
+            `;
+        }
+
         // ── Live tracking ──
         async function loadTracking() {
             const res = await api('/api/hod/students-tracking');
@@ -747,7 +772,9 @@
                             <div class="student-info">
                                 <div class="student-avatar" style="${s.attendance_locked ? 'border: 2px solid var(--red)' : ''}">${s.username.charAt(0).toUpperCase()}</div>
                                 <div class="student-details">
-                                    <div class="student-name">${s.username}${pulseHtml}</div>
+                                    <div class="student-name" style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;">
+                                        ${s.username}${pulseHtml}${batteryHtml(s.battery_level, s.is_charging)}
+                                    </div>
                                     <div class="student-meta">
                                         <span class="badge ${badgeClass}">${s.status}</span>
                                         <span style="font-size:10px;color:var(--text3);margin-left:6px;">🕐 ${lastSeenText}</span>
