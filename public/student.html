@@ -503,9 +503,12 @@
             </div>
         </div>
         <!-- Campus status -->
-        <div class="card" id="campusCard" style="display:none;">
-            <div class="card-title">📡 Campus Tracking</div>
-            <div id="campusStatusContent"></div>
+        <div class="card" id="campusCard" style="display:none; text-align: center;">
+            <div class="card-title" style="text-align: left;">📍 Campus Tracking</div>
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 15px; margin-top: 10px;">
+                <canvas id="radarCanvas" width="160" height="160" style="background: #090d16; border-radius: 50%; border: 2px solid rgba(59,130,246,0.25); box-shadow: 0 0 15px rgba(59,130,246,0.15);"></canvas>
+                <div id="campusStatusContent" style="width: 100%; text-align: left;"></div>
+            </div>
         </div>
 
         <!-- Active classes -->
@@ -762,6 +765,88 @@ let userLng = null;
 let userAccuracy = null;
 let qrScanner = null;
 let heartbeatInterval = null;
+
+// ── Radar scanner global state & animation loop ──
+let radarAngle = 0;
+let radarDist = 0;
+let radarRadius = 500;
+let radarInside = true;
+let radarAnimationId = null;
+
+function drawRadar() {
+    const canvas = document.getElementById('radarCanvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
+    const r = cx - 5;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Draw background grid circles
+    ctx.strokeStyle = 'rgba(59, 130, 246, 0.12)';
+    ctx.lineWidth = 1;
+    for (let d = 0.25; d <= 1; d += 0.25) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, r * d, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+
+    // Draw grid crosshairs
+    ctx.beginPath();
+    ctx.moveTo(cx - r, cy); ctx.lineTo(cx + r, cy);
+    ctx.moveTo(cx, cy - r); ctx.lineTo(cx, cy + r);
+    ctx.stroke();
+
+    // Draw sweep line
+    ctx.strokeStyle = 'rgba(59, 130, 246, 0.45)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + r * Math.cos(radarAngle), cy + r * Math.sin(radarAngle));
+    ctx.stroke();
+
+    // Draw sweep trail (gradient wedge)
+    ctx.fillStyle = 'rgba(59, 130, 246, 0.03)';
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, radarAngle - 0.25, radarAngle, false);
+    ctx.closePath();
+    ctx.fill();
+
+    // Update angle
+    radarAngle += 0.04;
+    if (radarAngle >= Math.PI * 2) radarAngle = 0;
+
+    // Draw center (College campus marker)
+    ctx.fillStyle = '#60a5fa';
+    ctx.beginPath();
+    ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(96, 165, 250, 0.2)';
+    ctx.beginPath();
+    ctx.arc(cx, cy, 8, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Draw student marker
+    const maxVal = Math.max(radarRadius, 100);
+    const plotDist = Math.min(1, radarDist / maxVal) * r;
+    const angleOffset = -Math.PI / 4; 
+    const sx = cx + plotDist * Math.cos(angleOffset);
+    const sy = cy + plotDist * Math.sin(angleOffset);
+
+    const markerColor = radarInside ? '#10b981' : '#ef4444';
+    ctx.fillStyle = markerColor;
+    ctx.beginPath();
+    ctx.arc(sx, sy, 4.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = markerColor + '33';
+    ctx.beginPath();
+    ctx.arc(sx, sy, 8, 0, Math.PI * 2);
+    ctx.fill();
+
+    radarAnimationId = requestAnimationFrame(drawRadar);
+}
 
 // ── Stable Device Fingerprint Helper ──
 function getStableFingerprint() {
@@ -1365,6 +1450,14 @@ function startHeartbeat() {
                 const inside = res.inside_campus !== false;
                 const dist = res.distance_from_campus || 0;
                 const radius = res.campus_radius || 500;
+                
+                // Update global radar parameters
+                radarDist = dist;
+                radarRadius = radius;
+                radarInside = inside;
+                if (!radarAnimationId) {
+                    drawRadar();
+                }
                 const hasPass = res.has_pass;
                 const timeNow = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 

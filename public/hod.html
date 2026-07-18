@@ -7,6 +7,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap">
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <style>
         :root {
             --bg: #030712;
@@ -25,6 +27,35 @@
             --text3: #6b7280;
         }
 
+        /* Premium Dark Mode Map overrides for Leaflet */
+        #trackingMap {
+            height: 350px;
+            width: 100%;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            background: #0b0f19;
+            z-index: 10;
+        }
+        .leaflet-tile-container {
+            filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+        }
+        .leaflet-bar a {
+            background-color: #1f2937 !important;
+            color: #f9fafb !important;
+            border-color: rgba(255,255,255,0.08) !important;
+        }
+        .leaflet-popup-content-wrapper {
+            background-color: #030712 !important;
+            color: #f9fafb !important;
+            border: 1px solid rgba(255,255,255,0.08) !important;
+            border-radius: 8px !important;
+        }
+        .leaflet-popup-tip {
+            background-color: #030712 !important;
+        }
+        
         body {
             font-family: 'Outfit', sans-serif;
             background: var(--bg);
@@ -432,7 +463,7 @@
                     <div class="card-title">📍 Live Campus Telemetry Guard</div>
                     <button class="btn btn-secondary btn-sm" id="btnRefreshTracking">🔄 Refresh</button>
                 </div>
-                <div id="trackingList">
+                <div id="trackingMap"></div><div id="trackingList">
                     <!-- Real-time campus exit monitoring -->
                 </div>
             </div>
@@ -537,6 +568,31 @@
         };
 
         var authToken = safeStorage.getItem('token');
+
+        // ── Map Global Variables ──
+        let trackingMap = null;
+        let mapMarkers = {};
+        let mapCircle = null;
+
+        async function initMap(lat, lng, radius) {
+            if (trackingMap) return;
+            try {
+                trackingMap = L.map('trackingMap').setView([lat, lng], 15);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19,
+                    attribution: '© OpenStreetMap contributors'
+                }).addTo(trackingMap);
+
+                mapCircle = L.circle([lat, lng], {
+                    color: '#3b82f6',
+                    fillColor: '#3b82f6',
+                    fillOpacity: 0.15,
+                    radius: radius
+                }).addTo(trackingMap);
+            } catch (err) {
+                console.error('Failed to initialize map:', err);
+            }
+        }
         var currentUser = null;
         try { currentUser = JSON.parse(safeStorage.getItem('user')); } catch(e) {}
 
@@ -657,7 +713,11 @@
                     }
 
                     if (pageId === 'page-tracking') {
-                        loadTracking();
+                        loadTracking().then(() => {
+                            if (trackingMap) {
+                                setTimeout(() => trackingMap.invalidateSize(), 150);
+                            }
+                        });
                         // Auto-refresh live tracking every 15 seconds
                         trackingAutoRefreshInterval = setInterval(loadTracking, 15000);
                     }
@@ -836,12 +896,98 @@
 
         // ── Live tracking ──
         async function loadTracking() {
+            // First fetch settings for geofence map
+            let lat = 17.3850, lng = 78.4867, radius = 500;
+            const settingsRes = await api('/api/campus-settings');
+            if (settingsRes.success && settingsRes.settings) {
+                lat = settingsRes.settings.campus_latitude || 17.3850;
+                lng = settingsRes.settings.campus_longitude || 78.4867;
+                radius = settingsRes.settings.campus_radius || 500;
+            }
+
+            // Init map div
+            await initMap(lat, lng, radius);
+
             const res = await api('/api/hod/students-tracking');
             const container = document.getElementById('trackingList');
             if (res.success && res.students) {
                 if (res.students.length === 0) {
                     container.innerHTML = `<div style="text-align:center; color:var(--text3); font-size:13px; padding:20px;">No students active on campus.</div>`;
+                    if (trackingMap) {
+                        Object.keys(mapMarkers).forEach(id => {
+                            trackingMap.removeLayer(mapMarkers[id]);
+                            delete mapMarkers[id];
+                        });
+                    }
                     return;
+                }
+
+                // Map Updates
+                if (trackingMap) {
+                    if (mapCircle) {
+                        mapCircle.setLatLng([lat, lng]);
+                        mapCircle.setRadius(radius);
+                    }
+
+                    const activeIds = new Set();
+                    res.students.forEach(s => {
+                        if (s.last_lat && s.last_lon) {
+                            activeIds.add(s.id);
+                            const inside = s.attendance_status === 'present';
+                            const isSpoof = s.is_location_suspicious === 1;
+                            const isOffline = s.status && s.status.includes('Offline');
+                            
+                            let markerColor = '#10b981'; // Green inside
+                            if (isOffline) markerColor = '#94a3b8'; // Grey offline
+                            else if (isSpoof) markerColor = '#f59e0b'; // Amber spoof warning
+                            else if (s.status === 'Geofence Breach' || !inside) markerColor = '#ef4444'; // Red exit
+                            
+                            const markerHtml = `
+                                <div style="
+                                    background: ${markerColor};
+                                    width: 14px;
+                                    height: 14px;
+                                    border-radius: 50%;
+                                    border: 2px solid #f9fafb;
+                                    box-shadow: 0 0 10px ${markerColor};
+                                "></div>
+                            `;
+                            
+                            const customIcon = L.divIcon({
+                                html: markerHtml,
+                                className: 'custom-map-marker',
+                                iconSize: [18, 18],
+                                iconAnchor: [9, 9]
+                            });
+
+                            const popupHtml = `
+                                <div style="font-family:'Outfit',sans-serif; color:#f9fafb; padding:2px;">
+                                    <div style="font-weight:700;font-size:12px;margin-bottom:4px;">${s.username}</div>
+                                    <div style="font-size:10px;color:#9ca3af;margin-bottom:2px;">Status: <span style="font-weight:600;color:${markerColor};">${s.status || 'Active'}</span></div>
+                                    <div style="font-size:10px;color:#9ca3af;margin-bottom:2px;">Battery: <b>${s.battery_level !== null ? s.battery_level + '%' : 'N/A'}</b></div>
+                                    <div style="font-size:10px;color:#9ca3af;">Coords: <b>${s.last_lat.toFixed(5)}, ${s.last_lon.toFixed(5)}</b></div>
+                                </div>
+                            `;
+
+                            if (mapMarkers[s.id]) {
+                                mapMarkers[s.id].setLatLng([s.last_lat, s.last_lon]);
+                                mapMarkers[s.id].setIcon(customIcon);
+                                mapMarkers[s.id].getPopup().setContent(popupHtml);
+                            } else {
+                                const m = L.marker([s.last_lat, s.last_lon], { icon: customIcon })
+                                    .bindPopup(popupHtml)
+                                    .addTo(trackingMap);
+                                mapMarkers[s.id] = m;
+                            }
+                        }
+                    });
+
+                    Object.keys(mapMarkers).forEach(id => {
+                        if (!activeIds.has(Number(id))) {
+                            trackingMap.removeLayer(mapMarkers[id]);
+                            delete mapMarkers[id];
+                        }
+                    });
                 }
 
                 const now = Date.now();
@@ -851,11 +997,9 @@
                     if (s.status === 'Active & Guarded') { badgeClass = 'badge-green'; pulseHtml = `<span class="pulse-dot" style="margin-left:6px;vertical-align:middle;"></span>`; }
                     if (s.status === 'Geofence Breach' || s.status.includes('Offline')) badgeClass = 'badge-red';
 
-                    // Only show location for recently-active students (seen within 5 min)
                     const isRecent = s.last_seen && ((now - new Date(s.last_seen).getTime()) < 5 * 60 * 1000);
                     const showLocation = s.last_lat && s.last_lon && isRecent;
 
-                    // Human-readable last-seen
                     let lastSeenText = 'Never';
                     if (s.last_seen) {
                         const secsAgo = Math.round((now - new Date(s.last_seen).getTime()) / 1000);
@@ -874,15 +1018,15 @@
                                     </div>
                                     <div class="student-meta">
                                         <span class="badge ${badgeClass}">${s.status}</span>
-                                        <span style="font-size:10px;color:var(--text3);margin-left:6px;">🕐 ${lastSeenText}</span>
+                                        <span style="font-size:10px;color:var(--text3);margin-left:6px;">🕒 ${lastSeenText}</span>
                                         ${showLocation ? `
                                             <div style="font-size:11px; color:var(--text3); margin-top:4px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
                                                 <span>📍 <strong>${s.last_lat.toFixed(5)}, ${s.last_lon.toFixed(5)}</strong></span>
                                                 <a href="https://www.google.com/maps?q=${s.last_lat},${s.last_lon}" target="_blank" style="color:var(--primary); text-decoration:none; font-weight:700; border-bottom:1px dashed var(--primary);">[View on Map]</a>
                                             </div>
-                                        ` : (s.last_lat && s.last_lon ? `<div style="font-size:10px;color:var(--text3);margin-top:3px;">📡 Location stale (>${lastSeenText})</div>` : '')}
+                                        ` : (s.last_lat && s.last_lon ? `<div style="font-size:10px;color:var(--text3);margin-top:3px;">⚠️ Location stale (>${lastSeenText})</div>` : '')}
                                         ${s.is_location_suspicious === 1 ? `<div style="font-size:10px;color:var(--red);margin-top:4px;font-weight:700;"><span class="badge badge-red">⚠️ LOCATION SUSPECT</span></div>` : ''}
-                                        ${s.tracking_alert ? `<div style="font-size:10px;color:var(--red,#ef4444);margin-top:3px;font-weight:600;">🚨 ${s.tracking_alert.substring(0,80)}…</div>` : ''}
+                                        ${s.tracking_alert ? `<div style="font-size:10px;color:var(--red,#ef4444);margin-top:3px;font-weight:600;">⚠️ ${s.tracking_alert.substring(0,80)}.</div>` : ''}
                                     </div>
                                 </div>
                             </div>
@@ -897,8 +1041,7 @@
             }
         }
 
-
-        async function unlockStudent(studentId) {
+                async function unlockStudent(studentId) {
             console.log(`[CLICK] unlockStudent called for Student ID: ${studentId}`);
             showToast('Unlocking student... please wait.', 'info');
             const res = await api('/api/coordinator/unlock-student', 'POST', { student_id: studentId });

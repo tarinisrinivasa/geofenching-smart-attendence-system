@@ -61,10 +61,10 @@ app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
-            scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://unpkg.com"],
+            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https://unpkg.com"],
             fontSrc: ["'self'", "https://fonts.gstatic.com"],
-            imgSrc: ["'self'", "data:", "https://images.unsplash.com", "https://bwipjs-api.metafloor.com", "https://*.onrender.com"],
+            imgSrc: ["'self'", "data:", "https://images.unsplash.com", "https://bwipjs-api.metafloor.com", "https://*.onrender.com", "https://unpkg.com", "https://*.tile.openstreetmap.org"],
             // Include localhost wildcard so local dev fetch() calls are not blocked by CSP
             connectSrc: ["'self'", "http://localhost:*", "https://localhost:*", "https://*.onrender.com", "wss://*.onrender.com"],
             mediaSrc: ["'self'", "data:"]
