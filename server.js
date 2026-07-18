@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const crypto = require('crypto');
@@ -323,29 +323,59 @@ app.post('/api/login', (req, res) => {
 
         // Enforce hardware lock for students
         if (row.role === 'student') {
-            if (!row.device_id) {
-                // First login: Verify that this phone isn't already registered to another student
-                db.get("SELECT username FROM users WHERE device_id = ? AND id != ?", [device_id, row.id], (err, boundUser) => {
-                    if (err) return res.status(500).json({ error: err.message });
-                    if (boundUser) {
-                        logSecurityEvent('DEVICE_BIND_FAIL', req.ip, row.id, row.username, `Device registration failed: device already bound to ${boundUser.username}`);
-                        return res.status(400).json({ success: false, message: `This device is already registered to student: ${boundUser.username}` });
-                    }
-                    
-                    // Bind this device ID
-                    db.run("UPDATE users SET device_id = ? WHERE id = ?", [device_id, row.id], (err) => {
+            // First check college status (hours & holiday mode)
+            db.all("SELECT key, value FROM campus_settings", [], (settingsErr, settingsRows) => {
+                if (settingsErr) return res.status(500).json({ error: settingsErr.message });
+                const s = {};
+                settingsRows.forEach(r => { s[r.key] = r.value; });
+                
+                const start = s.college_start_time || '09:00';
+                const end = s.college_end_time || '16:00';
+                const holidayMode = s.holiday_mode === '1';
+
+                if (holidayMode) {
+                    return res.status(403).json({ success: false, message: '🔒 College is closed today by HOD order. App is inaccessible.' });
+                }
+
+                const now = new Date();
+                const [sh, sm] = start.split(':').map(Number);
+                const [eh, em] = end.split(':').map(Number);
+                const nowMins = now.getHours() * 60 + now.getMinutes();
+                const startMins = sh * 60 + sm;
+                const endMins = eh * 60 + em;
+                const day = now.getDay();
+                const isWeekend = (day === 0 || day === 6);
+
+                if (isWeekend || nowMins < startMins || nowMins >= endMins) {
+                    const closedMsg = isWeekend ? 'Weekend — app is closed.' : (nowMins < startMins ? `App opens at ${start}` : `App closed at ${end}. Returns tomorrow at ${start}.`);
+                    return res.status(403).json({ success: false, message: `🔒 College is closed. Active hours: ${start} - ${end}. ${closedMsg}` });
+                }
+
+                // Proceed with device ID checks
+                if (!row.device_id) {
+                    // First login: Verify that this phone isn't already registered to another student
+                    db.get("SELECT username FROM users WHERE device_id = ? AND id != ?", [device_id, row.id], (err, boundUser) => {
                         if (err) return res.status(500).json({ error: err.message });
-                        logSecurityEvent('DEVICE_BOUND', req.ip, row.id, row.username, `Device registered with ID: ${device_id}`);
-                        completeLogin();
+                        if (boundUser) {
+                            logSecurityEvent('DEVICE_BIND_FAIL', req.ip, row.id, row.username, `Device registration failed: device already bound to ${boundUser.username}`);
+                            return res.status(400).json({ success: false, message: `This device is already registered to student: ${boundUser.username}` });
+                        }
+                        
+                        // Bind this device ID
+                        db.run("UPDATE users SET device_id = ? WHERE id = ?", [device_id, row.id], (err) => {
+                            if (err) return res.status(500).json({ error: err.message });
+                            logSecurityEvent('DEVICE_BOUND', req.ip, row.id, row.username, `Device registered with ID: ${device_id}`);
+                            completeLogin();
+                        });
                     });
-                });
-            } else if (row.device_id !== device_id) {
-                // Lockout: Prevent login from other devices
-                logSecurityEvent('DEVICE_LOCKOUT', req.ip, row.id, row.username, `Login blocked: device ID mismatch (Attempted: ${device_id}, Registered: ${row.device_id})`);
-                return res.status(400).json({ success: false, message: "This account is registered on another device." });
-            } else {
-                completeLogin();
-            }
+                } else if (row.device_id !== device_id) {
+                    // Lockout: Prevent login from other devices
+                    logSecurityEvent('DEVICE_LOCKOUT', req.ip, row.id, row.username, `Login blocked: device ID mismatch (Attempted: ${device_id}, Registered: ${row.device_id})`);
+                    return res.status(400).json({ success: false, message: "This account is registered on another device." });
+                } else {
+                    completeLogin();
+                }
+            });
         } else {
             completeLogin();
         }
@@ -1333,7 +1363,7 @@ app.post('/api/mark-attendance', authenticateToken, (req, res) => {
     });
 });
 
-// PUBLIC API: College open/closed status (no auth required � checked before login)
+// PUBLIC API: College open/closed status (no auth required � checked before login)
 app.get('/api/college-status', (req, res) => {
     db.all("SELECT key, value FROM campus_settings", [], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -1362,7 +1392,7 @@ app.get('/api/college-status', (req, res) => {
             start,
             end,
             is_weekend: isWeekend,
-            message: open ? 'College is open.' : isWeekend ? 'Weekend � app is closed.' : (nowMins < startMins ? `App opens at ${start}` : `App closed at ${end}. Returns tomorrow at ${start}.`)
+            message: open ? 'College is open.' : isWeekend ? 'Weekend � app is closed.' : (nowMins < startMins ? `App opens at ${start}` : `App closed at ${end}. Returns tomorrow at ${start}.`)
         });
     });
 });
@@ -1402,7 +1432,7 @@ app.post('/api/campus-settings', authenticateToken, (req, res) => {
         return res.status(403).json({ success: false, message: "Unauthorized access." });
     }
 
-    const { campus_latitude, campus_longitude, campus_radius, college_start_time, college_end_time, stop_tracking_on_exit, exact_live_tracking, track_after_hours } = req.body;
+    const { campus_latitude, campus_longitude, campus_radius, college_start_time, college_end_time, stop_tracking_on_exit, exact_live_tracking, track_after_hours, holiday_mode } = req.body;
     
     if (campus_latitude === undefined || campus_longitude === undefined || campus_radius === undefined || college_start_time === undefined || college_end_time === undefined) {
         return res.status(400).json({ success: false, message: "Missing required bounds or college hours values." });
@@ -1418,6 +1448,7 @@ app.post('/api/campus-settings', authenticateToken, (req, res) => {
         // Save the new configurations
         db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('stop_tracking_on_exit', ?)", [stop_tracking_on_exit !== undefined ? stop_tracking_on_exit.toString() : '0']);
         db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('exact_live_tracking', ?)", [exact_live_tracking !== undefined ? exact_live_tracking.toString() : '1']);
+        db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('holiday_mode', ?)", [holiday_mode !== undefined ? holiday_mode.toString() : '0']);
         db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('track_after_hours', ?)", [track_after_hours !== undefined ? track_after_hours.toString() : '0'], function(err) {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ success: true, message: "Campus geofence and tracking configurations updated successfully!" });

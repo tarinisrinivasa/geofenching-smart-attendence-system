@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -454,12 +454,31 @@ let pendingUser = null;
 let pendingCredentialId = null; // base64url string stored in DB
 let currentUsername = '';
 
-// ── Device ID ──────────────────────────────────────────────────────────────
-let deviceId = safeStorage.getItem('device_id');
-if (!deviceId) {
-    deviceId = 'dev-' + Math.random().toString(36).slice(2, 15) + Math.random().toString(36).slice(2, 15);
-    safeStorage.setItem('device_id', deviceId);
+// ── Stable Device Fingerprint Helper ──
+function getStableFingerprint() {
+    try {
+        const screenInfo = window.screen.width + 'x' + window.screen.height + 'x' + window.screen.colorDepth;
+        const userAgent = navigator.userAgent;
+        const language = navigator.language || navigator.userLanguage || '';
+        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+        const hardwareConcurrency = navigator.hardwareConcurrency || '1';
+        
+        const raw = `${screenInfo}|${userAgent}|${language}|${timezone}|${hardwareConcurrency}`;
+        let hash = 0;
+        for (let i = 0; i < raw.length; i++) {
+            const char = raw.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash; // Convert to 32bit integer
+        }
+        return 'fingerprint-' + Math.abs(hash).toString(36);
+    } catch (e) {
+        return 'dev-fallback-' + Math.random().toString(36).slice(2, 10);
+    }
 }
+
+// ── Device ID ──────────────────────────────────────────────────────────────
+let deviceId = getStableFingerprint();
+safeStorage.setItem('device_id', deviceId);
 
 // ── WebAuthn helpers ───────────────────────────────────────────────────────
 function base64urlToUint8Array(b64url) {
@@ -767,7 +786,74 @@ if ('serviceWorker' in navigator) {
 }
 
 // ── Bind Event Listeners Programmatically (Fixes mouse clicks failing) ──────
+// ── Blocker overlay ──
+function showBlocker(title, message, icon = '🔒') {
+    let blocker = document.getElementById('geoattend-blocker');
+    if (!blocker) {
+        blocker = document.createElement('div');
+        blocker.id = 'geoattend-blocker';
+        blocker.style.position = 'fixed';
+        blocker.style.top = '0';
+        blocker.style.left = '0';
+        blocker.style.width = '100%';
+        blocker.style.height = '100%';
+        blocker.style.background = '#0f172a';
+        blocker.style.color = '#f8fafc';
+        blocker.style.display = 'flex';
+        blocker.style.flexDirection = 'column';
+        blocker.style.alignItems = 'center';
+        blocker.style.justifyContent = 'center';
+        blocker.style.padding = '30px';
+        blocker.style.textAlign = 'center';
+        blocker.style.zIndex = '999999';
+        blocker.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+        document.body.appendChild(blocker);
+    }
+    blocker.innerHTML = `
+        <div style="max-width: 400px; background: #1e293b; padding: 35px; border-radius: 16px; border: 1px solid #334155; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5);">
+            <div style="font-size: 55px; margin-bottom: 20px;">${icon}</div>
+            <h2 style="font-size: 22px; font-weight: 700; margin-bottom: 12px; color: #f1f5f9;">${title}</h2>
+            <p style="font-size: 14px; color: #94a3b8; line-height: 1.6; margin-bottom: 24px; text-align: left;">${message}</p>
+            <button onclick="window.location.reload()" style="background: #3b82f6; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: background 0.2s; width: 100%;">
+                🔄 Try Again / Reload
+            </button>
+        </div>
+    `;
+    document.body.style.overflow = 'hidden';
+}
+
+async function runGatesCheck() {
+    try {
+        await new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 4000 });
+        });
+    } catch (e) {
+        showBlocker(
+            'Location Access Required',
+            'GeoAttend requires location permission to open. Without location services, you cannot log in or check in.<br><br><b>To fix this:</b><br>1. Click the lock/settings icon in the browser address bar.<br>2. Allow Location access.<br>3. Click Reload below.',
+            '🚫'
+        );
+        return;
+    }
+
+    try {
+        const r = await fetch('/api/college-status');
+        const d = await r.json();
+        if (d && d.open === false) {
+            showBlocker(
+                'GeoAttend is Closed',
+                d.message || 'College hours are Monday - Friday, 9:00 AM - 4:00 PM. The system is closed outside these hours.',
+                '🔒'
+            );
+            return;
+        }
+    } catch (err) {
+        console.error('Gates check failed', err);
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+    runGatesCheck();
     // 1) Main password login button
     const loginBtn = document.getElementById('loginBtn');
     if (loginBtn) {

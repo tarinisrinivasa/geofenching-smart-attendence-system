@@ -238,8 +238,11 @@ const db = new sqlite3.Database(dbPath, (err) => {
                     db.run("INSERT INTO campus_settings (key, value) VALUES ('stop_tracking_on_exit', '0')");
                     db.run("INSERT INTO campus_settings (key, value) VALUES ('exact_live_tracking', '1')");
                     db.run("INSERT INTO campus_settings (key, value) VALUES ('track_after_hours', '0')");
+                    db.run("INSERT INTO campus_settings (key, value) VALUES ('holiday_mode', '0')");
                 });
             }
+            // Always ensure holiday_mode row exists in case db is already seeded
+            db.run("INSERT OR IGNORE INTO campus_settings (key, value) VALUES ('holiday_mode', '0')");
         });
 
         // ── Seed Demo Accounts (only if no coordinators found) ──────
