@@ -827,12 +827,33 @@ function showBlocker(title, message, icon = '🔒') {
             <div style="font-size: 55px; margin-bottom: 20px;">${icon}</div>
             <h2 style="font-size: 22px; font-weight: 700; margin-bottom: 12px; color: #f1f5f9;">${title}</h2>
             <p style="font-size: 14px; color: #94a3b8; line-height: 1.6; margin-bottom: 24px; text-align: left;">${message}</p>
-            <button onclick="window.location.reload()" style="background: #3b82f6; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: background 0.2s; width: 100%;">
+            <button onclick="retryGpsGateCheckOnly()" style="background: #3b82f6; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: background 0.2s; width: 100%;">
                 🔄 Try Again / Reload
             </button>
         </div>
     `;
     document.body.style.overflow = 'hidden';
+}
+
+async function retryGpsGateCheckOnly() {
+    const btn = document.querySelector('#geoattend-blocker button');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Checking settings...';
+    }
+    try {
+        await new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 4000 });
+        });
+    } catch (e) {
+        alert('Location check failed. Please ensure location services are turned ON and allowed for this site in your browser settings.');
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = '🔄 Try Again / Reload';
+        }
+        return;
+    }
+    window.location.reload();
 }
 
 async function runGpsGateCheck() {
