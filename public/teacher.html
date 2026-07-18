@@ -497,6 +497,10 @@
                         <option value="">Loading locations...</option>
                     </select>
                 </div>
+                <div class="form-group">
+                    <label class="form-label">⏱️ Auto-close after (minutes, optional):</label>
+                    <input type="number" class="form-input" id="autoCloseMinutes" min="1" placeholder="e.g. 30 (leave empty for manual)">
+                </div>
                 <button class="btn btn-primary" id="createSessionBtn">
                     <span class="btn-text">🚀 Start Class Session</span>
                     <div class="spinner-sm"></div>
@@ -1137,6 +1141,7 @@ function displayPastSessions(sessions) {
 async function createSession() {
     const name = document.getElementById('className').value.trim();
     const classroomId = document.getElementById('sessionClassroomSelect').value;
+    const autoCloseMinutes = document.getElementById('autoCloseMinutes').value;
 
     if (!name) { showToast('Enter a class name', 'error'); return; }
     if (!classroomId) { showToast('Select a classroom location', 'error'); return; }
@@ -1144,7 +1149,7 @@ async function createSession() {
     const btn = document.getElementById('createSessionBtn');
     btn.classList.add('loading'); btn.disabled = true;
 
-    const data = await api('/api/classes', 'POST', { name, classroom_id: classroomId });
+    const data = await api('/api/classes', 'POST', { name, classroom_id: classroomId, auto_close_mins: autoCloseMinutes });
     btn.classList.remove('loading'); btn.disabled = false;
 
     if (data.success) {

@@ -328,10 +328,16 @@
             <div class="nav-tab" id="tab-outpass">🎟️ Out-Passes</div>
             <div class="nav-tab" id="tab-tracking">📍 Live Tracking</div>
             <div class="nav-tab" id="tab-anomalies">🚨 Anomalies & Alerts</div>
+            <div class="nav-tab" id="tab-analytics">📊 Analytics</div>
         </div>
 
         <!-- ═══ CAMPUS SETTINGS PAGE ═══ -->
         <div class="page active" id="page-campus">
+            <div class="card" id="halfDaySummaryCard" style="display:none;">
+                <div class="card-title" style="margin-bottom: 14px;">📊 Today's Attendance Summary</div>
+                <div id="halfDaySummaryList"></div>
+            </div>
+
             <div class="card">
                 <div class="card-title">🌐 College Geofence Coordinates</div>
                 <form id="campusForm" style="margin-top: 14px;">
@@ -443,6 +449,62 @@
                 </div>
             </div>
         </div>
+
+        <!-- ═══ ANALYTICS PAGE ═══ -->
+        <div class="page" id="page-analytics">
+            <div class="card">
+                <div class="card-title">📊 Real-Time Analytics Dashboard</div>
+                
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; margin-top:16px;">
+                    <!-- Widget 1: Daily Attendance Ring -->
+                    <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:12px; padding:16px; text-align:center;">
+                        <div style="font-size:13px; font-weight:600; color:var(--text2); margin-bottom:12px;">Today's Attendance</div>
+                        <div id="analyticsRing" style="width:100px; height:100px; border-radius:50%; background:conic-gradient(var(--green) 0%, rgba(255,255,255,0.1) 0%); margin:0 auto; display:flex; align-items:center; justify-content:center;">
+                            <div style="width:80px; height:80px; background:var(--surface); border-radius:50%; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+                                <div id="analyticsPct" style="font-size:20px; font-weight:800; color:var(--green);">0%</div>
+                                <div id="analyticsFrac" style="font-size:10px; color:var(--text3);">0/0</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Widget 6: 7-Day Trend -->
+                    <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:12px; padding:16px;">
+                        <div style="font-size:13px; font-weight:600; color:var(--text2); margin-bottom:12px;">7-Day Trend</div>
+                        <div id="analyticsTrend" style="display:flex; align-items:flex-end; justify-content:space-between; height:100px; padding-top:20px; border-bottom:1px solid rgba(255,255,255,0.1); gap:4px;">
+                            <!-- CSS columns -->
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; margin-top:16px;">
+                    <!-- Widget 5: Class Stats -->
+                    <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:12px; padding:16px;">
+                        <div style="font-size:13px; font-weight:600; color:var(--text2); margin-bottom:12px;">Class Attendance (Today)</div>
+                        <div id="analyticsClasses" style="display:flex; flex-direction:column; gap:8px;">
+                            <!-- CSS horizontal bars -->
+                        </div>
+                    </div>
+
+                    <!-- Widget 2: Top Absentees -->
+                    <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:12px; padding:16px;">
+                        <div style="font-size:13px; font-weight:600; color:var(--text2); margin-bottom:12px;">Top Absentees (All Time)</div>
+                        <div id="analyticsAbsentees" style="display:flex; flex-direction:column; gap:8px;">
+                            <!-- List -->
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; margin-top:16px;">
+                    <!-- Widget 3 & 4: Frequent Leavers -->
+                    <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:12px; padding:16px;">
+                        <div style="font-size:13px; font-weight:600; color:var(--text2); margin-bottom:12px;">Frequent Breach / GPS Drops</div>
+                        <div id="analyticsLeavers" style="display:flex; flex-direction:column; gap:8px;">
+                            <!-- List -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div id="toastContainer"></div>
@@ -486,10 +548,12 @@
             try {
                 initNavigation();
                 loadCampusSettings();
+                loadHalfDaySummary();
                 loadStudents();
                 loadOutpasses();
                 loadTracking();
                 loadAnomalies();
+                loadAnalytics();
 
                 var el;
                 el = document.getElementById('campusForm'); if(el) el.addEventListener('submit', saveCampusSettings);
@@ -595,12 +659,44 @@
                     }
                     if (pageId === 'page-anomalies') loadAnomalies();
                     if (pageId === 'page-outpass') { loadOutpasses(); loadStudents(); }
+                    if (pageId === 'page-campus') loadHalfDaySummary();
+                    if (pageId === 'page-analytics') loadAnalytics();
                 });
             });
         }
 
 
         // ── Campus Settings ──
+        async function loadHalfDaySummary() {
+            const res = await api('/api/hod/half-day-summary');
+            const card = document.getElementById('halfDaySummaryCard');
+            const list = document.getElementById('halfDaySummaryList');
+            if (res.success && res.summary) {
+                card.style.display = 'block';
+                if (res.summary.length === 0) {
+                    list.innerHTML = `<div style="text-align:center; color:var(--text3); font-size:13px; padding:20px;">No student data.</div>`;
+                    return;
+                }
+                list.innerHTML = res.summary.map(s => {
+                    let badge = '';
+                    if (s.type === 'full') badge = '<span class="badge badge-green">🟢 Full Day</span>';
+                    else if (s.type === 'half') badge = '<span class="badge badge-yellow">🟡 Half Day</span>';
+                    else badge = '<span class="badge badge-red">🔴 Absent</span>';
+                    
+                    return `
+                        <div class="student-row" style="padding:10px 14px;">
+                            <div class="student-info">
+                                <div class="student-name">${s.username}</div>
+                            </div>
+                            <div class="student-actions">
+                                ${badge}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+
         async function loadCampusSettings() {
             const res = await api('/api/campus-settings');
             if (res.success && res.settings) {
@@ -712,29 +808,23 @@
             }
         }
 
-        // ── Battery badge helper ──
+        // ── Battery pill-badge helper ──
         function batteryHtml(level, charging) {
             if (level === null || level === undefined) return '';
             const pct = Math.max(0, Math.min(100, level));
-            let color, icon;
-            if (charging) { color = '#3b82f6'; icon = '⚡'; }
-            else if (pct <= 15) { color = '#ef4444'; icon = '🪫'; }
-            else if (pct <= 35) { color = '#f59e0b'; icon = '🔋'; }
-            else { color = '#10b981'; icon = '🔋'; }
+            let bg, color, icon;
+            if (charging)      { bg = 'rgba(59,130,246,0.18)';  color = '#60a5fa'; icon = '⚡'; }
+            else if (pct <= 15){ bg = 'rgba(239,68,68,0.18)';   color = '#f87171'; icon = '🪫'; }
+            else if (pct <= 35){ bg = 'rgba(245,158,11,0.18)';  color = '#fbbf24'; icon = '🔋'; }
+            else               { bg = 'rgba(16,185,129,0.15)';  color = '#34d399'; icon = '🔋'; }
+            return `<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:20px;background:${bg};color:${color};font-size:10px;font-weight:700;margin-left:5px;border:1px solid ${color}33;">${icon} ${pct}%${charging ? ' ⚡' : ''}</span>`;
+        }
 
-            const barWidth = pct;
-            return `
-                <span style="display:inline-flex;align-items:center;gap:5px;font-size:10px;color:${color};font-weight:700;margin-left:6px;">
-                    ${icon}
-                    <span style="display:inline-flex;align-items:center;gap:3px;">
-                        <span style="width:28px;height:10px;border:1.5px solid ${color};border-radius:3px;position:relative;display:inline-block;">
-                            <span style="display:block;height:100%;width:${barWidth}%;background:${color};border-radius:2px;transition:width 0.4s;"></span>
-                            <span style="position:absolute;right:-4px;top:50%;transform:translateY(-50%);width:3px;height:5px;background:${color};border-radius:0 1px 1px 0;"></span>
-                        </span>
-                        ${pct}%${charging ? ' ⚡' : ''}
-                    </span>
-                </span>
-            `;
+        // ── Location status dot helper ──
+        function locationDot(lastSeen, hasCoords) {
+            const active = hasCoords && lastSeen && (Date.now() - new Date(lastSeen).getTime() < 3 * 60 * 1000);
+            if (active) return `<span title="GPS Active" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#10b981;box-shadow:0 0 6px #10b981;margin-left:6px;vertical-align:middle;flex-shrink:0;"></span>`;
+            return `<span title="GPS Off / No Data" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#ef4444;box-shadow:0 0 5px #ef4444;margin-left:6px;vertical-align:middle;flex-shrink:0;"></span>`;
         }
 
         // ── Live tracking ──
@@ -772,8 +862,8 @@
                             <div class="student-info">
                                 <div class="student-avatar" style="${s.attendance_locked ? 'border: 2px solid var(--red)' : ''}">${s.username.charAt(0).toUpperCase()}</div>
                                 <div class="student-details">
-                                    <div class="student-name" style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;">
-                                        ${s.username}${pulseHtml}${batteryHtml(s.battery_level, s.is_charging)}
+                                    <div class="student-name" style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;cursor:pointer;" data-action="open-timeline" data-id="${s.id}" title="Click to view movement timeline">
+                                        ${s.username}${locationDot(s.last_seen, !!(s.last_lat && s.last_lon))}${pulseHtml}${batteryHtml(s.battery_level, s.is_charging)}
                                     </div>
                                     <div class="student-meta">
                                         <span class="badge ${badgeClass}">${s.status}</span>
@@ -784,6 +874,7 @@
                                                 <a href="https://www.google.com/maps?q=${s.last_lat},${s.last_lon}" target="_blank" style="color:var(--primary); text-decoration:none; font-weight:700; border-bottom:1px dashed var(--primary);">[View on Map]</a>
                                             </div>
                                         ` : (s.last_lat && s.last_lon ? `<div style="font-size:10px;color:var(--text3);margin-top:3px;">📡 Location stale (>${lastSeenText})</div>` : '')}
+                                        ${s.is_location_suspicious === 1 ? `<div style="font-size:10px;color:var(--red);margin-top:4px;font-weight:700;"><span class="badge badge-red">⚠️ LOCATION SUSPECT</span></div>` : ''}
                                         ${s.tracking_alert ? `<div style="font-size:10px;color:var(--red,#ef4444);margin-top:3px;font-weight:600;">🚨 ${s.tracking_alert.substring(0,80)}…</div>` : ''}
                                     </div>
                                 </div>
@@ -909,8 +1000,108 @@
             }
         }
 
+        async function loadAnalytics() {
+            const res = await api('/api/hod/analytics');
+            if (!res.success || !res.analytics) return;
+            const a = res.analytics;
+            
+            // Widget 1: Ring
+            document.getElementById('analyticsPct').textContent = a.daily.percentage + '%';
+            document.getElementById('analyticsFrac').textContent = a.daily.present + '/' + a.daily.total;
+            document.getElementById('analyticsRing').style.background = `conic-gradient(var(--green) ${a.daily.percentage}%, rgba(255,255,255,0.1) 0%)`;
+
+            // Widget 2: Absentees
+            document.getElementById('analyticsAbsentees').innerHTML = a.top_absentees.map(u => `
+                <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.02); padding:8px 12px; border-radius:6px; border:1px solid var(--border);">
+                    <div style="font-size:12px; font-weight:600;">${u.username}</div>
+                    <div class="badge badge-red">${u.absent_count} absences</div>
+                </div>
+            `).join('') || '<div style="font-size:11px; color:var(--text3);">No data</div>';
+
+            // Widget 3&4: Leavers
+            document.getElementById('analyticsLeavers').innerHTML = a.frequent_leavers.map(u => `
+                <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.02); padding:8px 12px; border-radius:6px; border:1px solid var(--border);">
+                    <div style="font-size:12px; font-weight:600;">${u.username}</div>
+                    <div class="badge badge-yellow">${u.alert_count} alerts</div>
+                </div>
+            `).join('') || '<div style="font-size:11px; color:var(--text3);">No data</div>';
+
+            // Widget 5: Classes
+            document.getElementById('analyticsClasses').innerHTML = a.class_stats.map(c => {
+                const max = Math.max(1, ...a.class_stats.map(x=>x.present_count));
+                const pct = (c.present_count / max) * 100;
+                return `
+                    <div style="margin-bottom:6px;">
+                        <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:4px;">
+                            <span>${c.class_name}</span>
+                            <span>${c.present_count} present</span>
+                        </div>
+                        <div style="width:100%; background:rgba(255,255,255,0.1); border-radius:4px; height:6px; overflow:hidden;">
+                            <div style="width:${pct}%; background:var(--primary); height:100%; border-radius:4px;"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('') || '<div style="font-size:11px; color:var(--text3);">No data</div>';
+
+            // Widget 6: Trend
+            document.getElementById('analyticsTrend').innerHTML = a.week_trend.map(t => {
+                const maxCount = Math.max(1, ...a.week_trend.map(x=>x.percentage));
+                const heightPct = (t.percentage / maxCount) * 100;
+                const d = new Date(t.date).getDate();
+                return `
+                    <div style="display:flex; flex-direction:column; align-items:center; flex:1; gap:4px;" title="${t.date}: ${t.percentage} present">
+                        <div style="width:100%; max-width:20px; background:rgba(255,255,255,0.1); border-radius:4px 4px 0 0; height:70px; display:flex; align-items:flex-end;">
+                            <div style="width:100%; background:var(--purple); border-radius:4px 4px 0 0; height:${heightPct}%; transition:height 0.5s ease-out;"></div>
+                        </div>
+                        <div style="font-size:9px; color:var(--text3);">${d}</div>
+                    </div>
+                `;
+            }).join('') || '<div style="font-size:11px; color:var(--text3);">No data</div>';
+        }
+
         function closeSmsModal() {
             document.getElementById('smsModal').style.display = 'none';
+        }
+        
+        async function openTimeline(studentId) {
+            document.getElementById('timelineModal').style.display = 'flex';
+            const content = document.getElementById('timelineContent');
+            content.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text3);">Loading timeline...</div>';
+            
+            const res = await api(`/api/hod/student-timeline/${studentId}`);
+            if (res.success && res.events) {
+                if (res.events.length === 0) {
+                    content.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text3);">No movement data for today.</div>';
+                    return;
+                }
+                
+                content.innerHTML = res.events.map(ev => {
+                    let icon = '📍';
+                    let color = 'var(--text)';
+                    if (ev.event_type === 'CHECKIN') { icon = '✅'; color = 'var(--green)'; }
+                    if (ev.event_type === 'EXITED_CAMPUS') { icon = '🚪'; color = 'var(--red)'; }
+                    if (ev.event_type === 'ENTERED_CAMPUS') { icon = '🏫'; color = 'var(--green)'; }
+                    if (ev.event_type === 'LEFT_CLASS') { icon = '🏃'; color = 'var(--yellow)'; }
+                    if (ev.event_type === 'RETURNED_CLASS') { icon = '🔙'; color = 'var(--blue)'; }
+                    if (ev.event_type === 'IN_CAMPUS') { icon = '🚶'; }
+                    if (ev.event_type === 'GPS_DROPPED') { icon = '📡'; color = 'var(--red)'; }
+                    
+                    const timeStr = new Date(ev.timestamp + 'Z').toLocaleTimeString();
+                    const loc = (ev.latitude && ev.longitude) ? ` [${ev.latitude.toFixed(4)}, ${ev.longitude.toFixed(4)}]` : '';
+                    
+                    return `
+                        <div style="display:flex; gap:12px; margin-bottom:12px; align-items:flex-start;">
+                            <div style="font-size:20px; flex-shrink:0;">${icon}</div>
+                            <div style="flex:1; border-left: 2px solid rgba(255,255,255,0.1); padding-left:12px; padding-bottom:12px;">
+                                <div style="font-size:11px; color:var(--text3);">${timeStr}</div>
+                                <div style="font-size:13px; font-weight:600; color:${color}; margin-top:4px;">${ev.event_type.replace(/_/g, ' ')}${loc}</div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } else {
+                content.innerHTML = '<div style="text-align:center; padding:20px; color:var(--red);">Failed to load timeline.</div>';
+            }
         }
     </script>
 
@@ -928,6 +1119,20 @@
             <button class="btn btn-primary" data-action="close-sms" style="width: 100%; max-width: 100%;">Close Simulator</button>
         </div>
     </div>
+
+    <!-- Timeline Modal -->
+    <div id="timelineModal" class="modal-overlay" style="display: none;">
+        <div class="card" style="max-width: 500px; width: 95%; max-height: 80vh; display: flex; flex-direction: column; padding: 20px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                <h3 style="margin:0; font-size:16px; color:var(--text);">Movement Timeline</h3>
+                <button class="btn btn-secondary btn-sm" data-action="close-timeline">✖</button>
+            </div>
+            <div id="timelineContent" style="flex: 1; overflow-y: auto; padding-right: 8px;">
+                <!-- Timeline events will load here -->
+            </div>
+        </div>
+    </div>
+
     <!-- Global delegated click handler: handles all dynamic buttons safely on all mobile browsers -->
     <script>
         document.addEventListener('click', function(e) {
@@ -941,6 +1146,8 @@
             else if (action === 'notify') notifyParent(id);
             else if (action === 'revoke-pass') revokePass(id);
             else if (action === 'close-sms') closeSmsModal();
+            else if (action === 'close-timeline') document.getElementById('timelineModal').style.display = 'none';
+            else if (action === 'open-timeline') openTimeline(id);
         });
         
     </script>

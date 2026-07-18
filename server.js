@@ -568,7 +568,7 @@ app.post('/api/classes', authenticateToken, (req, res) => {
         return res.status(403).json({ success: false, message: "Unauthorized access." });
     }
 
-    const { name, classroom_id } = req.body;
+    const { name, classroom_id, auto_close_mins } = req.body;
     const teacher_id = req.user.id; // Extract teacher ID securely from verified token
     const token_secret = crypto.randomBytes(16).toString('hex');
     
@@ -581,9 +581,17 @@ app.post('/api/classes', authenticateToken, (req, res) => {
             return res.status(404).json({ success: false, message: "Selected classroom location not found." });
         }
 
+        let query = "INSERT INTO classes (teacher_id, name, latitude, longitude, radius, token_secret, accuracy) VALUES (?, ?, ?, ?, ?, ?, ?)";
+        let params = [teacher_id, name, room.latitude, room.longitude, room.radius, token_secret, room.accuracy];
+
+        if (auto_close_mins && !isNaN(auto_close_mins)) {
+            query = "INSERT INTO classes (teacher_id, name, latitude, longitude, radius, token_secret, accuracy, auto_close_at) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime', ?))";
+            params.push(`+${parseInt(auto_close_mins)} minutes`);
+        }
+
         db.run(
-            "INSERT INTO classes (teacher_id, name, latitude, longitude, radius, token_secret, accuracy) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            [teacher_id, name, room.latitude, room.longitude, room.radius, token_secret, room.accuracy],
+            query,
+            params,
             function (err) {
                 if (err) return res.status(500).json({ error: err.message });
                 res.json({ success: true, class_id: this.lastID });
@@ -591,6 +599,19 @@ app.post('/api/classes', authenticateToken, (req, res) => {
         );
     });
 });
+
+// Auto-close interval
+setInterval(() => {
+    db.run(
+        "UPDATE classes SET active = 0 WHERE active = 1 AND auto_close_at IS NOT NULL AND datetime(auto_close_at) <= datetime('now', 'localtime')",
+        function (err) {
+            if (err) console.error('[AUTO-CLOSE ERROR]', err.message);
+            if (this.changes > 0) {
+                console.log('[AUTO-CLOSE] Sessions auto-closed at', new Date());
+            }
+        }
+    );
+}, 2 * 60 * 1000);
 
 // Teacher API: Get classes for teacher (with optional attendance counts)
 app.get('/api/classes/:teacher_id', authenticateToken, (req, res) => {
@@ -778,6 +799,18 @@ app.post('/api/alerts/:alert_id/notify-parent', authenticateToken, (req, res) =>
     });
 });
 
+// Coordinator API: Escalate GPS Drop Alert to HOD
+app.post('/api/coordinator/escalate-alert', authenticateToken, (req, res) => {
+    if (req.user.role !== 'coordinator') {
+        return res.status(403).json({ success: false, message: "Unauthorized access." });
+    }
+    const { alert_id } = req.body;
+    db.run("UPDATE alerts SET type = 'GPS_DROPPED_ESCALATED', status = 1 WHERE id = ?", [alert_id], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true, message: "Alert escalated to HOD!" });
+    });
+});
+
 // HOD & Coordinator API: Reverse attendance status from Absent to Present
 app.post('/api/alerts/:alert_id/reverse-attendance', authenticateToken, (req, res) => {
     if (req.user.role !== 'hod' && req.user.role !== 'coordinator') {
@@ -811,8 +844,8 @@ app.post('/api/alerts/:alert_id/reverse-attendance', authenticateToken, (req, re
                 const performInsert = (finalClassId) => {
                     // Insert or replace present attendance status for that student and class
                     const insertAttendance = `
-                        INSERT OR REPLACE INTO attendance (class_id, student_id, status, timestamp) 
-                        VALUES (?, ?, 'present', datetime('now', 'localtime'))
+                        INSERT OR REPLACE INTO attendance (class_id, student_id, status, timestamp, check_in_time) 
+                        VALUES (?, ?, 'present', datetime('now', 'localtime'), datetime('now', 'localtime'))
                     `;
                     db.run(insertAttendance, [finalClassId, student_id], function(err) {
                         if (err) {
@@ -972,10 +1005,10 @@ app.post('/api/mark-barcode', authenticateToken, (req, res) => {
             if (err) return res.status(500).json({ error: err.message });
             if (!student) return res.status(404).json({ success: false, message: "Barcode not registered to any student." });
 
-            db.run("INSERT INTO attendance (class_id, student_id, status) VALUES (?, ?, 'present')", [class_id, student.id], function(err) {
+            db.run("INSERT INTO attendance (class_id, student_id, status, check_in_time) VALUES (?, ?, 'present', datetime('now','localtime'))", [class_id, student.id], function(err) {
                 if (err) {
                     if (err.message.includes("UNIQUE")) {
-                        db.run("UPDATE attendance SET status = 'present' WHERE class_id = ? AND student_id = ?", [class_id, student.id], function(updateErr) {
+                        db.run("UPDATE attendance SET status = 'present', check_in_time = coalesce(check_in_time, datetime('now','localtime')) WHERE class_id = ? AND student_id = ?", [class_id, student.id], function(updateErr) {
                             if (updateErr) return res.status(500).json({ error: updateErr.message });
                             return res.json({ success: true, message: `Attendance updated to Present for ${student.username}.` });
                         });
@@ -1084,7 +1117,7 @@ app.post('/api/request-approval', authenticateToken, (req, res) => {
     const student_id = req.user.id; // Securely retrieve student ID from verified token
     
     db.run(
-        "INSERT INTO attendance (class_id, student_id, status, request_lat, request_lon) VALUES (?, ?, 'pending', ?, ?)",
+        "INSERT INTO attendance (class_id, student_id, status, request_lat, request_lon, check_in_time) VALUES (?, ?, 'pending', ?, ?, datetime('now','localtime'))",
         [class_id, student_id, latitude, longitude],
         function(err) {
             if (err) {
@@ -1158,7 +1191,7 @@ app.post('/api/approve-request', authenticateToken, (req, res) => {
         }
 
         db.run(
-            "UPDATE attendance SET status = 'present' WHERE class_id = ? AND student_id = ? AND status = 'pending'",
+            "UPDATE attendance SET status = 'present', check_in_time = coalesce(check_in_time, datetime('now','localtime')) WHERE class_id = ? AND student_id = ? AND status = 'pending'",
             [class_id, student_id],
             function(err) {
                 if (err) return res.status(500).json({ error: err.message });
@@ -1231,10 +1264,10 @@ app.post('/api/mark-attendance', authenticateToken, (req, res) => {
             // OTP verified! Consume it
             db.run("DELETE FROM otp_codes WHERE student_id = ?", [student_id]);
 
-            db.run("INSERT INTO attendance (class_id, student_id, status) VALUES (?, ?, 'present')", [class_id, student_id], function(err) {
+            db.run("INSERT INTO attendance (class_id, student_id, status, check_in_time) VALUES (?, ?, 'present', datetime('now','localtime'))", [class_id, student_id], function(err) {
                 if (err) {
                     if (err.message.includes("UNIQUE")) {
-                        db.run("UPDATE attendance SET status = 'present' WHERE class_id = ? AND student_id = ? AND status = 'pending'", [class_id, student_id], function(updateErr) {
+                        db.run("UPDATE attendance SET status = 'present', check_in_time = coalesce(check_in_time, datetime('now','localtime')) WHERE class_id = ? AND student_id = ? AND status = 'pending'", [class_id, student_id], function(updateErr) {
                             if (updateErr) return res.status(500).json({ error: updateErr.message });
                             return res.json({ success: true, message: "Attendance verified and marked present!" });
                         });
@@ -1273,11 +1306,11 @@ app.post('/api/mark-attendance', authenticateToken, (req, res) => {
         
         // Skip distance validation check if radius is 0 or less (Geofence disabled) or if distance falls within accuracy tolerance
         if (cls.radius <= 0 || distance <= allowedDistance) {
-            db.run("INSERT INTO attendance (class_id, student_id, status, request_lat, request_lon) VALUES (?, ?, 'present', ?, ?)", [class_id, student_id, latitude, longitude], function(err) {
+            db.run("INSERT INTO attendance (class_id, student_id, status, request_lat, request_lon, check_in_time) VALUES (?, ?, 'present', ?, ?, datetime('now','localtime'))", [class_id, student_id, latitude, longitude], function(err) {
                 if (err) {
                     if (err.message.includes("UNIQUE")) {
                         // If it was pending, promote it to present
-                        db.run("UPDATE attendance SET status = 'present', request_lat = ?, request_lon = ? WHERE class_id = ? AND student_id = ? AND status = 'pending'", [latitude, longitude, class_id, student_id], function(updateErr) {
+                        db.run("UPDATE attendance SET status = 'present', request_lat = ?, request_lon = ?, check_in_time = coalesce(check_in_time, datetime('now','localtime')) WHERE class_id = ? AND student_id = ? AND status = 'pending'", [latitude, longitude, class_id, student_id], function(updateErr) {
                             if (updateErr) return res.status(500).json({ error: updateErr.message });
                             if (this.changes > 0) {
                                 return res.json({ success: true, message: "Attendance verified and marked present!", distance: Math.round(distance) });
@@ -1300,6 +1333,39 @@ app.post('/api/mark-attendance', authenticateToken, (req, res) => {
     });
 });
 
+// PUBLIC API: College open/closed status (no auth required � checked before login)
+app.get('/api/college-status', (req, res) => {
+    db.all("SELECT key, value FROM campus_settings", [], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        const s = {};
+        rows.forEach(r => { s[r.key] = r.value; });
+        const start = s.college_start_time || '09:00';
+        const end   = s.college_end_time   || '16:00';
+        const holidayMode = s.holiday_mode === '1';
+
+        if (holidayMode) {
+            return res.json({ open: false, start, end, message: 'Holiday / Special closure declared by HOD. App is closed today.' });
+        }
+
+        const now = new Date();
+        const [sh, sm] = start.split(':').map(Number);
+        const [eh, em] = end.split(':').map(Number);
+        const nowMins  = now.getHours() * 60 + now.getMinutes();
+        const startMins = sh * 60 + sm;
+        const endMins   = eh * 60 + em;
+        const day = now.getDay(); // 0=Sun, 6=Sat
+        const isWeekend = (day === 0 || day === 6);
+        const open = !isWeekend && nowMins >= startMins && nowMins < endMins;
+
+        res.json({
+            open,
+            start,
+            end,
+            is_weekend: isWeekend,
+            message: open ? 'College is open.' : isWeekend ? 'Weekend � app is closed.' : (nowMins < startMins ? `App opens at ${start}` : `App closed at ${end}. Returns tomorrow at ${start}.`)
+        });
+    });
+});
 // HOD & Student API: Get Campus Geofence Settings
 app.get('/api/campus-settings', authenticateToken, (req, res) => {
     db.all("SELECT key, value FROM campus_settings", [], (err, rows) => {
@@ -1571,122 +1637,215 @@ app.post('/api/student/heartbeat', authenticateToken, (req, res) => {
     }
 
     const student_id = req.user.id;
-    const { latitude, longitude, battery_level, is_charging } = req.body;
+    const { latitude, longitude, accuracy, battery_level, is_charging } = req.body;
+    
+    const student_username = req.user.username; // needed for alerts
 
-    // 1. Fetch campus settings
-    db.all("SELECT key, value FROM campus_settings", [], (err, rows) => {
+    // Fetch user info for spoofing detection & GPS drop alert
+    db.get("SELECT last_lat, last_lon, last_seen FROM users WHERE id = ?", [student_id], (err, userRecord) => {
         if (err) return res.status(500).json({ error: err.message });
         
-        const settings = {
-            campus_latitude: 17.3850,
-            campus_longitude: 78.4867,
-            campus_radius: 500,
-            college_start_time: '09:00',
-            college_end_time: '16:00',
-            stop_tracking_on_exit: 0,
-            exact_live_tracking: 1,
-            track_after_hours: 0
-        };
+        const prev_lat = userRecord?.last_lat;
+        const prev_lon = userRecord?.last_lon;
+        const prev_seen = userRecord?.last_seen;
 
-        rows.forEach(r => {
-            if (r.key === 'college_start_time' || r.key === 'college_end_time') {
-                settings[r.key] = r.value;
-            } else {
-                settings[r.key] = parseFloat(r.value);
+        // Fetch active attendance and class details
+        db.get(`
+            SELECT a.class_id, c.latitude as class_lat, c.longitude as class_lon, c.radius as class_radius 
+            FROM attendance a 
+            JOIN classes c ON a.class_id = c.id 
+            WHERE a.student_id = ? AND a.status = 'present' AND c.active = 1 AND date(a.timestamp,'localtime') = date('now','localtime')
+            ORDER BY a.id DESC LIMIT 1
+        `, [student_id], (err, activeClass) => {
+            const has_active_attendance = !!activeClass;
+
+            // ── TASK B: FAKE GPS / SPOOFING DETECTION ──
+            function haversineDistance(lat1, lon1, lat2, lon2) {
+                const R = 6371000;
+                const dLat = (lat2-lat1)*Math.PI/180;
+                const dLon = (lon2-lon1)*Math.PI/180;
+                const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+                return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
             }
-        });
-
-        // 2. Check if current local time is within college hours
-        const nowLocal = new Date();
-        const hours = nowLocal.getHours();
-        const minutes = nowLocal.getMinutes();
-        const currentMin = hours * 60 + minutes;
-
-        const [startH, startM] = settings.college_start_time.split(':').map(Number);
-        const [endH, endM] = settings.college_end_time.split(':').map(Number);
-        const startMin = startH * 60 + startM;
-        const endMin = endH * 60 + endM;
-
-        const isCollegeHours = currentMin >= startMin && currentMin <= endMin;
-
-        // 3. Calculate distance and campus residency status
-        let inside_campus = true;
-        let distance = 0;
-        if (latitude !== undefined && longitude !== undefined) {
-            distance = getDistance(settings.campus_latitude, settings.campus_longitude, latitude, longitude);
-            inside_campus = distance <= settings.campus_radius;
-        }
-
-        // 4. Resolve active out-pass
-        db.get("SELECT expiry, reason FROM student_passes WHERE student_id = ?", [student_id], (err, pass) => {
-            if (err) return res.status(500).json({ error: err.message });
             
-            const has_pass = pass && Date.now() < new Date(pass.expiry + 'Z').getTime();
-            let track_active = true;
+            let suspicious = false;
+            if (prev_lat && prev_lon && prev_seen && latitude && longitude) {
+                const dist = haversineDistance(prev_lat, prev_lon, latitude, longitude);
+                const secs = (Date.now() - new Date(prev_seen + 'Z').getTime()) / 1000;
+                // Teleportation: >1000m in <60s
+                if (secs > 0 && secs < 60 && dist > 1000) suspicious = true;
+            }
+            // Accuracy check: often 0 or very large for fake GPS
+            if (accuracy !== undefined && (accuracy === 0 || accuracy > 5000)) suspicious = true;
 
-            // 5. Enforce Geofencing rules and alerts during college hours
-            if (isCollegeHours) {
-                if (!inside_campus && !has_pass && latitude !== undefined && longitude !== undefined) {
-                    // Check alert count today to avoid alert spamming
-                    const alertCountQuery = `
-                        SELECT COUNT(*) as count FROM alerts 
-                        WHERE student_id = ? 
-                          AND message LIKE '%Campus Geofence Breach%' 
-                          AND date(timestamp) = date('now')
-                    `;
-                    db.get(alertCountQuery, [student_id], (err, countRow) => {
-                        const alertCount = countRow ? countRow.count : 0;
-                        
-                        if (alertCount < 4) {
-                            const alertMsg = `🚨 Campus Geofence Breach: Student "${req.user.username}" walked outside campus boundary during college hours. (Distance: ${Math.round(distance)}m, Limit: ${settings.campus_radius}m).`;
-                            db.run("INSERT INTO alerts (student_id, message, latitude, longitude) VALUES (?, ?, ?, ?)", [student_id, alertMsg, latitude, longitude]);
-                            db.run("UPDATE users SET attendance_locked = 1 WHERE id = ?", [student_id]);
+            if (suspicious) {
+                db.run("UPDATE users SET is_location_suspicious = 1 WHERE id = ?", [student_id]);
+                db.get("SELECT id FROM alerts WHERE student_id=? AND type='GPS_SPOOF' AND date(timestamp,'localtime')=date('now','localtime')", [student_id], (err, existing) => {
+                    if (!existing) {
+                        db.run("INSERT INTO alerts (student_id, message, type, status, timestamp) VALUES (?,?,?,0,datetime('now','localtime'))", 
+                            [student_id, `⚠️ Location Verification Failed — Possible GPS Spoofing detected for ${student_username}`, 'GPS_SPOOF']);
+                    }
+                });
+            }
+
+            // ── TASK C: GPS TURN-OFF ALERT ──
+            if (!latitude && !longitude && has_active_attendance && prev_lat && prev_lon) {
+                const minsSinceGps = (Date.now() - new Date(prev_seen + 'Z').getTime()) / 60000;
+                if (minsSinceGps > 3) {
+                    db.get("SELECT id FROM alerts WHERE student_id=? AND type='GPS_DROPPED' AND date(timestamp,'localtime')=date('now','localtime')", [student_id], (err, existing) => {
+                        if (!existing) {
+                            db.run("INSERT INTO alerts (student_id, message, type, status, timestamp) VALUES (?,?,?,0,datetime('now','localtime'))",
+                                [student_id, `📡 GPS Disabled — ${student_username} turned off location during active session`, 'GPS_DROPPED']);
+                            
+                            // ── TASK E: Movement Timeline (GPS_DROPPED) ──
+                            db.run("INSERT INTO movement_events (student_id, class_id, event_type, timestamp) VALUES (?, ?, 'GPS_DROPPED', datetime('now','localtime'))", 
+                                [student_id, activeClass ? activeClass.class_id : null]);
                         }
                     });
+                }
+            }
 
-                    // Stop tracking on exit option
-                    if (settings.stop_tracking_on_exit === 1) {
-                        track_active = false;
+            // 1. Fetch campus settings
+            db.all("SELECT key, value FROM campus_settings", [], (err, rows) => {
+                if (err) return res.status(500).json({ error: err.message });
+                
+                const settings = {
+                    campus_latitude: 17.3850,
+                    campus_longitude: 78.4867,
+                    campus_radius: 500,
+                    college_start_time: '09:00',
+                    college_end_time: '16:00',
+                    stop_tracking_on_exit: 0,
+                    exact_live_tracking: 1,
+                    track_after_hours: 0
+                };
+
+                rows.forEach(r => {
+                    if (r.key === 'college_start_time' || r.key === 'college_end_time') {
+                        settings[r.key] = r.value;
+                    } else {
+                        settings[r.key] = parseFloat(r.value);
+                    }
+                });
+
+                const nowLocal = new Date();
+                const hours = nowLocal.getHours();
+                const minutes = nowLocal.getMinutes();
+                const currentMin = hours * 60 + minutes;
+
+                const [startH, startM] = settings.college_start_time.split(':').map(Number);
+                const [endH, endM] = settings.college_end_time.split(':').map(Number);
+                const startMin = startH * 60 + startM;
+                const endMin = endH * 60 + endM;
+
+                const isCollegeHours = currentMin >= startMin && currentMin <= endMin;
+
+                let inside_campus = true;
+                let distance = 0;
+                let prev_inside_campus = true;
+                if (prev_lat !== undefined && prev_lon !== undefined) {
+                    prev_inside_campus = getDistance(settings.campus_latitude, settings.campus_longitude, prev_lat, prev_lon) <= settings.campus_radius;
+                }
+
+                if (latitude !== undefined && longitude !== undefined) {
+                    distance = getDistance(settings.campus_latitude, settings.campus_longitude, latitude, longitude);
+                    inside_campus = distance <= settings.campus_radius;
+                    
+                    // ── TASK E: Movement Timeline (Campus Enter/Exit & Class Leaves) ──
+                    if (prev_lat && prev_lon) {
+                        if (prev_inside_campus && !inside_campus) {
+                            db.run("INSERT INTO movement_events (student_id, event_type, latitude, longitude, timestamp) VALUES (?, 'EXITED_CAMPUS', ?, ?, datetime('now','localtime'))", [student_id, latitude, longitude]);
+                        } else if (!prev_inside_campus && inside_campus) {
+                            db.run("INSERT INTO movement_events (student_id, event_type, latitude, longitude, timestamp) VALUES (?, 'ENTERED_CAMPUS', ?, ?, datetime('now','localtime'))", [student_id, latitude, longitude]);
+                        } else if (inside_campus && Math.random() < 0.2) {
+                            // every 5th heartbeat roughly
+                            db.run("INSERT INTO movement_events (student_id, event_type, latitude, longitude, timestamp) VALUES (?, 'IN_CAMPUS', ?, ?, datetime('now','localtime'))", [student_id, latitude, longitude]);
+                        }
+                    }
+
+                    if (activeClass) {
+                        const distToClass = getDistance(activeClass.class_lat, activeClass.class_lon, latitude, longitude);
+                        const radius = activeClass.class_radius || 50;
+                        db.get("SELECT event_type FROM movement_events WHERE student_id = ? AND class_id = ? ORDER BY id DESC LIMIT 1", [student_id, activeClass.class_id], (err, lastEvent) => {
+                            const lastEventType = lastEvent ? lastEvent.event_type : null;
+                            if (distToClass > radius + 20) { // added 20m buffer for GPS jitter
+                                if (lastEventType !== 'LEFT_CLASS') {
+                                    db.run("INSERT INTO movement_events (student_id, class_id, event_type, latitude, longitude, timestamp) VALUES (?, ?, 'LEFT_CLASS', ?, ?, datetime('now','localtime'))", 
+                                        [student_id, activeClass.class_id, latitude, longitude]);
+                                }
+                            } else {
+                                if (lastEventType === 'LEFT_CLASS') {
+                                    db.run("INSERT INTO movement_events (student_id, class_id, event_type, latitude, longitude, timestamp) VALUES (?, ?, 'RETURNED_CLASS', ?, ?, datetime('now','localtime'))", 
+                                        [student_id, activeClass.class_id, latitude, longitude]);
+                                }
+                            }
+                        });
                     }
                 }
-            } else {
-                // Outside operating hours
-                if (settings.track_after_hours === 0) {
-                    track_active = false;
-                }
-            }
 
-            // 6. Update student telemetry/status in database (always update battery; update location only if tracking active and coords present)
-            let updateSql, updateParams;
-            const hasBattery = battery_level !== undefined && battery_level !== null;
-            const hasCoords  = track_active && latitude !== undefined && longitude !== undefined;
+                db.get("SELECT expiry, reason FROM student_passes WHERE student_id = ?", [student_id], (err, pass) => {
+                    if (err) return res.status(500).json({ error: err.message });
+                    
+                    const has_pass = pass && Date.now() < new Date(pass.expiry + 'Z').getTime();
+                    let track_active = true;
 
-            if (hasCoords && hasBattery) {
-                updateSql = "UPDATE users SET last_seen = datetime('now', 'localtime'), last_lat = ?, last_lon = ?, battery_level = ?, is_charging = ? WHERE id = ?";
-                updateParams = [latitude, longitude, Math.round(battery_level), is_charging ? 1 : 0, student_id];
-            } else if (hasCoords) {
-                updateSql = "UPDATE users SET last_seen = datetime('now', 'localtime'), last_lat = ?, last_lon = ? WHERE id = ?";
-                updateParams = [latitude, longitude, student_id];
-            } else if (hasBattery) {
-                updateSql = "UPDATE users SET last_seen = datetime('now', 'localtime'), battery_level = ?, is_charging = ? WHERE id = ?";
-                updateParams = [Math.round(battery_level), is_charging ? 1 : 0, student_id];
-            } else {
-                updateSql = "UPDATE users SET last_seen = datetime('now', 'localtime') WHERE id = ?";
-                updateParams = [student_id];
-            }
+                    if (isCollegeHours) {
+                        if (!inside_campus && !has_pass && latitude !== undefined && longitude !== undefined) {
+                            const alertCountQuery = `
+                                SELECT COUNT(*) as count FROM alerts 
+                                WHERE student_id = ? 
+                                  AND message LIKE '%Campus Geofence Breach%' 
+                                  AND date(timestamp) = date('now')
+                            `;
+                            db.get(alertCountQuery, [student_id], (err, countRow) => {
+                                const alertCount = countRow ? countRow.count : 0;
+                                if (alertCount < 4) {
+                                    const alertMsg = `🚨 Campus Geofence Breach: Student "${req.user.username}" walked outside campus boundary during college hours. (Distance: ${Math.round(distance)}m, Limit: ${settings.campus_radius}m).`;
+                                    db.run("INSERT INTO alerts (student_id, message, latitude, longitude) VALUES (?, ?, ?, ?)", [student_id, alertMsg, latitude, longitude]);
+                                    db.run("UPDATE users SET attendance_locked = 1 WHERE id = ?", [student_id]);
+                                }
+                            });
+                            if (settings.stop_tracking_on_exit === 1) track_active = false;
+                        }
+                    } else {
+                        if (settings.track_after_hours === 0) track_active = false;
+                    }
 
-            db.run(updateSql, updateParams, function(err) {
-                if (err) return res.status(500).json({ error: err.message });
-                res.json({
-                    success: true,
-                    track_active: track_active,
-                    inside_campus: inside_campus,
-                    distance_from_campus: Math.round(distance),
-                    campus_radius: settings.campus_radius,
-                    has_pass: !!has_pass,
-                    enable_high_accuracy: settings.exact_live_tracking === 1,
-                    interval_ms: settings.exact_live_tracking === 1 ? 10000 : 25000,
-                    message: "Telemetry processed successfully."
+                    // 6. Update student telemetry/status in database 
+                    let updateSql, updateParams;
+                    const hasBattery = battery_level !== undefined && battery_level !== null;
+                    const hasCoords  = track_active && latitude !== undefined && longitude !== undefined;
+
+                    // Note: Update prev_lat, prev_lon, prev_seen with current last_lat values
+                    if (hasCoords && hasBattery) {
+                        updateSql = "UPDATE users SET prev_lat = last_lat, prev_lon = last_lon, prev_seen = last_seen, last_seen = datetime('now', 'localtime'), last_lat = ?, last_lon = ?, battery_level = ?, is_charging = ? WHERE id = ?";
+                        updateParams = [latitude, longitude, Math.round(battery_level), is_charging ? 1 : 0, student_id];
+                    } else if (hasCoords) {
+                        updateSql = "UPDATE users SET prev_lat = last_lat, prev_lon = last_lon, prev_seen = last_seen, last_seen = datetime('now', 'localtime'), last_lat = ?, last_lon = ? WHERE id = ?";
+                        updateParams = [latitude, longitude, student_id];
+                    } else if (hasBattery) {
+                        updateSql = "UPDATE users SET prev_seen = last_seen, last_seen = datetime('now', 'localtime'), battery_level = ?, is_charging = ? WHERE id = ?";
+                        updateParams = [Math.round(battery_level), is_charging ? 1 : 0, student_id];
+                    } else {
+                        updateSql = "UPDATE users SET prev_seen = last_seen, last_seen = datetime('now', 'localtime') WHERE id = ?";
+                        updateParams = [student_id];
+                    }
+
+                    db.run(updateSql, updateParams, function(err) {
+                        if (err) return res.status(500).json({ error: err.message });
+                        res.json({
+                            success: true,
+                            track_active: track_active,
+                            inside_campus: inside_campus,
+                            distance_from_campus: Math.round(distance),
+                            campus_radius: settings.campus_radius,
+                            has_pass: !!has_pass,
+                            enable_high_accuracy: settings.exact_live_tracking === 1,
+                            interval_ms: settings.exact_live_tracking === 1 ? 10000 : 25000,
+                            location_suspicious: suspicious,
+                            message: "Telemetry processed successfully."
+                        });
+                    });
                 });
             });
         });
@@ -1934,7 +2093,7 @@ app.get('/api/hod/students-tracking', authenticateToken, (req, res) => {
 
     const query = `
         SELECT u.id, u.username, u.last_seen, u.attendance_locked, u.last_lat, u.last_lon,
-               u.battery_level, u.is_charging, a.status as attendance_status,
+               u.battery_level, u.is_charging, u.is_location_suspicious, a.status as attendance_status,
                (SELECT message FROM alerts WHERE student_id = u.id ORDER BY id DESC LIMIT 1) as last_alert
         FROM users u
         LEFT JOIN attendance a ON a.student_id = u.id AND date(a.timestamp, 'localtime') = date('now', 'localtime')
@@ -1978,7 +2137,8 @@ app.get('/api/hod/students-tracking', authenticateToken, (req, res) => {
                 last_lat: r.last_lat,
                 last_lon: r.last_lon,
                 battery_level: r.battery_level,
-                is_charging: r.is_charging
+                is_charging: r.is_charging,
+                is_location_suspicious: r.is_location_suspicious
             };
         });
         
@@ -2303,6 +2463,121 @@ app.use((err, req, res, next) => {
     
     // Prevent sensitive internal details leakage to frontend client
     res.status(500).json({ success: false, message: "❌ Internal Server Error. Please contact admin." });
+});
+
+// Task D: Half Day Summary
+app.get('/api/hod/half-day-summary', authenticateToken, (req, res) => {
+    if (req.user.role !== 'hod') return res.status(403).json({success: false, message: 'Unauthorized'});
+
+    db.all("SELECT key, value FROM campus_settings", [], (err, settingsRows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        let startH = 9, startM = 0, endH = 16, endM = 0;
+        settingsRows.forEach(r => {
+            if (r.key === 'college_start_time') { const p = r.value.split(':'); startH = +p[0]; startM = +p[1]; }
+            if (r.key === 'college_end_time') { const p = r.value.split(':'); endH = +p[0]; endM = +p[1]; }
+        });
+        const college_duration_mins = (endH*60 + endM) - (startH*60 + startM);
+        
+        const query = `
+            SELECT u.id, u.username,
+                   MIN(a.check_in_time) as first_check_in_time,
+                   u.last_seen,
+                   MAX(a.status) as status
+            FROM users u
+            LEFT JOIN attendance a ON a.student_id = u.id AND date(a.timestamp,'localtime') = date('now','localtime')
+            WHERE u.role = 'student'
+            GROUP BY u.id
+        `;
+        db.all(query, [], (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            
+            const result = rows.map(r => {
+                let type = 'absent';
+                if (r.first_check_in_time && r.last_seen && r.status === 'present') {
+                    const checkInStr = r.first_check_in_time.replace(' ', 'T');
+                    const lastSeenStr = r.last_seen.replace(' ', 'T');
+                    const checkInDate = new Date(checkInStr).getTime();
+                    const lastSeenDate = new Date(lastSeenStr).getTime();
+                    const mins_attended = (lastSeenDate - checkInDate) / 60000;
+                    if (mins_attended >= 0.75 * college_duration_mins) {
+                        type = 'full';
+                    } else if (mins_attended >= 0.30 * college_duration_mins) {
+                        type = 'half';
+                    }
+                }
+                return { id: r.id, username: r.username, check_in_time: r.first_check_in_time, last_seen: r.last_seen, type, status: r.status };
+            });
+            res.json({ success: true, summary: result });
+        });
+    });
+});
+
+// Task E: Movement Timeline
+app.get('/api/hod/student-timeline/:student_id', authenticateToken, (req, res) => {
+    if (req.user.role !== 'hod') return res.status(403).json({success: false, message: 'Unauthorized'});
+    const student_id = req.params.student_id;
+    const query = `
+        SELECT me.*, c.name as class_name 
+        FROM movement_events me
+        LEFT JOIN classes c ON me.class_id = c.id
+        WHERE me.student_id = ? AND date(me.timestamp,'localtime') = date('now','localtime')
+        ORDER BY me.timestamp ASC
+    `;
+    db.all(query, [student_id], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true, events: rows });
+    });
+});
+
+// Task F: Analytics
+app.get('/api/hod/analytics', authenticateToken, (req, res) => {
+    if (req.user.role !== 'hod') return res.status(403).json({success: false, message: 'Unauthorized'});
+
+    const response = {
+        daily: { present: 0, total: 0, percentage: 0 },
+        top_absentees: [],
+        late_arrivals: [],
+        frequent_leavers: [],
+        class_stats: [],
+        week_trend: []
+    };
+
+    db.serialize(() => {
+        db.get("SELECT COUNT(DISTINCT id) as total FROM users WHERE role='student'", (err, row) => {
+            if (row) response.daily.total = row.total;
+            db.get("SELECT COUNT(DISTINCT student_id) as present FROM attendance WHERE date(timestamp,'localtime') = date('now','localtime') AND status='present'", (err, row2) => {
+                if (row2) response.daily.present = row2.present;
+                if (response.daily.total > 0) response.daily.percentage = Math.round((response.daily.present / response.daily.total) * 100);
+            });
+        });
+
+        db.all("SELECT u.username, COUNT(a.id) as absent_count FROM users u LEFT JOIN attendance a ON u.id = a.student_id AND a.status='absent' WHERE u.role='student' GROUP BY u.id ORDER BY absent_count DESC LIMIT 5", (err, rows) => {
+            if (rows) response.top_absentees = rows;
+        });
+
+        db.all("SELECT u.username, COUNT(a.id) as alert_count FROM alerts a JOIN users u ON a.student_id = u.id WHERE a.type IN ('GPS_DROPPED', 'GPS_DROPPED_ESCALATED') OR a.message LIKE '%Breach%' GROUP BY u.id ORDER BY alert_count DESC LIMIT 5", (err, rows) => {
+            if (rows) response.frequent_leavers = rows;
+        });
+
+        db.all("SELECT c.name as class_name, COUNT(a.id) as present_count FROM classes c LEFT JOIN attendance a ON c.id = a.class_id AND date(a.timestamp,'localtime') = date('now','localtime') AND a.status='present' GROUP BY c.id ORDER BY present_count DESC", (err, rows) => {
+            if (rows) response.class_stats = rows;
+        });
+
+        const trendQuery = `
+            SELECT date(timestamp,'localtime') as date, COUNT(DISTINCT student_id) as present_count
+            FROM attendance 
+            WHERE status='present' AND date(timestamp,'localtime') >= date('now', '-7 days')
+            GROUP BY date(timestamp,'localtime')
+            ORDER BY date ASC
+        `;
+        db.all(trendQuery, (err, rows) => {
+            if (rows) response.week_trend = rows.map(r => ({ date: r.date, percentage: r.present_count })); 
+            
+            setTimeout(() => {
+                res.json({ success: true, analytics: response });
+            }, 100); 
+        });
+    });
 });
 
 if (isRender || !useHttps) {

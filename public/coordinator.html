@@ -866,6 +866,9 @@
                 }
                 container.innerHTML = unresolved.map(a => {
                     const timeStr = new Date(a.timestamp).toLocaleTimeString();
+                    if (a.type === 'GPS_DROPPED') {
+                        return '<div class="card" style="border-left:4px solid var(--accent); background:rgba(108,99,255,0.02);"><div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;"><div style="font-weight:700; font-size:13px; color:var(--accent);">📡 GPS DISABLED</div><div style="font-size:11px; color:var(--text3);">' + timeStr + '</div></div><p style="font-size:13px; color:var(--text); margin-bottom:10px;">' + a.message + '</p><div style="display:flex; gap:8px; flex-wrap:wrap;"><button class="btn btn-primary btn-sm" data-action="escalate-hod" data-id="' + a.id + '">⬆️ Escalate to HOD</button><button class="btn btn-secondary btn-sm" data-action="dismiss" data-id="' + a.id + '">Dismiss</button></div></div>';
+                    }
                     const reasonHtml = a.student_reason
                         ? '<div style="padding:10px; background:rgba(255,255,255,0.03); border-radius:8px; border:1px solid var(--border); margin-bottom:12px;"><div style="font-size:10px; font-weight:700; color:var(--yellow); text-transform:uppercase;">Student Explanation:</div><div style="font-size:12px; color:var(--text2); margin-top:2px;">"' + a.student_reason + '"</div></div>'
                         : '<div style="font-size:11px; color:var(--text3); margin-bottom:12px; font-style:italic;">No student explanation submitted yet.</div>';
@@ -897,6 +900,18 @@
             } else {
                 const errMsg = res.message || res.error || 'Failed to dismiss alert.';
                 showToast('❌ Dismiss failed: ' + errMsg, 'error');
+            }
+        }
+
+        async function escalateAlert(alertId) {
+            showToast('Escalating alert to HOD...', 'info');
+            const res = await api('/api/coordinator/escalate-alert', 'POST', { alert_id: alertId });
+            if (res.success) {
+                showToast('✅ Alert escalated to HOD.', 'success');
+                loadAlerts();
+            } else {
+                const errMsg = res.message || res.error || 'Failed to escalate alert.';
+                showToast('❌ Escalate failed: ' + errMsg, 'error');
             }
         }
 
@@ -970,6 +985,7 @@
             if (action === 'unlock') unlockStudent(parseInt(id, 10));
             else if (action === 'reverse') reverseAttendance(parseInt(id, 10));
             else if (action === 'dismiss') dismissAlert(parseInt(id, 10));
+            else if (action === 'escalate-hod') escalateAlert(parseInt(id, 10));
             else if (action === 'notify') notifyParent(parseInt(id, 10));
             else if (action === 'delete-classroom') deleteClassroom(parseInt(id, 10));
             else if (action === 'toggle-keypad') toggleKeypad(parseInt(id, 10), btn.checked);

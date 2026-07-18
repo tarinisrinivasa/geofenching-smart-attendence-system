@@ -198,6 +198,25 @@ const db = new sqlite3.Database(dbPath, (err) => {
         safeAlter("ALTER TABLE alerts ADD COLUMN latitude REAL");
         safeAlter("ALTER TABLE alerts ADD COLUMN longitude REAL");
         safeAlter("ALTER TABLE classes ADD COLUMN token_secret TEXT");
+        safeAlter("ALTER TABLE classes ADD COLUMN auto_close_at TEXT");
+        safeAlter("ALTER TABLE users ADD COLUMN prev_lat REAL");
+        safeAlter("ALTER TABLE users ADD COLUMN prev_lon REAL");
+        safeAlter("ALTER TABLE users ADD COLUMN prev_seen TEXT");
+        safeAlter("ALTER TABLE users ADD COLUMN is_location_suspicious INTEGER DEFAULT 0");
+        safeAlter("ALTER TABLE alerts ADD COLUMN type TEXT");
+        safeAlter("ALTER TABLE attendance ADD COLUMN check_in_time TEXT");
+        safeAlter("ALTER TABLE attendance ADD COLUMN attendance_type TEXT DEFAULT 'full'");
+
+        db.run(`CREATE TABLE IF NOT EXISTS movement_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_id INTEGER,
+            class_id INTEGER,
+            event_type TEXT,
+            latitude REAL,
+            longitude REAL,
+            timestamp TEXT DEFAULT (datetime('now','localtime')),
+            notes TEXT
+        )`, (err) => { if (err) console.error('[DB] Error creating movement_events table:', err.message); });
         safeAlter("ALTER TABLE classes ADD COLUMN accuracy REAL");
         safeAlter("ALTER TABLE attendance ADD COLUMN status TEXT DEFAULT 'present'");
         safeAlter("ALTER TABLE attendance ADD COLUMN request_lat REAL");
