@@ -303,7 +303,7 @@ app.post('/api/login', (req, res) => {
 
             logSecurityEvent('AUTH_SUCCESS', req.ip, row.id, row.username, `Successful login (Role: ${row.role})`);
 
-            if (row.role === 'student') {
+            if (row.role !== 'hod') {
                 // Fetch biometric status for the 2-step login flow
                 db.get("SELECT device_biometric_id FROM users WHERE id = ?", [row.id], (bioErr, bioRow) => {
                     const hasBiometric = !!(bioRow && bioRow.device_biometric_id);
@@ -322,7 +322,7 @@ app.post('/api/login', (req, res) => {
         };
 
         // Enforce hardware lock for students
-        if (row.role === 'student') {
+        if (row.role !== 'hod') {
             // First check college status (hours & holiday mode)
             db.all("SELECT key, value FROM campus_settings", [], (settingsErr, settingsRows) => {
                 if (settingsErr) return res.status(500).json({ error: settingsErr.message });
@@ -352,7 +352,7 @@ app.post('/api/login', (req, res) => {
                 }
 
                 // Proceed with device ID checks
-                if (!row.device_id) {
+                if (row.role === 'student') { if (!row.device_id) {
                     // First login: Verify that this phone isn't already registered to another student
                     db.get("SELECT username FROM users WHERE device_id = ? AND id != ?", [device_id, row.id], (err, boundUser) => {
                         if (err) return res.status(500).json({ error: err.message });
@@ -374,7 +374,7 @@ app.post('/api/login', (req, res) => {
                     return res.status(400).json({ success: false, message: "This account is registered on another device." });
                 } else {
                     completeLogin();
-                }
+                } } else { completeLogin(); }
             });
         } else {
             completeLogin();

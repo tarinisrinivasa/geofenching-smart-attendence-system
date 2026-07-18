@@ -853,6 +853,20 @@ async function retryGpsGateCheckOnly() {
         }
         return;
     }
+    try {
+        const r = await fetch('/api/college-status');
+        const d = await r.json();
+        if (d && d.open === false) {
+            alert(d.message || 'College is closed outside operational hours.');
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = '🔄 Try Again / Reload';
+            }
+            return;
+        }
+    } catch (err) {
+        // ignore
+    }
     window.location.reload();
 }
 
@@ -868,6 +882,20 @@ async function runGpsGateCheck() {
             '🚫'
         );
         return false;
+    }
+    try {
+        const r = await fetch('/api/college-status');
+        const d = await r.json();
+        if (d && d.open === false) {
+            showBlocker(
+                'GeoAttend is Closed',
+                d.message || 'College hours are Monday - Friday, 9:00 AM - 4:00 PM. The system is closed outside these hours.',
+                '🔒'
+            );
+            return false;
+        }
+    } catch (err) {
+        console.error('Gates check failed', err);
     }
     return true;
 }
