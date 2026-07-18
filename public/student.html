@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -775,7 +775,11 @@ let radarAnimationId = null;
 
 function drawRadar() {
     const canvas = document.getElementById('radarCanvas');
-    if (!canvas) return;
+    const card = document.getElementById('campusCard');
+    if (!canvas || !card || card.style.display === 'none') {
+        radarAnimationId = null;
+        return;
+    }
     const ctx = canvas.getContext('2d');
     const cx = canvas.width / 2;
     const cy = canvas.height / 2;
