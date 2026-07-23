@@ -248,9 +248,66 @@
         .breach-title { font-size: 18px; font-weight: 800; color: var(--red); margin-bottom: 10px; }
         .breach-desc { font-size: 13px; color: var(--text2); line-height: 1.6; margin-bottom: 20px; }
         .breach-alert-box {
-            background: rgba(239,68,68,0.07); border: 1px solid rgba(239,68,68,0.2);
-            border-radius: 12px; padding: 14px; margin-bottom: 20px;
-            font-size: 12px; color: #fca5a5; line-height: 1.6; text-align: left;
+            background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.2);
+            border-radius: 14px; padding: 16px; margin-bottom: 24px; text-align: left;
+        }
+
+        /* ── PRIVACY POLICY & TERMS MODAL ── */
+        .policy-modal-overlay {
+            position: fixed; inset: 0; z-index: 100000;
+            background: rgba(3, 7, 18, 0.88);
+            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            display: flex; align-items: center; justify-content: center;
+            padding: 20px;
+        }
+        .policy-modal-card {
+            background: #0b0f19;
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 20px;
+            width: 100%; max-width: 520px;
+            max-height: 85vh; display: flex; flex-direction: column;
+            box-shadow: 0 24px 64px rgba(0,0,0,0.8);
+            overflow: hidden;
+            animation: modalFadeIn 0.3s ease;
+        }
+        @keyframes modalFadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        .policy-header {
+            padding: 20px; border-bottom: 1px solid rgba(255,255,255,0.08);
+            display: flex; align-items: center; gap: 14px; background: rgba(255,255,255,0.02);
+        }
+        .policy-icon { font-size: 28px; }
+        .policy-title { font-size: 17px; font-weight: 800; color: #f9fafb; }
+        .policy-sub { font-size: 12px; color: #9ca3af; margin-top: 2px; }
+        .policy-body {
+            padding: 20px; overflow-y: auto; flex: 1; font-size: 13px; color: #d1d5db; line-height: 1.6;
+        }
+        .policy-section { margin-bottom: 18px; }
+        .policy-section h4 { font-size: 13px; font-weight: 700; color: #a78bfa; margin-bottom: 6px; }
+        .policy-section ul { margin-left: 18px; margin-top: 4px; }
+        .policy-footer {
+            padding: 16px 20px; border-top: 1px solid rgba(255,255,255,0.08);
+            background: rgba(255,255,255,0.02);
+        }
+        .policy-checkbox-label {
+            display: flex; align-items: flex-start; gap: 10px; font-size: 12px; color: #e5e7eb;
+            margin-bottom: 14px; cursor: pointer; user-select: none;
+        }
+        .policy-checkbox-label input { width: 16px; height: 16px; margin-top: 2px; cursor: pointer; accent-color: #6c63ff; }
+        .policy-btn-group { display: flex; gap: 10px; }
+        .btn-decline-policy {
+            padding: 12px 18px; border-radius: 10px; background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1); color: #9ca3af; font-size: 13px; font-weight: 600; cursor: pointer;
+        }
+        .btn-accept-policy {
+            flex: 1; padding: 12px 18px; border-radius: 10px;
+            background: linear-gradient(135deg, #6c63ff, #a78bfa);
+            color: white; border: none; font-size: 13px; font-weight: 700; cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-accept-policy:disabled { opacity: 0.4; cursor: not-allowed; filter: grayscale(1); }
+        .btn-accept-policy:hover:not(:disabled) { box-shadow: 0 8px 24px rgba(108,99,255,0.4); }
+        .policy-decline-msg {
+            margin-top: 10px; font-size: 11px; color: #ef4444; font-weight: 600; text-align: center;
         }
         .breach-alert-box strong { color: var(--red); }
         .btn-back {
@@ -421,8 +478,76 @@
         </div>
     </div>
 
+    <!-- ═══ MANDATORY PRIVACY POLICY & TERMS OF SERVICE MODAL ═══ -->
+    <div id="policyModal" class="policy-modal-overlay" style="display:none;">
+        <div class="policy-modal-card">
+            <div class="policy-header">
+                <div class="policy-icon">📜</div>
+                <div>
+                    <div class="policy-title">Privacy Policy & Terms of Service</div>
+                    <div class="policy-sub">GeoAttend — Smart Geofencing & Safety System</div>
+                </div>
+            </div>
+            
+            <div class="policy-body">
+                <div class="policy-section">
+                    <h4>1. System Purpose & Institutional Compliance</h4>
+                    <p>GeoAttend is an institutional smart geofencing and attendance safety platform. By using this application, you agree to comply with all institutional regulations, data security standards, and these Terms of Service.</p>
+                </div>
+
+                <div class="policy-section">
+                    <h4>2. Geolocation & Real-Time Perimeter Tracking</h4>
+                    <p>To automate class attendance and ensure student safety inside college perimeters, GeoAttend collects and processes your device's precise GPS coordinates (latitude, longitude, accuracy) during active sessions and operational hours set by college administration.</p>
+                </div>
+
+                <div class="policy-section">
+                    <h4>3. Single-Device Hardware Binding & Biometrics</h4>
+                    <p>To prevent proxy attendance and account sharing:
+                    <ul>
+                        <li>Your account is cryptographically bound to a single physical device hardware ID.</li>
+                        <li>Student check-ins require WebAuthn biometric verification (Fingerprint or Face ID) registered on your bound device.</li>
+                    </ul></p>
+                </div>
+
+                <div class="policy-section">
+                    <h4>4. Automated Attendance Locks & Parent Notifications</h4>
+                    <p>You acknowledge and agree that:
+                    <ul>
+                        <li>Walking outside classroom or campus geofence perimeters during active sessions flags an unauthorized breach.</li>
+                        <li>Accumulating <strong>more than 2 unexcused absences</strong> will automatically lock your account and trigger an automated SMS notification to your registered parent/guardian phone number.</li>
+                    </ul></p>
+                </div>
+
+                <div class="policy-section">
+                    <h4>5. Telemetry & Data Privacy Protection</h4>
+                    <p>Device battery status, connection health, and security audit logs are transmitted securely via HTTPS and stored in encrypted institutional databases strictly for attendance monitoring and campus safety.</p>
+                </div>
+
+                <div class="policy-section">
+                    <h4>6. Mandatory Consent</h4>
+                    <p>You must accept these Terms of Service to access the login portal. Declining these terms will prevent access to the login application.</p>
+                </div>
+            </div>
+
+            <div class="policy-footer">
+                <label class="policy-checkbox-label">
+                    <input type="checkbox" id="policyCheckbox" onchange="togglePolicyAcceptBtn()">
+                    <span>I have read, understood, and agree to the Privacy Policy & Terms of Service</span>
+                </label>
+                <div class="policy-btn-group">
+                    <button type="button" class="btn-decline-policy" onclick="declinePolicy()">Decline</button>
+                    <button type="button" class="btn-accept-policy" id="acceptPolicyBtn" disabled onclick="acceptPolicy()">Accept & Proceed to Login</button>
+                </div>
+                <div id="policyDeclineWarning" class="policy-decline-msg" style="display:none;">
+                    ⚠️ You must accept the Privacy Policy & Terms of Service to access the GeoAttend login portal.
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="footer">
-        Secured with end-to-end JWT · Device-bound biometrics · WebAuthn
+        Secured with end-to-end JWT · Device-bound biometrics · WebAuthn<br>
+        <a href="#" onclick="openPolicyModal(); return false;" style="color:var(--accent2); text-decoration:underline; font-size:11px; margin-top:4px; display:inline-block;">📜 Privacy Policy & Terms of Service</a>
     </div>
 </div>
 
@@ -886,7 +1011,44 @@ async function runGatesCheck() {
     }
 }
 
+// ── Privacy Policy & Terms Gate ───────────────────────────────────────────
+function checkPolicyConsent() {
+    const accepted = safeStorage.getItem('geoattend_policy_accepted_v1');
+    const loginBtn = document.getElementById('loginBtn');
+    if (accepted !== 'true') {
+        document.getElementById('policyModal').style.display = 'flex';
+        if (loginBtn) loginBtn.disabled = true;
+    } else {
+        document.getElementById('policyModal').style.display = 'none';
+        if (loginBtn) loginBtn.disabled = false;
+    }
+}
+
+function openPolicyModal() {
+    document.getElementById('policyModal').style.display = 'flex';
+}
+
+function togglePolicyAcceptBtn() {
+    const checked = document.getElementById('policyCheckbox').checked;
+    document.getElementById('acceptPolicyBtn').disabled = !checked;
+    if (checked) document.getElementById('policyDeclineWarning').style.display = 'none';
+}
+
+function acceptPolicy() {
+    safeStorage.setItem('geoattend_policy_accepted_v1', 'true');
+    document.getElementById('policyModal').style.display = 'none';
+    const loginBtn = document.getElementById('loginBtn');
+    if (loginBtn) loginBtn.disabled = false;
+}
+
+function declinePolicy() {
+    document.getElementById('policyDeclineWarning').style.display = 'block';
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+    // Mandate Privacy Policy & Terms acceptance before unlocking login page
+    checkPolicyConsent();
+
     // 1) Main password login button
     const loginBtn = document.getElementById('loginBtn');
     if (loginBtn) {
