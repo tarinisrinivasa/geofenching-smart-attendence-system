@@ -1363,7 +1363,7 @@ input::placeholder { color: rgba(148, 163, 184, 0.4); }
 
 /* ── Toast container — bottom right with blur ── */
 #toastContainer {
-    z-index: 10001 !important;
+    z-index: 999999 !important;
 }
 .toast {
     backdrop-filter: blur(16px);

@@ -18,6 +18,7 @@
             --border2: rgba(255, 255, 255, 0.15);
             --accent: #3b82f6;
             --accent-glow: rgba(59, 130, 246, 0.25);
+            --primary: #3b82f6;
             --green: #10b981;
             --red: #f43f5e;
             --yellow: #f59e0b;
@@ -643,7 +644,9 @@
         }
 
         var headerEl = document.getElementById('headerTitle');
-        if (headerEl && currentUser) { headerEl.textContent = currentUser.username.toUpperCase() + ' (HOD)'; }
+        if (headerEl && currentUser) {
+            headerEl.innerHTML = `${currentUser.username.toUpperCase()} (HOD) <span style="font-size: 9px; padding: 2px 6px; background: var(--green); color: white; border-radius: 4px; margin-left: 4px; font-weight: 800; vertical-align: middle; display: inline-block;">V3 LIVE</span>`;
+        }
 
         function hodInit() {
             console.log('[HOD V3] Init running');
@@ -1118,7 +1121,7 @@
 
                     return `
                         <div class="card" style="${borderStyle}">
-                            <div style="display:flex; justify-content:between; align-items:center; margin-bottom:8px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                                 <div style="font-weight:700; font-size:13px; color:${titleColor};">${title}</div>
                                 <div style="font-size:11px; color:var(--text3);">${new Date(a.timestamp).toLocaleTimeString()}</div>
                             </div>

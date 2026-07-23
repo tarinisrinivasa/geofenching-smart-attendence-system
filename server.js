@@ -176,11 +176,12 @@ function securityFirewall(req, res, next) {
     }
     next();
 }
-// Globally enable WAF security firewall middleware!
-app.use(securityFirewall);
-
+// Express body parser MUST run BEFORE securityFirewall so req.body is defined for WAF checks!
 app.use(cors());
 app.use(express.json());
+
+// Globally enable WAF security firewall middleware!
+app.use(securityFirewall);
 
 // Force browsers/CDNs to always re-fetch HTML files (prevents stale cached JS)
 app.use(express.static(path.join(__dirname, 'public'), {
@@ -194,22 +195,25 @@ app.use(express.static(path.join(__dirname, 'public'), {
 }));
 
 app.post('/api/log-error', (req, res) => {
-    const { url, message, stack } = req.body;
+    const { url, message, stack } = req.body || {};
+    if (!message) return res.status(400).json({ success: false, message: 'Missing error message' });
     console.error(`[CLIENT EXCEPTION] URL: ${url}\nMsg: ${message}\nStack: ${stack}\n`);
-    db.run("INSERT INTO client_errors (url, message, stack) VALUES (?, ?, ?)", [url, message, stack], (err) => {
+    db.run("INSERT INTO client_errors (url, message, stack) VALUES (?, ?, ?)", [String(url||''), String(message||'').substring(0, 500), String(stack||'').substring(0, 1000)], (err) => {
         if (err) console.error('[DB] Failed to insert client error:', err.message);
         res.json({ success: true });
     });
 });
 
-app.get('/api/debug/errors', (req, res) => {
+app.get('/api/debug/errors', authenticateToken, (req, res) => {
+    if (req.user.role !== 'hod') return res.status(403).json({ success: false, message: 'Unauthorized access.' });
     db.all("SELECT * FROM client_errors ORDER BY id DESC LIMIT 50", [], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ success: true, errors: rows });
     });
 });
 
-app.get('/api/debug/requests', (req, res) => {
+app.get('/api/debug/requests', authenticateToken, (req, res) => {
+    if (req.user.role !== 'hod') return res.status(403).json({ success: false, message: 'Unauthorized access.' });
     db.all("SELECT * FROM request_logs ORDER BY id DESC LIMIT 100", [], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ success: true, requests: rows });
@@ -239,7 +243,7 @@ app.use('/api', (req, res, next) => {
     next();
 });
 
-app.use(securityFirewall);
+// (securityFirewall already applied globally at line 180 \u2014 no duplicate needed)
 
 // JWT authentication verification middleware
 function authenticateToken(req, res, next) {
@@ -630,7 +634,7 @@ app.post('/api/classes', authenticateToken, (req, res) => {
     });
 });
 
-// Auto-close interval
+// Auto-close interval (runs every 2 minutes)
 setInterval(() => {
     db.run(
         "UPDATE classes SET active = 0 WHERE active = 1 AND auto_close_at IS NOT NULL AND datetime(auto_close_at) <= datetime('now', 'localtime')",
@@ -642,6 +646,23 @@ setInterval(() => {
         }
     );
 }, 2 * 60 * 1000);
+
+// DB Housekeeping: Purge expired token blacklist entries & prune logs (runs every hour)
+setInterval(() => {
+    const now = Date.now();
+    db.run("DELETE FROM token_blacklist WHERE expires_at < ?", [now], function(err) {
+        if (!err && this.changes > 0) console.log(`[HOUSEKEEPING] Removed ${this.changes} expired token(s) from blacklist.`);
+    });
+    db.run("DELETE FROM request_logs WHERE id NOT IN (SELECT id FROM request_logs ORDER BY id DESC LIMIT 1000)", function(err) {
+        if (!err && this.changes > 0) console.log(`[HOUSEKEEPING] Pruned ${this.changes} old request log(s).`);
+    });
+    db.run("DELETE FROM movement_events WHERE date(timestamp,'localtime') < date('now', '-30 days')", function(err) {
+        if (!err && this.changes > 0) console.log(`[HOUSEKEEPING] Removed ${this.changes} old movement event(s).`);
+    });
+    db.run("DELETE FROM client_errors WHERE id NOT IN (SELECT id FROM client_errors ORDER BY id DESC LIMIT 500)", function(err) {
+        if (!err && this.changes > 0) console.log(`[HOUSEKEEPING] Pruned ${this.changes} old client error(s).`);
+    });
+}, 60 * 60 * 1000);
 
 // Teacher API: Get classes for teacher (with optional attendance counts)
 app.get('/api/classes/:teacher_id', authenticateToken, (req, res) => {
@@ -1782,16 +1803,14 @@ app.post('/api/student/heartbeat', authenticateToken, (req, res) => {
                     distance = getDistance(settings.campus_latitude, settings.campus_longitude, latitude, longitude);
                     inside_campus = distance <= settings.campus_radius;
                     
-                    // ── TASK E: Movement Timeline (Campus Enter/Exit & Class Leaves) ──
+                    // ── TASK E: Movement Timeline (Campus Enter/Exit events only) ──
                     if (prev_lat && prev_lon) {
                         if (prev_inside_campus && !inside_campus) {
                             db.run("INSERT INTO movement_events (student_id, event_type, latitude, longitude, timestamp) VALUES (?, 'EXITED_CAMPUS', ?, ?, datetime('now','localtime'))", [student_id, latitude, longitude]);
                         } else if (!prev_inside_campus && inside_campus) {
                             db.run("INSERT INTO movement_events (student_id, event_type, latitude, longitude, timestamp) VALUES (?, 'ENTERED_CAMPUS', ?, ?, datetime('now','localtime'))", [student_id, latitude, longitude]);
-                        } else if (inside_campus && Math.random() < 0.2) {
-                            // every 5th heartbeat roughly
-                            db.run("INSERT INTO movement_events (student_id, event_type, latitude, longitude, timestamp) VALUES (?, 'IN_CAMPUS', ?, ?, datetime('now','localtime'))", [student_id, latitude, longitude]);
                         }
+                        // Note: Removed random IN_CAMPUS sampling noise — only meaningful state transitions recorded.
                     }
 
                     if (activeClass) {
@@ -2560,54 +2579,55 @@ app.get('/api/hod/student-timeline/:student_id', authenticateToken, (req, res) =
     });
 });
 
-// Task F: Analytics
+// Task F: Analytics — Promise-based to ensure all queries complete before responding
 app.get('/api/hod/analytics', authenticateToken, (req, res) => {
     if (req.user.role !== 'hod') return res.status(403).json({success: false, message: 'Unauthorized'});
 
-    const response = {
-        daily: { present: 0, total: 0, percentage: 0 },
-        top_absentees: [],
-        late_arrivals: [],
-        frequent_leavers: [],
-        class_stats: [],
-        week_trend: []
-    };
+    // Promisify db queries for clean async handling
+    const dbGet = (sql, params) => new Promise((resolve, reject) =>
+        db.get(sql, params || [], (err, row) => err ? reject(err) : resolve(row))
+    );
+    const dbAll = (sql, params) => new Promise((resolve, reject) =>
+        db.all(sql, params || [], (err, rows) => err ? reject(err) : resolve(rows || []))
+    );
 
-    db.serialize(() => {
-        db.get("SELECT COUNT(DISTINCT id) as total FROM users WHERE role='student'", (err, row) => {
-            if (row) response.daily.total = row.total;
-            db.get("SELECT COUNT(DISTINCT student_id) as present FROM attendance WHERE date(timestamp,'localtime') = date('now','localtime') AND status='present'", (err, row2) => {
-                if (row2) response.daily.present = row2.present;
-                if (response.daily.total > 0) response.daily.percentage = Math.round((response.daily.present / response.daily.total) * 100);
-            });
-        });
+    Promise.all([
+        // 1. Total enrolled students
+        dbGet("SELECT COUNT(DISTINCT id) as total FROM users WHERE role='student'"),
+        // 2. Today's present count
+        dbGet("SELECT COUNT(DISTINCT student_id) as present FROM attendance WHERE date(timestamp,'localtime') = date('now','localtime') AND status='present'"),
+        // 3. Top 5 absentees (all-time)
+        dbAll("SELECT u.username, COUNT(a.id) as absent_count FROM users u LEFT JOIN attendance a ON u.id = a.student_id AND a.status='absent' WHERE u.role='student' GROUP BY u.id ORDER BY absent_count DESC LIMIT 5"),
+        // 4. Top 5 frequent breach/leaver students
+        dbAll("SELECT u.username, COUNT(a.id) as alert_count FROM alerts a JOIN users u ON a.student_id = u.id WHERE a.type IN ('GPS_DROPPED', 'GPS_DROPPED_ESCALATED') OR a.message LIKE '%Breach%' GROUP BY u.id ORDER BY alert_count DESC LIMIT 5"),
+        // 5. Class attendance stats for today
+        dbAll("SELECT c.name as class_name, COUNT(a.id) as present_count FROM classes c LEFT JOIN attendance a ON c.id = a.class_id AND date(a.timestamp,'localtime') = date('now','localtime') AND a.status='present' GROUP BY c.id ORDER BY present_count DESC"),
+        // 6. 7-day attendance trend
+        dbAll("SELECT date(timestamp,'localtime') as date, COUNT(DISTINCT student_id) as present_count FROM attendance WHERE status='present' AND date(timestamp,'localtime') >= date('now', '-7 days') GROUP BY date(timestamp,'localtime') ORDER BY date ASC")
+    ]).then(([totalRow, presentRow, absentees, leavers, classStats, trend]) => {
+        const total = totalRow ? totalRow.total : 0;
+        const present = presentRow ? presentRow.present : 0;
+        const percentage = total > 0 ? Math.round((present / total) * 100) : 0;
 
-        db.all("SELECT u.username, COUNT(a.id) as absent_count FROM users u LEFT JOIN attendance a ON u.id = a.student_id AND a.status='absent' WHERE u.role='student' GROUP BY u.id ORDER BY absent_count DESC LIMIT 5", (err, rows) => {
-            if (rows) response.top_absentees = rows;
+        res.json({
+            success: true,
+            analytics: {
+                daily: { present, total, percentage },
+                top_absentees: absentees,
+                late_arrivals: [],   // Reserved for future check-in time analysis
+                frequent_leavers: leavers,
+                class_stats: classStats,
+                week_trend: trend.map(r => ({
+                    date: r.date,
+                    present_count: r.present_count,
+                    // Correct percentage relative to enrolled students
+                    percentage: total > 0 ? Math.round((r.present_count / total) * 100) : 0
+                }))
+            }
         });
-
-        db.all("SELECT u.username, COUNT(a.id) as alert_count FROM alerts a JOIN users u ON a.student_id = u.id WHERE a.type IN ('GPS_DROPPED', 'GPS_DROPPED_ESCALATED') OR a.message LIKE '%Breach%' GROUP BY u.id ORDER BY alert_count DESC LIMIT 5", (err, rows) => {
-            if (rows) response.frequent_leavers = rows;
-        });
-
-        db.all("SELECT c.name as class_name, COUNT(a.id) as present_count FROM classes c LEFT JOIN attendance a ON c.id = a.class_id AND date(a.timestamp,'localtime') = date('now','localtime') AND a.status='present' GROUP BY c.id ORDER BY present_count DESC", (err, rows) => {
-            if (rows) response.class_stats = rows;
-        });
-
-        const trendQuery = `
-            SELECT date(timestamp,'localtime') as date, COUNT(DISTINCT student_id) as present_count
-            FROM attendance 
-            WHERE status='present' AND date(timestamp,'localtime') >= date('now', '-7 days')
-            GROUP BY date(timestamp,'localtime')
-            ORDER BY date ASC
-        `;
-        db.all(trendQuery, (err, rows) => {
-            if (rows) response.week_trend = rows.map(r => ({ date: r.date, percentage: r.present_count })); 
-            
-            setTimeout(() => {
-                res.json({ success: true, analytics: response });
-            }, 100); 
-        });
+    }).catch(err => {
+        console.error('[ANALYTICS ERROR]', err.message);
+        res.status(500).json({ success: false, error: 'Analytics query failed.' });
     });
 });
 

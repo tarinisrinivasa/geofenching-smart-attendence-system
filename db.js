@@ -222,8 +222,23 @@ const db = new sqlite3.Database(dbPath, (err) => {
         safeAlter("ALTER TABLE attendance ADD COLUMN request_lat REAL");
         safeAlter("ALTER TABLE attendance ADD COLUMN request_lon REAL");
 
-        // Ensure barcode index exists
+        // ── Performance Indexes (eliminate full-table scans on hot queries) ──
         db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_barcode ON users (barcode)", () => {});
+        db.run("CREATE INDEX IF NOT EXISTS idx_attendance_student ON attendance (student_id)", () => {});
+        db.run("CREATE INDEX IF NOT EXISTS idx_attendance_class ON attendance (class_id)", () => {});
+        db.run("CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance (student_id, status)", () => {});
+        db.run("CREATE INDEX IF NOT EXISTS idx_alerts_student ON alerts (student_id)", () => {});
+        db.run("CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts (status)", () => {});
+        db.run("CREATE INDEX IF NOT EXISTS idx_movement_student ON movement_events (student_id)", () => {});
+        db.run("CREATE INDEX IF NOT EXISTS idx_movement_class ON movement_events (class_id)", () => {});
+        db.run("CREATE INDEX IF NOT EXISTS idx_classes_teacher ON classes (teacher_id)", () => {});
+        db.run("CREATE INDEX IF NOT EXISTS idx_classes_active ON classes (active)", () => {});
+
+        // ── DB Housekeeping on startup: clean up expired/stale data ──
+        db.run("DELETE FROM token_blacklist WHERE expires_at < " + Date.now(), () => {});
+        db.run("DELETE FROM request_logs WHERE id NOT IN (SELECT id FROM request_logs ORDER BY id DESC LIMIT 1000)", () => {});
+        db.run("DELETE FROM movement_events WHERE date(timestamp,'localtime') < date('now', '-30 days')", () => {});
+        db.run("DELETE FROM client_errors WHERE id NOT IN (SELECT id FROM client_errors ORDER BY id DESC LIMIT 500)", () => {});
 
         // ── Seed Default Campus Settings ────────────────────────────
         db.get("SELECT count(*) as count FROM campus_settings", (err, row) => {

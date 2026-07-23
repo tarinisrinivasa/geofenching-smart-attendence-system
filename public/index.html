@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -761,17 +761,16 @@ async function submitFallback() {
 
 // ── Complete Login & Redirect ──────────────────────────────────────────────
 function completeLogin(token, user) {
-    safeStorage.setItem('token', token);
-    safeStorage.setItem('user', JSON.stringify(user));
-
-    const pages = { hod: 'hod.html', coordinator: 'coordinator.html', teacher: 'teacher.html', student: 'student.html' };
-    const target = (pages[user.role] || 'index.html') + '?v=3';
-
     try {
         localStorage.setItem('__t', '1'); localStorage.removeItem('__t');
+        safeStorage.setItem('token', token);
+        safeStorage.setItem('user', JSON.stringify(user));
+
+        const pages = { hod: 'hod.html', coordinator: 'coordinator.html', teacher: 'teacher.html', student: 'student.html' };
+        const target = (pages[user.role] || 'index.html') + '?v=3';
         window.location.href = target;
     } catch(e) {
-        window.location.href = `${target}&token=${encodeURIComponent(token)}&user=${encodeURIComponent(JSON.stringify(user))}`;
+        showMsg('passMsg', '❌ Storage access disabled: Please enable cookies/localStorage in browser settings to log in.', true);
     }
 }
 
@@ -888,6 +887,9 @@ async function runGatesCheck() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Run initial location & college status gate checks
+    runGatesCheck();
+
     // 1) Main password login button
     const loginBtn = document.getElementById('loginBtn');
     if (loginBtn) {
