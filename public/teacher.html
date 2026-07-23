@@ -883,7 +883,20 @@ async function runGpsGateCheck() {
         );
         return false;
     }
-    // Teachers are faculty members and can access the portal 24/7 to manage classes
+    try {
+        const r = await fetch('/api/college-status');
+        const d = await r.json();
+        if (d && d.open === false) {
+            showBlocker(
+                'GeoAttend is Closed',
+                d.message || 'College hours are managed by HOD. The system is closed outside these operational hours.',
+                '🔒'
+            );
+            return false;
+        }
+    } catch (err) {
+        console.error('Hours check failed', err);
+    }
     return true;
 }
 
