@@ -27,7 +27,7 @@
             min-height: 100%; font-family: 'Inter', sans-serif;
             background: var(--bg); color: var(--text);
             display: flex; align-items: center; justify-content: center;
-            overflow: hidden;
+            overflow-y: auto;
         }
 
         /* ── Animated Background ── */
@@ -887,9 +887,6 @@ async function runGatesCheck() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Run initial location & college status gate checks
-    runGatesCheck();
-
     // 1) Main password login button
     const loginBtn = document.getElementById('loginBtn');
     if (loginBtn) {
