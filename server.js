@@ -176,6 +176,90 @@ function securityFirewall(req, res, next) {
     }
     next();
 }
+
+// ── Real Carrier SMS Dispatcher Module ──────────────────────────────────────
+async function sendRealSms(toPhone, messageText) {
+    const rawPhone = String(toPhone || '').replace(/[^\d+]/g, '');
+    const digitsOnly = rawPhone.replace(/\D/g, '');
+
+    if (!digitsOnly || digitsOnly.length < 10) {
+        console.warn(`[REAL SMS] Invalid phone number provided: "${toPhone}". Skipping carrier transmission.`);
+        return { success: false, error: 'Invalid destination phone number format (must be at least 10 digits).' };
+    }
+
+    const twilioSid = process.env.TWILIO_ACCOUNT_SID;
+    const twilioAuth = process.env.TWILIO_AUTH_TOKEN;
+    const twilioFrom = process.env.TWILIO_PHONE_NUMBER;
+    const fast2smsKey = process.env.FAST2SMS_API_KEY;
+
+    // 1. Dispatch via Twilio SMS API if keys present
+    if (twilioSid && twilioAuth && twilioFrom) {
+        try {
+            const formattedPhone = rawPhone.startsWith('+') ? rawPhone : (digitsOnly.length === 10 ? '+91' + digitsOnly : '+' + digitsOnly);
+            const authHeader = 'Basic ' + Buffer.from(`${twilioSid}:${twilioAuth}`).toString('base64');
+            const body = new URLSearchParams({
+                To: formattedPhone,
+                From: twilioFrom,
+                Body: messageText
+            });
+
+            const resp = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': authHeader,
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: body.toString()
+            });
+
+            const data = await resp.json();
+            if (resp.ok) {
+                console.log(`[TWILIO REAL SMS SENT SUCCESSFULLY] SID: ${data.sid} | To: ${formattedPhone}`);
+                return { success: true, provider: 'twilio', sid: data.sid, to: formattedPhone };
+            } else {
+                console.error(`[TWILIO SMS ERROR] Code ${data.code}: ${data.message}`);
+                return { success: false, provider: 'twilio', error: data.message || 'Twilio transmission error' };
+            }
+        } catch (e) {
+            console.error('[TWILIO EXCEPTION]', e.message);
+            return { success: false, provider: 'twilio', error: e.message };
+        }
+    }
+
+    // 2. Dispatch via Fast2SMS (Indian Mobile Carrier API) if key present
+    if (fast2smsKey) {
+        try {
+            const targetNumber = digitsOnly.slice(-10); // 10-digit Indian phone number
+            const resp = await fetch(`https://www.fast2sms.com/dev/bulkV2?authorization=${fast2smsKey}&route=q&message=${encodeURIComponent(messageText)}&flash=0&numbers=${targetNumber}`);
+            const data = await resp.json();
+            if (data && data.return === true) {
+                console.log(`[FAST2SMS REAL SMS SENT SUCCESSFULLY] RequestId: ${data.request_id} | To: ${targetNumber}`);
+                return { success: true, provider: 'fast2sms', request_id: data.request_id, to: targetNumber };
+            } else {
+                console.error(`[FAST2SMS ERROR]`, data);
+                return { success: false, provider: 'fast2sms', error: (data && data.message) || 'Fast2SMS API failed' };
+            }
+        } catch (e) {
+            console.error('[FAST2SMS EXCEPTION]', e.message);
+            return { success: false, provider: 'fast2sms', error: e.message };
+        }
+    }
+
+    // 3. Simulated Logger (No API Key Configured in Environment)
+    console.log(`\n==================================================================`);
+    console.log(`[REAL SMS DISPATCH SIMULATOR]`);
+    console.log(`Recipient Phone: ${toPhone}`);
+    console.log(`Message Content: "${messageText}"`);
+    console.log(`NOTE: No SMS Provider credentials found in process.env.`);
+    console.log(`To send live SMS to mobile phones, add TWILIO_ACCOUNT_SID & TWILIO_AUTH_TOKEN or FAST2SMS_API_KEY.`);
+    console.log(`==================================================================\n`);
+
+    return { 
+        success: false, 
+        simulated: true, 
+        message: 'SMS logged to console. To send live SMS to mobile phones, set TWILIO or FAST2SMS API keys in environment variables.' 
+    };
+}
 // Express body parser MUST run BEFORE securityFirewall so req.body is defined for WAF checks!
 app.use(cors());
 app.use(express.json());
@@ -757,10 +841,7 @@ app.post('/api/classes/:class_id/end', authenticateToken, (req, res) => {
 
                                         if (parentPhone) {
                                             const smsBody = `Alert from College Administration: Your child ${u.username} has missed ${absRow.absent_count} classes (more than 2 absences). Their attendance privileges have been suspended. Please contact the college.`;
-                                            console.log(`\n==================================================================`);
-                                            console.log(`[AUTOMATED PARENT SMS GATEWAY] Recipient: ${parentPhone} | Student: ${u.username}`);
-                                            console.log(`Message: "${smsBody}"`);
-                                            console.log(`==================================================================\n`);
+                                            sendRealSms(parentPhone, smsBody);
                                         }
                                     });
                                 }
@@ -864,16 +945,18 @@ app.post('/api/alerts/:alert_id/notify-parent', authenticateToken, (req, res) =>
 
         const messageText = `Alert from HOD/Coordinator: Your child ${row.username} was Present in the first session but Absent in the second session. Please contact your child or the college to clarify.`;
         
-        console.log(`[PARENT ALERT SMS] Destination: ${row.parent_phone} | Content: "${messageText}"`);
-
-        // Mark alert notification as sent by updating status (let's say we set status to 1 as marked/notified)
-        db.run("UPDATE alerts SET status = 1 WHERE id = ?", [alertId], function(err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ 
-                success: true, 
-                message: `SMS notification logged & sent to ${row.parent_phone}!`,
-                parent_phone: row.parent_phone,
-                sms_body: messageText
+        sendRealSms(row.parent_phone, messageText).then(smsResult => {
+            db.run("UPDATE alerts SET status = 1 WHERE id = ?", [alertId], function(err) {
+                if (err) return res.status(500).json({ error: err.message });
+                res.json({ 
+                    success: true, 
+                    message: smsResult.success 
+                        ? `Real SMS dispatched successfully via ${smsResult.provider} to ${row.parent_phone}!` 
+                        : `SMS notification logged for ${row.parent_phone}. ${smsResult.simulated ? '(Simulated Mode: Add TWILIO or FAST2SMS keys to send real SMS)' : ''}`,
+                    parent_phone: row.parent_phone,
+                    sms_body: messageText,
+                    sms_result: smsResult
+                });
             });
         });
     });
@@ -2393,12 +2476,17 @@ app.post('/api/coordinator/send-keypad-otp', authenticateToken, (req, res) => {
                 function(err) {
                     if (err) return res.status(500).json({ error: err.message });
                     
-                    // Simulate SMS Transmission
-                    console.log(`\n==================================================================`);
-                    console.log(`[SMS GATEWAY] Transmitting OTP: ${otp} to Keypad Student "${student.username}" (Phone: ${student.student_phone || 'N/A'})`);
-                    console.log(`==================================================================\n`);
-
-                    res.json({ success: true, message: `OTP code sent via SMS successfully to ${student.username}!`, otp });
+                    const otpText = `GeoAttend Security Verification Code: ${otp}. Valid for 5 minutes. Do not share with anyone.`;
+                    sendRealSms(student.student_phone, otpText).then(smsResult => {
+                        res.json({ 
+                            success: true, 
+                            message: smsResult.success 
+                                ? `Real OTP SMS dispatched to ${student.username} (${student.student_phone})!` 
+                                : `OTP code generated for ${student.username}. (Code: ${otp})`,
+                            otp,
+                            sms_result: smsResult
+                        });
+                    });
                 }
             );
         });
@@ -2537,6 +2625,30 @@ app.post('/api/alerts/biometric-breach', (req, res) => {
         );
     });
 });
+
+// HOD & Admin API: Send Test Real SMS to any Mobile Number
+app.post('/api/admin/send-test-sms', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'hod' && req.user.role !== 'coordinator') {
+        return res.status(403).json({ success: false, message: 'Unauthorized access.' });
+    }
+
+    const { phone_number, message_text } = req.body || {};
+    if (!phone_number || !message_text) {
+        return res.status(400).json({ success: false, message: 'Missing required parameters: phone_number and message_text.' });
+    }
+
+    const result = await sendRealSms(phone_number, message_text);
+    res.json({
+        success: result.success,
+        simulated: result.simulated || false,
+        provider: result.provider || 'none',
+        message: result.success 
+            ? `Real SMS dispatched successfully via ${result.provider} to ${phone_number}!` 
+            : (result.simulated ? 'SMS logged to server console. To send live SMS to mobile phones, add FAST2SMS_API_KEY or TWILIO credentials to environment variables.' : `SMS transmission error: ${result.error}`),
+        details: result
+    });
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Global Error Handler Middleware (OWASP Secure Error Handling)
