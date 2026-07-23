@@ -325,8 +325,8 @@ app.post('/api/login', (req, res) => {
             }
         };
 
-        // Enforce hardware lock for students
-        if (row.role !== 'hod') {
+        // Enforce operating hours & hardware lock for students
+        if (row.role === 'student') {
             // First check college status (hours & holiday mode)
             db.all("SELECT key, value FROM campus_settings", [], (settingsErr, settingsRows) => {
                 if (settingsErr) return res.status(500).json({ error: settingsErr.message });
@@ -355,8 +355,8 @@ app.post('/api/login', (req, res) => {
                     return res.status(403).json({ success: false, message: `🔒 College is closed. Active hours: ${start} - ${end}. ${closedMsg}` });
                 }
 
-                // Proceed with device ID checks
-                if (row.role === 'student') { if (!row.device_id) {
+                // Proceed with device ID checks for students
+                if (!row.device_id) {
                     // First login: Verify that this phone isn't already registered to another student
                     db.get("SELECT username FROM users WHERE device_id = ? AND id != ?", [device_id, row.id], (err, boundUser) => {
                         if (err) return res.status(500).json({ error: err.message });
@@ -378,9 +378,10 @@ app.post('/api/login', (req, res) => {
                     return res.status(400).json({ success: false, message: "This account is registered on another device." });
                 } else {
                     completeLogin();
-                } } else { completeLogin(); }
+                }
             });
         } else {
+            // HOD, Teacher, Coordinator can always log in 24/7
             completeLogin();
         }
     });
@@ -1453,25 +1454,30 @@ app.post('/api/campus-settings', authenticateToken, (req, res) => {
         return res.status(403).json({ success: false, message: "Unauthorized access." });
     }
 
-    const { campus_latitude, campus_longitude, campus_radius, college_start_time, college_end_time, stop_tracking_on_exit, exact_live_tracking, track_after_hours, holiday_mode } = req.body;
+    const { campus_latitude, campus_longitude, campus_radius, college_start_time, college_end_time, stop_tracking_on_exit, exact_live_tracking, track_after_hours, holiday_mode } = req.body || {};
     
-    if (campus_latitude === undefined || campus_longitude === undefined || campus_radius === undefined || college_start_time === undefined || college_end_time === undefined) {
-        return res.status(400).json({ success: false, message: "Missing required bounds or college hours values." });
-    }
+    const lat = isNaN(parseFloat(campus_latitude)) ? 17.3850 : parseFloat(campus_latitude);
+    const lng = isNaN(parseFloat(campus_longitude)) ? 78.4867 : parseFloat(campus_longitude);
+    const rad = isNaN(parseFloat(campus_radius)) ? 500 : parseFloat(campus_radius);
+    const start = (college_start_time && String(college_start_time).trim()) || '09:00';
+    const end = (college_end_time && String(college_end_time).trim()) || '16:00';
+    const stopTracking = stop_tracking_on_exit ? '1' : '0';
+    const exactTracking = exact_live_tracking !== undefined ? (exact_live_tracking ? '1' : '0') : '1';
+    const holiday = holiday_mode ? '1' : '0';
+    const afterHours = track_after_hours ? '1' : '0';
 
     db.serialize(() => {
-        db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('campus_latitude', ?)", [campus_latitude.toString()]);
-        db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('campus_longitude', ?)", [campus_longitude.toString()]);
-        db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('campus_radius', ?)", [campus_radius.toString()]);
-        db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('college_start_time', ?)", [college_start_time]);
-        db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('college_end_time', ?)", [college_end_time]);
-        
-        // Save the new configurations
-        db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('stop_tracking_on_exit', ?)", [stop_tracking_on_exit !== undefined ? stop_tracking_on_exit.toString() : '0']);
-        db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('exact_live_tracking', ?)", [exact_live_tracking !== undefined ? exact_live_tracking.toString() : '1']);
-        db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('holiday_mode', ?)", [holiday_mode !== undefined ? holiday_mode.toString() : '0']);
-        db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('track_after_hours', ?)", [track_after_hours !== undefined ? track_after_hours.toString() : '0'], function(err) {
+        db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('campus_latitude', ?)", [lat.toString()]);
+        db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('campus_longitude', ?)", [lng.toString()]);
+        db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('campus_radius', ?)", [rad.toString()]);
+        db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('college_start_time', ?)", [start]);
+        db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('college_end_time', ?)", [end]);
+        db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('stop_tracking_on_exit', ?)", [stopTracking]);
+        db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('exact_live_tracking', ?)", [exactTracking]);
+        db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('holiday_mode', ?)", [holiday]);
+        db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('track_after_hours', ?)", [afterHours], function(err) {
             if (err) return res.status(500).json({ error: err.message });
+            console.log(`[CAMPUS SETTINGS UPDATED] Lat: ${lat}, Lng: ${lng}, Rad: ${rad}m, Hours: ${start} - ${end}, Holiday: ${holiday}`);
             res.json({ success: true, message: "Campus geofence and tracking configurations updated successfully!" });
         });
     });

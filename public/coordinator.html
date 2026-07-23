@@ -606,20 +606,7 @@ async function retryCollegeHoursCheck() {
 }
 
 async function runCollegeHoursCheck() {
-    try {
-        const r = await fetch('/api/college-status');
-        const d = await r.json();
-        if (d && d.open === false) {
-            showBlocker(
-                'GeoAttend is Closed',
-                d.message || 'College hours are Monday - Friday, 9:00 AM - 4:00 PM. The system is closed outside these hours.',
-                '🔒'
-            );
-            return false;
-        }
-    } catch (err) {
-        console.error('Hours check failed', err);
-    }
+    // Coordinators are staff members and can access the portal 24/7 to manage class rosters & alerts
     return true;
 }
 

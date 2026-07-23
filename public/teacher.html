@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -883,20 +883,7 @@ async function runGpsGateCheck() {
         );
         return false;
     }
-    try {
-        const r = await fetch('/api/college-status');
-        const d = await r.json();
-        if (d && d.open === false) {
-            showBlocker(
-                'GeoAttend is Closed',
-                d.message || 'College hours are Monday - Friday, 9:00 AM - 4:00 PM. The system is closed outside these hours.',
-                '🔒'
-            );
-            return false;
-        }
-    } catch (err) {
-        console.error('Gates check failed', err);
-    }
+    // Teachers are faculty members and can access the portal 24/7 to manage classes
     return true;
 }
 
