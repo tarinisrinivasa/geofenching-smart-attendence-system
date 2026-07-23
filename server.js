@@ -325,37 +325,19 @@ app.post('/api/login', (req, res) => {
             }
         };
 
-        // Enforce operating hours & hardware lock for students
+        // Enforce device hardware lock & holiday mode for students
         if (row.role === 'student') {
-            // First check college status (hours & holiday mode)
             db.all("SELECT key, value FROM campus_settings", [], (settingsErr, settingsRows) => {
                 if (settingsErr) return res.status(500).json({ error: settingsErr.message });
                 const s = {};
                 settingsRows.forEach(r => { s[r.key] = r.value; });
-                
-                const start = s.college_start_time || '09:00';
-                const end = s.college_end_time || '16:00';
                 const holidayMode = s.holiday_mode === '1';
 
                 if (holidayMode) {
-                    return res.status(403).json({ success: false, message: '🔒 College is closed today by HOD order. App is inaccessible.' });
+                    return res.status(403).json({ success: false, message: '🔒 College is closed today by HOD order (Holiday Mode).' });
                 }
 
-                const now = new Date();
-                const [sh, sm] = start.split(':').map(Number);
-                const [eh, em] = end.split(':').map(Number);
-                const nowMins = now.getHours() * 60 + now.getMinutes();
-                const startMins = sh * 60 + sm;
-                const endMins = eh * 60 + em;
-                const day = now.getDay();
-                const isWeekend = (day === 0 || day === 6);
-
-                if (isWeekend || nowMins < startMins || nowMins >= endMins) {
-                    const closedMsg = isWeekend ? 'Weekend — app is closed.' : (nowMins < startMins ? `App opens at ${start}` : `App closed at ${end}. Returns tomorrow at ${start}.`);
-                    return res.status(403).json({ success: false, message: `🔒 College is closed. Active hours: ${start} - ${end}. ${closedMsg}` });
-                }
-
-                // Proceed with device ID checks for students
+                // Proceed with device ID hardware binding checks for students
                 if (!row.device_id) {
                     // First login: Verify that this phone isn't already registered to another student
                     db.get("SELECT username FROM users WHERE device_id = ? AND id != ?", [device_id, row.id], (err, boundUser) => {
@@ -381,7 +363,7 @@ app.post('/api/login', (req, res) => {
                 }
             });
         } else {
-            // HOD, Teacher, Coordinator can always log in 24/7
+            // Staff (HOD, Teacher, Coordinator) can always log in 24/7
             completeLogin();
         }
     });
@@ -737,6 +719,30 @@ app.post('/api/classes/:class_id/end', authenticateToken, (req, res) => {
                             const alertMsg = `⚠️ Unverified Absence: Student "${u.username}" did not mark attendance for class session "${currentClass.name}".`;
                             insertUnmarkedAlert.run([u.id, classId, alertMsg]);
                             insertAbsentAttendance.run([classId, u.id]);
+
+                            // ── AUTOMATED LOCK & PARENT NOTIFY (>2 ABSENT CLASSES) ──
+                            db.get("SELECT COUNT(*) as absent_count FROM attendance WHERE student_id = ? AND status = 'absent'", [u.id], (absErr, absRow) => {
+                                if (!absErr && absRow && absRow.absent_count > 2) {
+                                    // 1. Lock student account automatically
+                                    db.run("UPDATE users SET attendance_locked = 1 WHERE id = ?", [u.id]);
+                                    
+                                    // 2. Fetch parent phone and trigger automatic SMS notification
+                                    db.get("SELECT parent_phone FROM users WHERE id = ?", [u.id], (pErr, pUser) => {
+                                        const parentPhone = (pUser && pUser.parent_phone) || null;
+                                        const autoMsg = `🚨 AUTOMATED ACCOUNT LOCKOUT: Student "${u.username}" has been absent for ${absRow.absent_count} classes (exceeded 2-class limit). Account locked automatically & parent notified${parentPhone ? ' (' + parentPhone + ')' : ''}.`;
+                                        
+                                        db.run("INSERT INTO alerts (student_id, class_id, message, status) VALUES (?, ?, ?, 1)", [u.id, classId, autoMsg]);
+
+                                        if (parentPhone) {
+                                            const smsBody = `Alert from College Administration: Your child ${u.username} has missed ${absRow.absent_count} classes (more than 2 absences). Their attendance privileges have been suspended. Please contact the college.`;
+                                            console.log(`\n==================================================================`);
+                                            console.log(`[AUTOMATED PARENT SMS GATEWAY] Recipient: ${parentPhone} | Student: ${u.username}`);
+                                            console.log(`Message: "${smsBody}"`);
+                                            console.log(`==================================================================\n`);
+                                        }
+                                    });
+                                }
+                            });
                         });
                         
                         insertUnmarkedAlert.finalize();

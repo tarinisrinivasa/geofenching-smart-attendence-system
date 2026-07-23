@@ -957,8 +957,8 @@ async function runGatesCheck() {
     } catch (e) {
         showBlocker(
             'Location Access Required',
-            'GeoAttend requires location permission to function. Without location services, your heartbeats will fail and attendance may be marked absent.<br><br><b>To fix this:</b><br>1. Click the lock/settings icon in the browser address bar.<br>2. Allow Location access.<br>3. Click Reload below.',
-            '🚫'
+            'GeoAttend requires location permission to verify your presence inside campus boundaries.<br><br><b>To fix this:</b><br>1. Enable Location Services on your device.<br>2. Allow location access in browser site settings.<br>3. Tap Reload below.',
+            '📍'
         );
         return false;
     }
