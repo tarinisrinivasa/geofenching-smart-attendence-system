@@ -11,16 +11,11 @@ const { getDistance } = require('./utils/geofence');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_key_for_attendance_system';
+// Auto-generate a secure random secret if JWT_SECRET environment variable is missing on Render/production
+const JWT_SECRET = process.env.JWT_SECRET || ('super_secret_' + crypto.randomBytes(16).toString('hex'));
 
-// Only treat as Render/cloud when explicitly signalled — avoids false-positive on Windows where PORT may already be set in env
+// Only treat as Render/cloud when explicitly signalled
 const isRender = process.env.RENDER === 'true' || process.env.RENDER_EXTERNAL_URL !== undefined;
-
-// Secure start check: enforce a custom secret in production/Render
-if (isRender && JWT_SECRET === 'super_secret_key_for_attendance_system') {
-    console.error("FATAL ERROR: JWT_SECRET environment variable is missing or insecure in production/Render environment!");
-    process.exit(1);
-}
 
 let httpsOptions = null;
 if (!isRender) {
