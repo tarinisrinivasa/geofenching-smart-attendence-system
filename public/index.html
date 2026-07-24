@@ -530,16 +530,16 @@
             </div>
 
             <div class="policy-footer">
-                <label class="policy-checkbox-label" style="cursor:pointer;" onclick="togglePolicyAcceptBtn()">
-                    <input type="checkbox" id="policyCheckbox" style="pointer-events:none;">
-                    <span>I have read, understood, and agree to the Privacy Policy & Terms of Service</span>
+                <label class="policy-checkbox-label" style="cursor:pointer;">
+                    <input type="checkbox" id="policyCheckbox" onchange="togglePolicyAcceptBtn()">
+                    <span>I have read, understood, and agree to the Privacy Policy &amp; Terms of Service</span>
                 </label>
                 <div class="policy-btn-group">
                     <button type="button" class="btn-decline-policy" onclick="declinePolicy()">Decline</button>
-                    <button type="button" class="btn-accept-policy locked" id="acceptPolicyBtn" onclick="acceptPolicy()">Accept & Proceed to Login</button>
+                    <button type="button" class="btn-accept-policy locked" id="acceptPolicyBtn" onclick="acceptPolicy()">Accept &amp; Proceed to Login</button>
                 </div>
                 <div id="policyDeclineWarning" class="policy-decline-msg" style="display:none;">
-                    ⚠️ You must accept the Privacy Policy & Terms of Service to access the GeoAttend login portal.
+                    ⚠️ You must accept the Privacy Policy &amp; Terms of Service to access the GeoAttend login portal.
                 </div>
             </div>
         </div>
@@ -1029,11 +1029,10 @@ function openPolicyModal() {
 }
 
 function togglePolicyAcceptBtn() {
-    // Toggle the checkbox manually (label click handles this)
-    const cb = document.getElementById('policyCheckbox');
-    cb.checked = !cb.checked;
+    // onchange fires AFTER browser has already updated cb.checked — just read it
+    const checked = document.getElementById('policyCheckbox').checked;
     const btn = document.getElementById('acceptPolicyBtn');
-    if (cb.checked) {
+    if (checked) {
         btn.classList.remove('locked');
         document.getElementById('policyDeclineWarning').style.display = 'none';
     } else {
@@ -1044,9 +1043,9 @@ function togglePolicyAcceptBtn() {
 function acceptPolicy() {
     const cb = document.getElementById('policyCheckbox');
     if (!cb.checked) {
-        // Force-show the warning and bounce the checkbox
-        document.getElementById('policyDeclineWarning').style.display = 'block';
-        document.getElementById('policyDeclineWarning').textContent = '⚠️ Please tick the checkbox above first, then click Accept.';
+        const warn = document.getElementById('policyDeclineWarning');
+        warn.style.display = 'block';
+        warn.textContent = '⚠️ Please tick the checkbox first, then click Accept.';
         return;
     }
     safeStorage.setItem('geoattend_policy_accepted_v1', 'true');
