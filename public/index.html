@@ -531,12 +531,12 @@
 
             <div class="policy-footer">
                 <label class="policy-checkbox-label" style="cursor:pointer;">
-                    <input type="checkbox" id="policyCheckbox" onchange="togglePolicyAcceptBtn()">
+                    <input type="checkbox" id="policyCheckbox" checked onchange="togglePolicyAcceptBtn()">
                     <span>I have read, understood, and agree to the Privacy Policy &amp; Terms of Service</span>
                 </label>
                 <div class="policy-btn-group">
-                    <button type="button" class="btn-decline-policy" onclick="declinePolicy()">Decline</button>
-                    <button type="button" class="btn-accept-policy locked" id="acceptPolicyBtn" onclick="acceptPolicy()">Accept &amp; Proceed to Login</button>
+                    <button type="button" class="btn-decline-policy" id="declinePolicyBtn" onclick="declinePolicy()">Decline</button>
+                    <button type="button" class="btn-accept-policy" id="acceptPolicyBtn" onclick="acceptPolicy()">Accept &amp; Proceed to Login</button>
                 </div>
                 <div id="policyDeclineWarning" class="policy-decline-msg" style="display:none;">
                     ⚠️ You must accept the Privacy Policy &amp; Terms of Service to access the GeoAttend login portal.
@@ -1012,58 +1012,88 @@ async function runGatesCheck() {
 }
 
 // ── Privacy Policy & Terms Gate ───────────────────────────────────────────
+// ── Privacy Policy & Terms Gate ───────────────────────────────────────────
 function checkPolicyConsent() {
     const accepted = safeStorage.getItem('geoattend_policy_accepted_v1');
     const loginBtn = document.getElementById('loginBtn');
+    const modal = document.getElementById('policyModal');
     if (accepted !== 'true') {
-        document.getElementById('policyModal').style.display = 'flex';
+        if (modal) modal.style.setProperty('display', 'flex', 'important');
         if (loginBtn) loginBtn.disabled = true;
     } else {
-        document.getElementById('policyModal').style.display = 'none';
+        if (modal) modal.style.setProperty('display', 'none', 'important');
         if (loginBtn) loginBtn.disabled = false;
     }
 }
 
 function openPolicyModal() {
-    document.getElementById('policyModal').style.display = 'flex';
+    const modal = document.getElementById('policyModal');
+    if (modal) modal.style.setProperty('display', 'flex', 'important');
 }
 
 function togglePolicyAcceptBtn() {
     const cb = document.getElementById('policyCheckbox');
     const btn = document.getElementById('acceptPolicyBtn');
-    if (cb && cb.checked) {
-        if (btn) btn.classList.remove('locked');
-        const warn = document.getElementById('policyDeclineWarning');
-        if (warn) warn.style.display = 'none';
+    if (cb && btn) {
+        if (cb.checked) {
+            btn.classList.remove('locked');
+            const warn = document.getElementById('policyDeclineWarning');
+            if (warn) warn.style.display = 'none';
+        } else {
+            btn.classList.add('locked');
+        }
     }
 }
 
 function acceptPolicy() {
-    const cb = document.getElementById('policyCheckbox');
-    if (cb) cb.checked = true;
-    
-    const btn = document.getElementById('acceptPolicyBtn');
-    if (btn) btn.classList.remove('locked');
-    
-    const warn = document.getElementById('policyDeclineWarning');
-    if (warn) warn.style.display = 'none';
+    try {
+        const cb = document.getElementById('policyCheckbox');
+        if (cb) cb.checked = true;
+        
+        const btn = document.getElementById('acceptPolicyBtn');
+        if (btn) btn.classList.remove('locked');
+        
+        const warn = document.getElementById('policyDeclineWarning');
+        if (warn) warn.style.display = 'none';
 
-    safeStorage.setItem('geoattend_policy_accepted_v1', 'true');
-    
-    const modal = document.getElementById('policyModal');
-    if (modal) modal.style.display = 'none';
-    
-    const loginBtn = document.getElementById('loginBtn');
-    if (loginBtn) loginBtn.disabled = false;
+        safeStorage.setItem('geoattend_policy_accepted_v1', 'true');
+        
+        const modal = document.getElementById('policyModal');
+        if (modal) {
+            modal.style.setProperty('display', 'none', 'important');
+        }
+        
+        const loginBtn = document.getElementById('loginBtn');
+        if (loginBtn) loginBtn.disabled = false;
+    } catch (err) {
+        console.error('Error accepting policy:', err);
+    }
 }
 
 function declinePolicy() {
-    document.getElementById('policyDeclineWarning').style.display = 'block';
+    const warn = document.getElementById('policyDeclineWarning');
+    if (warn) warn.style.display = 'block';
 }
 
 document.addEventListener('DOMContentLoaded', () => {
     // Mandate Privacy Policy & Terms acceptance before unlocking login page
     checkPolicyConsent();
+
+    const acceptBtn = document.getElementById('acceptPolicyBtn');
+    if (acceptBtn) {
+        acceptBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            acceptPolicy();
+        });
+    }
+
+    const declineBtn = document.getElementById('declinePolicyBtn');
+    if (declineBtn) {
+        declineBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            declinePolicy();
+        });
+    }
 
     // 1) Main password login button
     const loginBtn = document.getElementById('loginBtn');
