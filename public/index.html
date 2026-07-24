@@ -304,8 +304,8 @@
             color: white; border: none; font-size: 13px; font-weight: 700; cursor: pointer;
             transition: all 0.2s;
         }
-        .btn-accept-policy:disabled { opacity: 0.4; cursor: not-allowed; filter: grayscale(1); }
-        .btn-accept-policy:hover:not(:disabled) { box-shadow: 0 8px 24px rgba(108,99,255,0.4); }
+        .btn-accept-policy.locked { opacity: 0.4; cursor: not-allowed; filter: grayscale(1); pointer-events: none; }
+        .btn-accept-policy:not(.locked):hover { box-shadow: 0 8px 24px rgba(108,99,255,0.4); transform: translateY(-1px); }
         .policy-decline-msg {
             margin-top: 10px; font-size: 11px; color: #ef4444; font-weight: 600; text-align: center;
         }
@@ -530,13 +530,13 @@
             </div>
 
             <div class="policy-footer">
-                <label class="policy-checkbox-label">
-                    <input type="checkbox" id="policyCheckbox" onchange="togglePolicyAcceptBtn()">
+                <label class="policy-checkbox-label" style="cursor:pointer;" onclick="togglePolicyAcceptBtn()">
+                    <input type="checkbox" id="policyCheckbox" style="pointer-events:none;">
                     <span>I have read, understood, and agree to the Privacy Policy & Terms of Service</span>
                 </label>
                 <div class="policy-btn-group">
                     <button type="button" class="btn-decline-policy" onclick="declinePolicy()">Decline</button>
-                    <button type="button" class="btn-accept-policy" id="acceptPolicyBtn" disabled onclick="acceptPolicy()">Accept & Proceed to Login</button>
+                    <button type="button" class="btn-accept-policy locked" id="acceptPolicyBtn" onclick="acceptPolicy()">Accept & Proceed to Login</button>
                 </div>
                 <div id="policyDeclineWarning" class="policy-decline-msg" style="display:none;">
                     ⚠️ You must accept the Privacy Policy & Terms of Service to access the GeoAttend login portal.
@@ -1029,12 +1029,26 @@ function openPolicyModal() {
 }
 
 function togglePolicyAcceptBtn() {
-    const checked = document.getElementById('policyCheckbox').checked;
-    document.getElementById('acceptPolicyBtn').disabled = !checked;
-    if (checked) document.getElementById('policyDeclineWarning').style.display = 'none';
+    // Toggle the checkbox manually (label click handles this)
+    const cb = document.getElementById('policyCheckbox');
+    cb.checked = !cb.checked;
+    const btn = document.getElementById('acceptPolicyBtn');
+    if (cb.checked) {
+        btn.classList.remove('locked');
+        document.getElementById('policyDeclineWarning').style.display = 'none';
+    } else {
+        btn.classList.add('locked');
+    }
 }
 
 function acceptPolicy() {
+    const cb = document.getElementById('policyCheckbox');
+    if (!cb.checked) {
+        // Force-show the warning and bounce the checkbox
+        document.getElementById('policyDeclineWarning').style.display = 'block';
+        document.getElementById('policyDeclineWarning').textContent = '⚠️ Please tick the checkbox above first, then click Accept.';
+        return;
+    }
     safeStorage.setItem('geoattend_policy_accepted_v1', 'true');
     document.getElementById('policyModal').style.display = 'none';
     const loginBtn = document.getElementById('loginBtn');
