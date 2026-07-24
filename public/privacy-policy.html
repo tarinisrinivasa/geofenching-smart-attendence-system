@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy & Terms of Service — GeoAttend</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #030712;
+            --card-bg: rgba(15, 23, 42, 0.75);
+            --border: rgba(255, 255, 255, 0.1);
+            --primary: #6c63ff;
+            --accent: #a78bfa;
+            --text: #f9fafb;
+            --text2: #9ca3af;
+            --green: #10b981;
+            --red: #ef4444;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', system-ui, sans-serif; }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 30px 16px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(108, 99, 255, 0.15) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(167, 139, 250, 0.12) 0%, transparent 40%);
+            background-attachment: fixed;
+        }
+
+        .policy-container {
+            width: 100%;
+            max-width: 800px;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 40px;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 30px;
+            padding-bottom: 24px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .logo-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            box-shadow: 0 8px 24px rgba(108, 99, 255, 0.4);
+        }
+
+        .title-group h1 {
+            font-size: 24px;
+            font-weight: 800;
+            color: var(--text);
+            letter-spacing: -0.5px;
+        }
+
+        .title-group p {
+            font-size: 13px;
+            color: var(--text2);
+            margin-top: 4px;
+        }
+
+        .badge-effective {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            background: rgba(108, 99, 255, 0.15);
+            border: 1px solid rgba(108, 99, 255, 0.3);
+            color: var(--accent);
+            font-size: 11px;
+            font-weight: 600;
+            margin-top: 8px;
+        }
+
+        .status-box {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 16px 20px;
+            margin-bottom: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .status-info { display: flex; align-items: center; gap: 12px; }
+        .status-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--text2); }
+        .status-dot.active { background: var(--green); box-shadow: 0 0 10px var(--green); }
+        .status-text { font-size: 13px; font-weight: 600; }
+
+        .content { font-size: 14px; line-height: 1.7; color: #d1d5db; }
+        .section { margin-bottom: 28px; }
+        .section h2 {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--accent);
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section p { margin-bottom: 10px; }
+        .section ul { margin-left: 20px; margin-bottom: 10px; }
+        .section li { margin-bottom: 6px; }
+
+        .alert-box {
+            background: rgba(239, 68, 68, 0.08);
+            border: 1px solid rgba(239, 68, 68, 0.25);
+            border-radius: 12px;
+            padding: 16px;
+            margin: 14px 0;
+            color: #fca5a5;
+            font-size: 13px;
+        }
+
+        .actions {
+            margin-top: 36px;
+            padding-top: 24px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            color: white;
+            flex: 1;
+        }
+
+        .btn-primary:hover {
+            box-shadow: 0 8px 24px rgba(108, 99, 255, 0.4);
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid var(--border);
+            color: var(--text);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        @media (max-width: 600px) {
+            .policy-container { padding: 24px 18px; }
+            .header { flex-direction: column; text-align: center; }
+            .actions { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="policy-container">
+    <div class="header">
+        <div class="logo-icon">📜</div>
+        <div class="title-group">
+            <h1>Privacy Policy & Terms of Service</h1>
+            <p>GeoAttend — Smart Geofencing & Institutional Safety System</p>
+            <span class="badge-effective">Last Updated: July 2026 · Institutional Standard V1.0</span>
+        </div>
+    </div>
+
+    <div class="status-box">
+        <div class="status-info">
+            <div class="status-dot" id="statusDot"></div>
+            <div>
+                <div class="status-text" id="statusText">Checking consent status...</div>
+                <div style="font-size:11px; color:var(--text2);" id="statusSub">Local Device Binding</div>
+            </div>
+        </div>
+        <button class="btn btn-secondary" style="padding: 6px 14px; font-size:12px;" onclick="toggleConsentState()">
+            Toggle Consent State
+        </button>
+    </div>
+
+    <div class="content">
+        <div class="section">
+            <h2>1. System Overview & Compliance Mandate</h2>
+            <p>GeoAttend is an enterprise educational attendance automation and perimeter security platform. By accessing or utilizing this portal, you explicitly consent to institutional regulations, automated attendance monitoring, and these Terms of Service.</p>
+        </div>
+
+        <div class="section">
+            <h2>2. Geolocation & Real-Time Perimeter Tracking</h2>
+            <p>To automate class check-ins and maintain campus perimeter safety, GeoAttend collects and processes your mobile device's precise GPS telemetry (latitude, longitude, and accuracy radius) during active class sessions and institutional operating hours configured by college administration.</p>
+            <ul>
+                <li>GPS coordinates are evaluated strictly against designated classroom and campus geofences.</li>
+                <li>Tracking is automatically restricted outside institutional operating hours unless explicitly enabled by college rules.</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>3. Hardware ID Binding & Biometric Verification</h2>
+            <p>To eliminate proxy attendance, account sharing, and credential theft:</p>
+            <ul>
+                <li>Your account is cryptographically bound to your specific physical device hardware identifier (`device_id`).</li>
+                <li>Student check-ins require WebAuthn biometric authentication (Fingerprint or Face ID) registered on your bound device.</li>
+                <li>Attempting login from an unregistered or unverified device triggers an immediate security alert to HOD administration.</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>4. Automated Attendance Suspensions & Parent SMS Alerts</h2>
+            <div class="alert-box">
+                <strong>⚠️ Mandatory Institutional Regulation:</strong><br>
+                1. Exceeding campus or classroom perimeters during an active class session flags an unauthorized perimeter breach.<br>
+                2. Accumulating <strong>more than 2 unexcused absences (3 or more missed sessions)</strong> will automatically suspend your attendance privileges and dispatch an automated SMS alert to your registered parent/guardian phone number.
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>5. Telemetry & Data Encryption</h2>
+            <p>System telemetry—including battery status, connection health, and security event logs—is encrypted in transit using HTTPS (TLS 1.3) and stored in secure institutional databases strictly for academic monitoring and student safety.</p>
+        </div>
+
+        <div class="section">
+            <h2>6. User Consent & Contact</h2>
+            <p>Acceptance of this Privacy Policy & Terms of Service is mandatory to access the GeoAttend login portal. If you have questions regarding data privacy or device binding resets, please contact your institutional HOD or System Administrator.</p>
+        </div>
+    </div>
+
+    <div class="actions">
+        <button class="btn btn-primary" id="btnAcceptTerms" onclick="acceptAndReturn()">
+            ✓ Accept Terms & Proceed to Portal
+        </button>
+        <a href="index.html" class="btn btn-secondary">
+            ← Back to Login Portal
+        </a>
+    </div>
+</div>
+
+<script>
+    var safeStorage = {
+        getItem: function(k) { try { return localStorage.getItem(k); } catch(e) { return null; } },
+        setItem: function(k, v) { try { localStorage.setItem(k, v); } catch(e) {} }
+    };
+
+    function updateUIStatus() {
+        const accepted = safeStorage.getItem('geoattend_policy_accepted_v1') === 'true';
+        const dot = document.getElementById('statusDot');
+        const text = document.getElementById('statusText');
+        const sub = document.getElementById('statusSub');
+        const btn = document.getElementById('btnAcceptTerms');
+
+        if (accepted) {
+            dot.className = 'status-dot active';
+            text.textContent = '✅ Policy Accepted on this Device';
+            sub.textContent = 'Terms active · Access Granted';
+            btn.textContent = '✓ Terms Accepted (Return to Login)';
+        } else {
+            dot.className = 'status-dot';
+            text.textContent = '⚠️ Policy Not Yet Accepted';
+            sub.textContent = 'Mandatory consent required before login';
+            btn.textContent = '✓ Accept Terms & Proceed to Portal';
+        }
+    }
+
+    function acceptAndReturn() {
+        safeStorage.setItem('geoattend_policy_accepted_v1', 'true');
+        updateUIStatus();
+        setTimeout(() => {
+            window.location.href = 'index.html';
+        }, 300);
+    }
+
+    function toggleConsentState() {
+        const accepted = safeStorage.getItem('geoattend_policy_accepted_v1') === 'true';
+        safeStorage.setItem('geoattend_policy_accepted_v1', accepted ? 'false' : 'true');
+        updateUIStatus();
+    }
+
+    document.addEventListener('DOMContentLoaded', updateUIStatus);
+</script>
+
+</body>
+</html>
