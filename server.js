@@ -177,7 +177,7 @@ function securityFirewall(req, res, next) {
     next();
 }
 
-// ── Real Carrier SMS Dispatcher Module ──────────────────────────────────────
+// ── Real Carrier SMS Dispatcher Module (Optimized for India) ───────────────
 async function sendRealSms(toPhone, messageText) {
     const rawPhone = String(toPhone || '').replace(/[^\d+]/g, '');
     const digitsOnly = rawPhone.replace(/\D/g, '');
@@ -187,77 +187,131 @@ async function sendRealSms(toPhone, messageText) {
         return { success: false, error: 'Invalid destination phone number format (must be at least 10 digits).' };
     }
 
+    const indian10Digit = digitsOnly.slice(-10); // Indian 10-digit mobile number format (e.g. 9876543210)
+    const formattedIntlPhone = rawPhone.startsWith('+') ? rawPhone : '+91' + indian10Digit;
+
+    // Fetch DB settings dynamically from campus_settings
+    let dbSettings = {};
+    try {
+        dbSettings = await new Promise((resolve) => {
+            db.all("SELECT key, value FROM campus_settings WHERE key LIKE 'sms_%'", [], (err, rows) => {
+                if (err || !rows) return resolve({});
+                const s = {};
+                rows.forEach(r => s[r.key] = r.value);
+                resolve(s);
+            });
+        });
+    } catch(e) {}
+
+    const provider = (dbSettings.sms_provider || process.env.SMS_PROVIDER || 'fast2sms').toLowerCase();
+    const apiKey = dbSettings.sms_api_key || process.env.FAST2SMS_API_KEY || process.env.SMS_API_KEY || process.env.TWOFACTOR_API_KEY;
+
+    // ── 1. FAST2SMS (India Bulk & Transactional SMS Gateway) ──
+    if ((provider === 'fast2sms' || !provider) && apiKey) {
+        try {
+            const resp = await fetch(`https://www.fast2sms.com/dev/bulkV2?authorization=${apiKey}&route=q&message=${encodeURIComponent(messageText)}&flash=0&numbers=${indian10Digit}`);
+            const data = await resp.json();
+            if (data && data.return === true) {
+                console.log(`[FAST2SMS INDIA REAL SMS SENT] RequestId: ${data.request_id} | To: +91 ${indian10Digit}`);
+                return { success: true, provider: 'Fast2SMS India', request_id: data.request_id, to: '+91 ' + indian10Digit };
+            } else {
+                console.error(`[FAST2SMS ERROR]`, data);
+                const errDetail = data && data.message ? (Array.isArray(data.message) ? data.message.join(', ') : data.message) : 'Fast2SMS transmission error';
+                return { success: false, provider: 'Fast2SMS India', error: errDetail };
+            }
+        } catch (e) {
+            console.error('[FAST2SMS EXCEPTION]', e.message);
+            return { success: false, provider: 'Fast2SMS India', error: e.message };
+        }
+    }
+
+    // ── 2. 2FACTOR.IN (India Instant SMS & OTP Gateway) ──
+    if (provider === '2factor' && apiKey) {
+        try {
+            const resp = await fetch(`https://2factor.in/API/V1/${apiKey}/ADDON_SERVICES/SEND/TSMS`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({
+                    From: dbSettings.sms_sender_id || 'GEOATN',
+                    To: indian10Digit,
+                    Msg: messageText
+                })
+            });
+            const data = await resp.json();
+            if (data && data.Status === 'Success') {
+                console.log(`[2FACTOR INDIA REAL SMS SENT] SessionId: ${data.Details} | To: +91 ${indian10Digit}`);
+                return { success: true, provider: '2Factor India', details: data.Details, to: '+91 ' + indian10Digit };
+            } else {
+                console.error(`[2FACTOR ERROR]`, data);
+                return { success: false, provider: '2Factor India', error: (data && data.Details) || '2Factor transmission error' };
+            }
+        } catch (e) {
+            console.error('[2FACTOR EXCEPTION]', e.message);
+            return { success: false, provider: '2Factor India', error: e.message };
+        }
+    }
+
+    // ── 3. TEXTLOCAL INDIA ──
+    if (provider === 'textlocal' && apiKey) {
+        try {
+            const sender = dbSettings.sms_sender_id || 'TXTLCL';
+            const resp = await fetch(`https://api.textlocal.in/send/?apikey=${encodeURIComponent(apiKey)}&numbers=91${indian10Digit}&sender=${encodeURIComponent(sender)}&message=${encodeURIComponent(messageText)}`);
+            const data = await resp.json();
+            if (data && data.status === 'success') {
+                console.log(`[TEXTLOCAL INDIA REAL SMS SENT] Batch ID: ${data.batch_id} | To: +91 ${indian10Digit}`);
+                return { success: true, provider: 'Textlocal India', batch_id: data.batch_id, to: '+91 ' + indian10Digit };
+            } else {
+                console.error(`[TEXTLOCAL ERROR]`, data);
+                return { success: false, provider: 'Textlocal India', error: (data && data.errors && data.errors[0] && data.errors[0].message) || 'Textlocal transmission error' };
+            }
+        } catch (e) {
+            console.error('[TEXTLOCAL EXCEPTION]', e.message);
+            return { success: false, provider: 'Textlocal India', error: e.message };
+        }
+    }
+
+    // ── 4. TWILIO GLOBAL ──
     const twilioSid = process.env.TWILIO_ACCOUNT_SID;
     const twilioAuth = process.env.TWILIO_AUTH_TOKEN;
     const twilioFrom = process.env.TWILIO_PHONE_NUMBER;
-    const fast2smsKey = process.env.FAST2SMS_API_KEY;
 
-    // 1. Dispatch via Twilio SMS API if keys present
     if (twilioSid && twilioAuth && twilioFrom) {
         try {
-            const formattedPhone = rawPhone.startsWith('+') ? rawPhone : (digitsOnly.length === 10 ? '+91' + digitsOnly : '+' + digitsOnly);
             const authHeader = 'Basic ' + Buffer.from(`${twilioSid}:${twilioAuth}`).toString('base64');
-            const body = new URLSearchParams({
-                To: formattedPhone,
-                From: twilioFrom,
-                Body: messageText
-            });
+            const body = new URLSearchParams({ To: formattedIntlPhone, From: twilioFrom, Body: messageText });
 
             const resp = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`, {
                 method: 'POST',
-                headers: {
-                    'Authorization': authHeader,
-                    'Content-Type': 'application/x-www-form-urlencoded'
-                },
+                headers: { 'Authorization': authHeader, 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: body.toString()
             });
 
             const data = await resp.json();
             if (resp.ok) {
-                console.log(`[TWILIO REAL SMS SENT SUCCESSFULLY] SID: ${data.sid} | To: ${formattedPhone}`);
-                return { success: true, provider: 'twilio', sid: data.sid, to: formattedPhone };
+                console.log(`[TWILIO REAL SMS SENT] SID: ${data.sid} | To: ${formattedIntlPhone}`);
+                return { success: true, provider: 'Twilio', sid: data.sid, to: formattedIntlPhone };
             } else {
-                console.error(`[TWILIO SMS ERROR] Code ${data.code}: ${data.message}`);
-                return { success: false, provider: 'twilio', error: data.message || 'Twilio transmission error' };
+                console.error(`[TWILIO ERROR] Code ${data.code}: ${data.message}`);
+                return { success: false, provider: 'Twilio', error: data.message || 'Twilio transmission error' };
             }
         } catch (e) {
             console.error('[TWILIO EXCEPTION]', e.message);
-            return { success: false, provider: 'twilio', error: e.message };
+            return { success: false, provider: 'Twilio', error: e.message };
         }
     }
 
-    // 2. Dispatch via Fast2SMS (Indian Mobile Carrier API) if key present
-    if (fast2smsKey) {
-        try {
-            const targetNumber = digitsOnly.slice(-10); // 10-digit Indian phone number
-            const resp = await fetch(`https://www.fast2sms.com/dev/bulkV2?authorization=${fast2smsKey}&route=q&message=${encodeURIComponent(messageText)}&flash=0&numbers=${targetNumber}`);
-            const data = await resp.json();
-            if (data && data.return === true) {
-                console.log(`[FAST2SMS REAL SMS SENT SUCCESSFULLY] RequestId: ${data.request_id} | To: ${targetNumber}`);
-                return { success: true, provider: 'fast2sms', request_id: data.request_id, to: targetNumber };
-            } else {
-                console.error(`[FAST2SMS ERROR]`, data);
-                return { success: false, provider: 'fast2sms', error: (data && data.message) || 'Fast2SMS API failed' };
-            }
-        } catch (e) {
-            console.error('[FAST2SMS EXCEPTION]', e.message);
-            return { success: false, provider: 'fast2sms', error: e.message };
-        }
-    }
-
-    // 3. Simulated Logger (No API Key Configured in Environment)
+    // ── 5. SIMULATED LOGGER (Fallback when no API Key is entered) ──
     console.log(`\n==================================================================`);
-    console.log(`[REAL SMS DISPATCH SIMULATOR]`);
-    console.log(`Recipient Phone: ${toPhone}`);
+    console.log(`[INDIAN REAL SMS SIMULATED TRANSMISSION]`);
+    console.log(`Recipient Mobile: +91 ${indian10Digit}`);
     console.log(`Message Content: "${messageText}"`);
-    console.log(`NOTE: No SMS Provider credentials found in process.env.`);
-    console.log(`To send live SMS to mobile phones, add TWILIO_ACCOUNT_SID & TWILIO_AUTH_TOKEN or FAST2SMS_API_KEY.`);
+    console.log(`NOTE: Enter your Fast2SMS or 2Factor API Key in HOD Console to send live carrier SMS to Indian mobile numbers.`);
     console.log(`==================================================================\n`);
 
     return { 
         success: false, 
         simulated: true, 
-        message: 'SMS logged to console. To send live SMS to mobile phones, set TWILIO or FAST2SMS API keys in environment variables.' 
+        message: `SMS for +91 ${indian10Digit} logged to console. Enter your Fast2SMS or 2Factor API Key in HOD Console to send live SMS to Indian phones.` 
     };
 }
 // Express body parser MUST run BEFORE securityFirewall so req.body is defined for WAF checks!
@@ -1535,7 +1589,7 @@ app.get('/api/campus-settings', authenticateToken, (req, res) => {
         if (err) return res.status(500).json({ error: err.message });
         const settings = {};
         rows.forEach(r => {
-            if (r.key === 'college_start_time' || r.key === 'college_end_time') {
+            if (['college_start_time', 'college_end_time', 'sms_provider', 'sms_api_key', 'sms_sender_id'].includes(r.key)) {
                 settings[r.key] = r.value;
             } else {
                 settings[r.key] = parseFloat(r.value);
@@ -1559,13 +1613,13 @@ app.get('/api/campus-settings', authenticateToken, (req, res) => {
     });
 });
 
-// HOD API: Update Campus Geofence Settings
+// HOD API: Update Campus Geofence & SMS Settings
 app.post('/api/campus-settings', authenticateToken, (req, res) => {
     if (req.user.role !== 'hod') {
         return res.status(403).json({ success: false, message: "Unauthorized access." });
     }
 
-    const { campus_latitude, campus_longitude, campus_radius, college_start_time, college_end_time, stop_tracking_on_exit, exact_live_tracking, track_after_hours, holiday_mode } = req.body || {};
+    const { campus_latitude, campus_longitude, campus_radius, college_start_time, college_end_time, stop_tracking_on_exit, exact_live_tracking, track_after_hours, holiday_mode, sms_provider, sms_api_key, sms_sender_id } = req.body || {};
     
     const lat = isNaN(parseFloat(campus_latitude)) ? 17.3850 : parseFloat(campus_latitude);
     const lng = isNaN(parseFloat(campus_longitude)) ? 78.4867 : parseFloat(campus_longitude);
@@ -1586,10 +1640,16 @@ app.post('/api/campus-settings', authenticateToken, (req, res) => {
         db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('stop_tracking_on_exit', ?)", [stopTracking]);
         db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('exact_live_tracking', ?)", [exactTracking]);
         db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('holiday_mode', ?)", [holiday]);
-        db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('track_after_hours', ?)", [afterHours], function(err) {
+        db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('track_after_hours', ?)", [afterHours]);
+
+        if (sms_provider !== undefined) db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('sms_provider', ?)", [String(sms_provider).trim()]);
+        if (sms_api_key !== undefined) db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('sms_api_key', ?)", [String(sms_api_key).trim()]);
+        if (sms_sender_id !== undefined) db.run("INSERT OR REPLACE INTO campus_settings (key, value) VALUES ('sms_sender_id', ?)", [String(sms_sender_id).trim()]);
+
+        db.get("SELECT value FROM campus_settings WHERE key = 'campus_radius'", [], (err) => {
             if (err) return res.status(500).json({ error: err.message });
-            console.log(`[CAMPUS SETTINGS UPDATED] Lat: ${lat}, Lng: ${lng}, Rad: ${rad}m, Hours: ${start} - ${end}, Holiday: ${holiday}`);
-            res.json({ success: true, message: "Campus geofence and tracking configurations updated successfully!" });
+            console.log(`[CAMPUS & SMS SETTINGS UPDATED] Lat: ${lat}, Lng: ${lng}, Rad: ${rad}m, Hours: ${start} - ${end}, SMS Provider: ${sms_provider || 'default'}`);
+            res.json({ success: true, message: "Campus geofence and Indian SMS gateway configurations updated successfully!" });
         });
     });
 });
